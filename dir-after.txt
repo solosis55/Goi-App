@@ -1,0 +1,11 @@
+﻿
+
+    Directorio: C:\Users\cris\Desktop\Programar\Proyecto\Proyecto GoI\Goi App
+
+
+Mode                 LastWriteTime         Length Name                                                                 
+----                 -------------         ------ ----                                                                 
+-a----        12/05/2026     23:02           1214 setup-log.txt                                                        
+
+
+

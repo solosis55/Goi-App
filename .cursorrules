@@ -1,0 +1,34 @@
+# Goi App — contexto para asistentes de IA (Cursor)
+
+## Qué es este proyecto
+Cliente móvil de **Goi**: red social centrada en gimnasio y entrenamiento. Convive en el mismo workspace que **Goi Web**; la app debe **alinearse con la API y el dominio** de Goi Web (Express en `Goi Web/server`), no inventar contratos distintos sin acuerdo explícito.
+
+## Materiales de prácticas (nombre del ejemplo)
+En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nombre de proyecto de ejemplo. Aquí el producto es **Goi**: sustituir mentalmente y en código/textos **NoteFlow → Goi** (nombres de app, rutas de ejemplo, títulos, etc.), sin copiar el nombre NoteFlow al entregable.
+
+## Stack y dependencias
+- **Base ya instalada (setup prácticas):** Expo (SDK del proyecto), **Expo Router**, dependencias del enunciado (safe area, screens, linking, constants, status-bar) y **vista web** (`react-dom`, `react-native-web`).
+- **UI:** **Gluestack UI** (`@gluestack-ui/themed`, `@gluestack-ui/config`, `@gluestack-style/react`, `react-native-svg`) con `GluestackUIProvider` en `app/_layout.tsx`.
+- **Stack previsto más adelante:** FlashList, Zustand, AsyncStorage — **solo cuando el enunciado lo autorice**.
+- **TypeScript** en todo el código de app.
+
+## Convenciones de código
+- Componentes **funcionales** y hooks; sin clases salvo requisito del enunciado.
+- **TypeScript**: tipar props, estado y respuestas de API; evitar `any`; usar `unknown` y acotar si hace falta.
+- **Expo Router**: seguir la estructura y convenciones oficiales (rutas, `_layout`, grupos, etc.).
+- **UI** coherente con **Gluestack UI** (`@gluestack-ui/themed`); evitar mezclar otros sistemas de diseño globales salvo requisito del enunciado.
+- Cadenas visibles al usuario en **español** salvo que las prácticas pidan otro idioma.
+
+## Integración con Goi Web
+- Antes de definir endpoints, DTOs o flujos de auth, **revisar** `Goi Web` (cliente y `server/src`) para respetar rutas, códigos de error y modelos existentes.
+- JWT, subidas (`multipart`) y límites de payload deben ser **compatibles** con lo que ya implementa el backend.
+
+## Restricciones importantes
+- **No añadir** dependencias, scripts ni tooling nuevos si el apartado de prácticas aún no lo autoriza.
+- Cambios **acotados** a lo pedido: nada de refactors masivos ni archivos no relacionados.
+- Si hace falta una excepción al stack o a estas reglas, documentarla brevemente en `docs/ai-setup.md`.
+
+## React Native + TypeScript (recordatorios útiles)
+- No usar APIs exclusivas de navegador en pantallas móviles.
+- Código específico por plataforma solo con sufijos `.android` / `.ios` (o `.native`) cuando sea necesario.
+- Rendimiento: listas grandes con **FlashList** cuando el proyecto ya lo tenga instalado.
