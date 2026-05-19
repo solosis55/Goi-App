@@ -9,8 +9,18 @@ En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nomb
 ## Stack y dependencias
 - **Base ya instalada (setup prácticas):** Expo (SDK del proyecto), **Expo Router**, dependencias del enunciado (safe area, screens, linking, constants, status-bar) y **vista web** (`react-dom`, `react-native-web`).
 - **UI:** **Gluestack UI** (`@gluestack-ui/themed`, `@gluestack-ui/config`, `@gluestack-style/react`, `react-native-svg`) con `GluestackUIProvider` en `app/_layout.tsx`.
+- **Sesión:** `context/AuthContext.tsx` — hidrata desde `goi-auth`, `signIn` / `signOut`, escucha `onAuthExpired` (401 desde `api/client`).
+- **Red / API:** `api/` (`client`, `config` con `resolveMediaUrl`, `session`, `auth`, `health`, **`posts`**).
+- **Tipos alineados con la web:** `types/post.ts` (mismo contrato que `Goi Web/src/types/post.ts` para `GET /posts`).
+- **Pantallas:** `/` inicio (landing) → `/login` → `/feed` (protegida); `/nueva-publicacion` (protegida).
 - **Stack previsto más adelante:** FlashList, Zustand, AsyncStorage — **solo cuando el enunciado lo autorice**.
 - **TypeScript** en todo el código de app.
+- **Validación / formularios:** Zod (`constants/loginSchema.ts`, `constants/publicacionSchema.ts`).
+
+## Prioridad de plataforma (app vs web)
+- **Referencia principal:** diseño, animaciones y detalles visuales pensados para **Expo Go / iOS / Android** (lo que el usuario ve en dispositivo o emulador).
+- **No** mantener ramas o estilos **solo** para la vista web de Expo (`expo start --web`) salvo lo imprescindible para que no rompa; si la web de Expo muestra lo mismo que el móvil, correcto.
+- La web de **Goi Web** sirve de **inspiración y contrato de API**, no como obligación de replicar pixel a pixel su CSS, SVG o animaciones en la app.
 
 ## Convenciones de código
 - Componentes **funcionales** y hooks; sin clases salvo requisito del enunciado.

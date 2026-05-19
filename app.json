@@ -14,7 +14,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Goi usa Face ID para proteger el acceso a tu cuenta en este dispositivo."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +31,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-secure-store"
     ]
   }
 }
