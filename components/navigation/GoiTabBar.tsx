@@ -45,7 +45,7 @@ export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) 
               key={route.key}
               onPress={onCreatePress}
               accessibilityRole="button"
-              accessibilityLabel="Crear publicación o historia"
+              accessibilityLabel="Crear publicación o GoI Daily"
               style={styles.tabSlot}
             >
               <View style={styles.createOuter}>

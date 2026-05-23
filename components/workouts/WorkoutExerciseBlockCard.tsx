@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,7 +7,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import {
   WORKOUT_SET_FIELD_MAX_LEN,
   WORKOUT_SETS_MAX_PER_EXERCISE,
@@ -41,19 +41,6 @@ import { SetTypePickerSheet } from "./SetTypePickerSheet";
 import { SetsProgressBar } from "./SetsProgressBar";
 import { WorkoutExerciseBlockMenuSheet } from "./WorkoutExerciseBlockMenuSheet";
 import { WorkoutExerciseConfigSection } from "./WorkoutExerciseConfigSection";
-
-function confirmRemoveBlock(name: string, onConfirm: () => void) {
-  if (Platform.OS === "web") {
-    if (typeof globalThis.confirm === "function" && globalThis.confirm(`¿Quitar ${name} de la rutina?`)) {
-      onConfirm();
-    }
-    return;
-  }
-  Alert.alert("Quitar ejercicio", `Se eliminará ${name} de la rutina.`, [
-    { text: "Cancelar", style: "cancel" },
-    { text: "Quitar", style: "destructive", onPress: onConfirm },
-  ]);
-}
 
 type WorkoutExerciseBlockCardProps = {
   index: number;
@@ -88,6 +75,7 @@ export function WorkoutExerciseBlockCard({
   canDuplicate = true,
   collapseAll,
 }: WorkoutExerciseBlockCardProps) {
+  const { showAlert } = useGoiAlert();
   const [collapsed, setCollapsed] = useState(false);
   const [setTypePickerIdx, setSetTypePickerIdx] = useState<number | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,6 +91,18 @@ export function WorkoutExerciseBlockCard({
   const setsEmpty = blockSetsAreEmpty(block);
   const incomplete = editorBlockSetsIncomplete(block);
   const exerciseName = exercise?.name ?? "Ejercicio";
+
+  const confirmRemove = useCallback(() => {
+    showAlert({
+      title: "Quitar ejercicio",
+      message: `Se eliminará ${exerciseName} de la rutina.`,
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Quitar", style: "destructive", onPress: onRemove },
+      ],
+    });
+  }, [exerciseName, onRemove, showAlert]);
+
   const headMeta = editorBlockHeadMetaLine(block);
   const collapsedSummary = workoutBlockCollapsedSummary(block);
   const collapsedPills = useMemo(() => workoutBlockCollapsedSetPills(block), [block]);
@@ -166,16 +166,26 @@ export function WorkoutExerciseBlockCard({
   );
 
   const headLine = (
-    <Text style={styles.headMetaLine} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-      {headMeta}
-    </Text>
+    <>
+      <Text style={styles.headMetaLine} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        {headMeta}
+      </Text>
+      {block.sets.length > 0 ? (
+        <View style={styles.headProgress}>
+          <SetsProgressBar
+            ratio={setsFillRatio}
+            accessibilityLabel={`Series completadas en editor: ${Math.round(setsFillRatio * 100)}%`}
+          />
+        </View>
+      ) : null}
+    </>
   );
 
   return (
     <>
       <ExerciseBlockCardShell
         exerciseName={exerciseName}
-        imageUri={exercise?.imageUrl}
+        imageUri={exercise?.imageUrl ? resolveMediaUrl(exercise.imageUrl) : null}
         badgeLabel={index + 1}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
@@ -307,7 +317,7 @@ export function WorkoutExerciseBlockCard({
         onDuplicate={onDuplicate}
         onMoveUp={onMoveUp}
         onMoveDown={onMoveDown}
-        onRemove={() => confirmRemoveBlock(exerciseName, onRemove)}
+        onRemove={confirmRemove}
       />
     </>
   );

@@ -40,3 +40,50 @@ export function formatPostRelative(iso: string, now = new Date()): string {
 
   return formatPostAbsolute(iso);
 }
+
+/** Clave local `YYYY-MM-DD` para agrupar publicaciones por día en el feed. */
+export function feedDayKey(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch {
+    return "";
+  }
+}
+
+/** Etiqueta para separadores del timeline: «Hoy», «Ayer», o fecha legible en español. */
+export function formatFeedDayLabel(iso: string, now = new Date()): string {
+  let post: Date;
+  try {
+    post = new Date(iso);
+    if (Number.isNaN(post.getTime())) return "";
+  } catch {
+    return "";
+  }
+
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const postDay = new Date(post);
+  postDay.setHours(0, 0, 0, 0);
+
+  if (postDay.getTime() === today.getTime()) return "Hoy";
+  if (postDay.getTime() === yesterday.getTime()) return "Ayer";
+
+  const sameYear = postDay.getFullYear() === today.getFullYear();
+  if (sameYear) {
+    const raw = new Intl.DateTimeFormat("es-ES", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    }).format(postDay);
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+  return new Intl.DateTimeFormat("es-ES", { dateStyle: "long" }).format(postDay);
+}

@@ -11,10 +11,17 @@ type ProfilePostsGridProps = {
   posts: Post[];
   pinnedPostId?: string | null;
   selectedId?: string | null;
+  workoutLabelByPostId?: Record<string, string>;
   onSelect: (postId: string) => void;
 };
 
-export function ProfilePostsGrid({ posts, pinnedPostId, selectedId, onSelect }: ProfilePostsGridProps) {
+export function ProfilePostsGrid({
+  posts,
+  pinnedPostId,
+  selectedId,
+  workoutLabelByPostId,
+  onSelect,
+}: ProfilePostsGridProps) {
   const { width } = useWindowDimensions();
   const cellSize = (width - GAP * (COLS - 1)) / COLS;
   const pinTrim = pinnedPostId?.trim() ?? "";
@@ -27,6 +34,7 @@ export function ProfilePostsGrid({ posts, pinnedPostId, selectedId, onSelect }: 
         const multi = (post.media?.length ?? 0) > 1;
         const selected = selectedId === post.id;
         const isPinned = Boolean(pinTrim && post.id === pinTrim);
+        const workoutLabel = workoutLabelByPostId?.[post.id];
         const preview = post.content.trim().slice(0, 80);
         const label =
           preview.length > 0
@@ -62,6 +70,13 @@ export function ProfilePostsGrid({ posts, pinnedPostId, selectedId, onSelect }: 
               <View style={styles.badgeTopLeft}>
                 <Text style={styles.badgeIcon} accessibilityElementsHidden>
                   ★
+                </Text>
+              </View>
+            ) : null}
+            {workoutLabel ? (
+              <View style={styles.badgeBottom}>
+                <Text style={styles.workoutBadgeText} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  🏋 {workoutLabel}
                 </Text>
               </View>
             ) : null}
@@ -137,5 +152,20 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.85)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  badgeBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+    backgroundColor: "rgba(0, 0, 0, 0.62)",
+  },
+  workoutBadgeText: {
+    color: AUTH.gold,
+    fontSize: 9,
+    fontWeight: "700",
+    textAlign: "center",
   },
 });

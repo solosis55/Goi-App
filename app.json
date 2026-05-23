@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSFaceIDUsageDescription": "Goi usa Face ID para proteger el acceso a tu cuenta en este dispositivo.",
-        "NSCameraUsageDescription": "Goi usa la cámara para publicar historias del gym."
+        "NSCameraUsageDescription": "Goi usa la cámara para publicar GoI Daily."
       }
     },
     "android": {
@@ -37,14 +37,14 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Goi necesita acceso a tus fotos para publicar historias.",
-          "cameraPermission": "Goi necesita la cámara para publicar historias."
+          "photosPermission": "Goi necesita acceso a tus fotos para publicar GoI Daily.",
+          "cameraPermission": "Goi necesita la cámara para publicar GoI Daily."
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Goi necesita la cámara para publicar historias.",
+          "cameraPermission": "Goi necesita la cámara para publicar GoI Daily.",
           "recordAudioAndroid": false
         }
       ]

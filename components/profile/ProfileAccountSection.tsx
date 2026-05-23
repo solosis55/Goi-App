@@ -1,12 +1,14 @@
 import { useRouter } from "expo-router";
 import { useCallback } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 
 export function ProfileAccountSection() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const { palette, typography } = useGoiTheme();
   const { signOut, storedAccounts, biometricUnlockActive, disableBiometricUnlock } = useAuth();
   const hasMultipleAccounts = storedAccounts.length > 1;
@@ -17,21 +19,18 @@ export function ProfileAccountSection() {
       router.replace(hasMultipleAccounts ? "/(tabs)/perfil" : "/");
     };
 
-    if (Platform.OS === "web") {
-      if (typeof globalThis.confirm === "function" && globalThis.confirm("¿Cerrar sesión?")) {
-        void run();
-      }
-      return;
-    }
-
     const message = hasMultipleAccounts
       ? "Se quitará esta cuenta del dispositivo. Las demás cuentas guardadas seguirán disponibles."
       : "¿Cerrar sesión?";
-    Alert.alert("Goi", message, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Salir", style: "destructive", onPress: () => void run() },
-    ]);
-  }, [hasMultipleAccounts, router, signOut]);
+    showAlert({
+      title: "Goi",
+      message,
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Salir", style: "destructive", onPress: () => void run() },
+      ],
+    });
+  }, [hasMultipleAccounts, router, showAlert, signOut]);
 
   return (
     <View style={styles.wrap}>

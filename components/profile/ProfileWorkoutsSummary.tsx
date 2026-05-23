@@ -1,27 +1,28 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useAuth } from "../../context/AuthContext";
 import { useWorkoutHubData } from "../../hooks/useWorkoutHubData";
+import { sessionsPerDayLast7 } from "../../utils/workoutWeekSparkline";
 import { TabDumbbellIcon } from "../navigation/TabBarIcons";
+import { WorkoutWeekSparkline } from "../workouts/WorkoutWeekSparkline";
 
 type ProfileWorkoutsSummaryProps = {
   goal?: string;
 };
 
-function SummaryStat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statCard}>
-      <Text style={styles.statValue} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        {value}
-      </Text>
-      <Text style={styles.statLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        {label}
-      </Text>
-    </View>
-  );
+function formatLastSession(iso: string | undefined): string {
+  if (!iso) return "Aún no hay sesiones registradas.";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "Sesión reciente";
+  const diff = Date.now() - t;
+  const days = Math.floor(diff / (24 * 60 * 60 * 1000));
+  if (days <= 0) return "Última sesión: hoy";
+  if (days === 1) return "Última sesión: ayer";
+  if (days < 7) return `Última sesión: hace ${days} días`;
+  return `Última sesión: ${new Date(t).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}`;
 }
 
 export function ProfileWorkoutsSummary({ goal }: ProfileWorkoutsSummaryProps) {
@@ -37,6 +38,27 @@ export function ProfileWorkoutsSummary({ goal }: ProfileWorkoutsSummaryProps) {
     }, [hub.load])
   );
 
+  const lastSession = useMemo(() => {
+    const sorted = [...hub.sessions].sort((a, b) => (a.performedAt < b.performedAt ? 1 : -1));
+    return sorted[0];
+  }, [hub.sessions]);
+
+  const sparkCounts = useMemo(() => sessionsPerDayLast7(hub.sessions), [hub.sessions]);
+
+  const recentRoutines = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { id: string; title: string }[] = [];
+    const sorted = [...hub.sessions].sort((a, b) => (a.performedAt < b.performedAt ? 1 : -1));
+    for (const s of sorted) {
+      if (!s.workoutId || seen.has(s.workoutId)) continue;
+      seen.add(s.workoutId);
+      const title = hub.workouts.find((w) => w.id === s.workoutId)?.title ?? s.workoutTitle ?? "Rutina";
+      out.push({ id: s.workoutId, title });
+      if (out.length >= 4) break;
+    }
+    return out;
+  }, [hub.sessions, hub.workouts]);
+
   return (
     <View style={styles.wrap}>
       <View style={styles.heroCard}>
@@ -47,14 +69,19 @@ export function ProfileWorkoutsSummary({ goal }: ProfileWorkoutsSummaryProps) {
           Tu actividad de entreno
         </Text>
         <Text style={styles.cardBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Registra rutinas y sesiones completadas. El detalle completo está en la pestaña Entrenar.
+          {loading ? "Cargando…" : formatLastSession(lastSession?.performedAt)}
         </Text>
+        {lastSession?.workoutTitle ? (
+          <Text style={styles.lastTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {lastSession.workoutTitle}
+          </Text>
+        ) : null}
       </View>
 
       {goal?.trim() ? (
         <View style={styles.goalCard}>
           <Text style={styles.goalLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Objetivo actual
+            Tu objetivo
           </Text>
           <Text style={styles.goalValue} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             {goal.trim()}
@@ -65,12 +92,25 @@ export function ProfileWorkoutsSummary({ goal }: ProfileWorkoutsSummaryProps) {
       {loading ? (
         <ActivityIndicator color={AUTH.gold} style={{ marginVertical: 8 }} />
       ) : (
-        <View style={styles.statsRow}>
-          <SummaryStat label="Sesiones" value={String(hub.stats.totalSessions)} />
-          <SummaryStat label="Esta semana" value={String(hub.stats.sessionsThisWeek)} />
-          <SummaryStat label="Rutinas" value={String(hub.stats.routineCount)} />
-        </View>
+        <WorkoutWeekSparkline counts={sparkCounts} />
       )}
+
+      {recentRoutines.length > 0 ? (
+        <View style={styles.chipsWrap}>
+          <Text style={styles.chipsKicker} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Rutinas recientes
+          </Text>
+          <View style={styles.chipsRow}>
+            {recentRoutines.map((r) => (
+              <View key={r.id} style={styles.chip}>
+                <Text style={styles.chipText} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {r.title}
+                </Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       <Pressable
         onPress={() => router.push("/(tabs)/entrenamientos")}
@@ -101,7 +141,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.22)",
     backgroundColor: "rgba(23, 23, 23, 0.65)",
-    gap: 10,
+    gap: 8,
   },
   iconRing: {
     width: 64,
@@ -125,6 +165,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: "center",
   },
+  lastTitle: {
+    color: AUTH.gold,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   goalCard: {
     padding: 14,
     borderRadius: 10,
@@ -145,30 +191,34 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: 10,
+  chipsWrap: {
+    gap: 8,
   },
-  statCard: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(64, 64, 64, 0.8)",
-    backgroundColor: "rgba(23, 23, 23, 0.5)",
-    gap: 4,
-  },
-  statValue: {
-    color: AUTH.neutral100,
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  statLabel: {
+  chipsKicker: {
     color: AUTH.faint,
-    fontSize: 10,
-    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  chipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    maxWidth: "48%",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(64, 64, 64, 0.85)",
+    backgroundColor: "rgba(23, 23, 23, 0.7)",
+  },
+  chipText: {
+    color: AUTH.steel,
+    fontSize: 12,
+    fontWeight: "600",
   },
   cta: {
     marginTop: 4,

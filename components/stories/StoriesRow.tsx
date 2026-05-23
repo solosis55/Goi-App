@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { GOI_DAILY_LABEL } from "../../constants/storyBranding";
 import type { FeedStoryAuthor } from "../../types/story";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { UserAvatar } from "../ui/UserAvatar";
@@ -36,10 +37,10 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
     return (
       <View style={styles.empty}>
         <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Publica tu primera historia
+          Publica tu primer {GOI_DAILY_LABEL}
         </Text>
         <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Pulsa tu avatar con el + para compartir un momento del gym (24 h).
+          Pulsa tu avatar con el + para compartir un momento (24 h).
         </Text>
       </View>
     );
@@ -51,14 +52,14 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.strip}
       accessibilityRole="list"
-      accessibilityLabel="Historias de usuarios"
+      accessibilityLabel={GOI_DAILY_LABEL}
     >
       {authors.map((author) => {
         const isSelf = author.userId === currentUserId;
         const hasSlides = author.slides.length > 0;
         const isNewSlot = isSelf && !hasSlides;
         const unseen = hasUnseenStories(author.userId, author.slides, seenMap[author.userId]);
-        const label = isSelf ? (hasSlides ? "Tu historia" : "Nueva") : author.authorUsername;
+        const label = isSelf ? (hasSlides ? "Tu Daily" : "Nueva") : author.authorUsername;
 
         const ringStyle = isNewSlot
           ? styles.ringNew
@@ -68,23 +69,32 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
               : styles.ringSeen
             : styles.ringMuted;
 
+        const avatarSize = isSelf ? 64 : 56;
+        const cellWidth = isSelf ? 80 : 72;
+
         return (
           <Pressable
             key={author.userId}
             onPress={() => onPress(author.userId)}
-            style={({ pressed }) => [styles.cell, isNewSlot ? styles.cellNew : null, pressed ? styles.cellPressed : null]}
+            style={({ pressed }) => [
+              styles.cell,
+              { width: cellWidth },
+              isNewSlot ? styles.cellNew : null,
+              isSelf ? styles.cellSelf : null,
+              pressed ? styles.cellPressed : null,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={
               isNewSlot
-                ? "Crear nueva historia"
+                ? `Publicar ${GOI_DAILY_LABEL}`
                 : hasSlides
-                  ? `Ver historia de ${author.authorUsername}`
-                  : `Historia de ${author.authorUsername}`
+                  ? `Ver ${GOI_DAILY_LABEL} de ${author.authorUsername}`
+                  : `${GOI_DAILY_LABEL} de ${author.authorUsername}`
             }
           >
             <View style={styles.avatarWrap}>
               <View style={[styles.ring, ringStyle]}>
-                <UserAvatar src={author.authorAvatarUrl} username={author.authorUsername} size={56} />
+                <UserAvatar src={author.authorAvatarUrl} username={author.authorUsername} size={avatarSize} />
               </View>
               {isNewSlot ? (
                 <View style={styles.plusBadge}>
@@ -132,9 +142,11 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   cell: {
-    width: 72,
     alignItems: "center",
     gap: 6,
+  },
+  cellSelf: {
+    marginRight: 4,
   },
   cellNew: {
     borderRadius: 14,
@@ -157,7 +169,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212, 175, 55, 0.65)",
   },
   ringUnseen: {
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: AUTH.gold,
   },
   ringSeen: {

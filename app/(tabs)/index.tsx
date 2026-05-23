@@ -1,44 +1,70 @@
 import { Box, Text } from "@gluestack-ui/themed";
 import { useFocusEffect } from "@react-navigation/native";
-import { Redirect, Stack, useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   type FlatList as FlatListType,
   RefreshControl,
   StyleSheet,
   View,
 } from "react-native";
-import { FeedPostCardSkeleton } from "../../components/feed/FeedPostCardSkeleton";
+import Animated, { runOnJS, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import { getFollowing, getUsers } from "../../api/auth";
 import { createComment, deletePost, getPosts, toggleLike } from "../../api/posts";
 import { getStories } from "../../api/stories";
+import { getWorkouts } from "../../api/workouts";
 import { ApiError } from "../../api/client";
 import { AppScreenShell } from "../../components/AppScreenShell";
-import { FeedStatusBanner } from "../../components/feed/FeedStatusBanner";
+import { FeedDaySeparator } from "../../components/feed/FeedDaySeparator";
+import { FeedEmptyState } from "../../components/feed/FeedEmptyState";
+import { FeedErrorBanner } from "../../components/feed/FeedErrorBanner";
+import { FeedLoadMoreFooter } from "../../components/feed/FeedLoadMoreFooter";
+import { FeedPostCardSkeleton } from "../../components/feed/FeedPostCardSkeleton";
+import { FeedStickyScopeHeader } from "../../components/feed/FeedStickyScopeHeader";
+import { FeedReportModal } from "../../components/feed/FeedReportModal";
+import { FeedScrollToTopFab } from "../../components/feed/FeedScrollToTopFab";
+import { FeedStoriesSection } from "../../components/feed/FeedStoriesSection";
+import { FeedSuggestionsRow } from "../../components/feed/FeedSuggestionsRow";
 import { FeedTopBar } from "../../components/feed/FeedTopBar";
 import { PostCard } from "../../components/feed/PostCard";
-import { StoriesRow } from "../../components/stories/StoriesRow";
 import { StoryViewerModal } from "../../components/stories/StoryViewerModal";
 import { AUTH } from "../../constants/authUi";
 import { camaraHistoriaHref } from "../../constants/storyRoutes";
+import { FEED_PAGE_SIZE, type FeedScope } from "../../constants/feed";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
+import { goiToast } from "../../context/GoiToastContext";
+import type { DiscoverUser } from "../../types/auth";
 import { getErrorMessage } from "../../utils/errorMessages";
-import { loadMutedUserIds, loadSavedPostIds, muteUser, toggleSavedPost } from "../../utils/feedLocalPrefs";
+import {
+  appendLocalReport,
+  loadMutedUserIds,
+  loadSavedPostIds,
+  loadSuggestionsDismissed,
+  muteUser,
+  setSuggestionsDismissed as persistSuggestionsDismissed,
+  toggleSavedPost,
+} from "../../utils/feedLocalPrefs";
+import { buildFeedListItems, feedListIndexForPostId, type FeedListItem } from "../../utils/feedListItems";
+import { filterFeedPosts } from "../../utils/feedTimeline";
+import { readStoredFeedScope, writeStoredFeedScope } from "../../utils/feedScopeStorage";
+import { sharePost } from "../../utils/sharePost";
 import type { Post } from "../../types/post";
 import type { FeedStoryAuthor } from "../../types/story";
 
 const FEED_MAX_WIDTH = 672;
 const LIST_BOTTOM_PAD = 24;
+const SCROLL_TOP_FAB_THRESHOLD = 380;
 
 function FeedListSeparator() {
-  return <View style={{ height: 20 }} />;
+  return <View style={styles.listGap} />;
 }
 
 export default function HomeFeedScreen() {
   const router = useRouter();
+  const { focusPostId: focusPostIdParam } = useLocalSearchParams<{ focusPostId?: string }>();
   const { palette, typography } = useGoiTheme();
   const { isHydrated, isAuthenticated, user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
@@ -50,16 +76,42 @@ export default function HomeFeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
-  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [commentByPostId, setCommentByPostId] = useState<Record<string, string>>({});
   const [commentErrorsByPostId, setCommentErrorsByPostId] = useState<Record<string, string | null>>({});
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
   const [savedPostIdSet, setSavedPostIdSet] = useState<Set<string>>(() => new Set());
   const [mutedUserIdSet, setMutedUserIdSet] = useState<Set<string>>(() => new Set());
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [discoverUsers, setDiscoverUsers] = useState<DiscoverUser[]>([]);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [feedScope, setFeedScope] = useState<FeedScope>("all");
+  const [feedScopeReady, setFeedScopeReady] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
+  const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>({});
+  const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
+  const [showScrollFab, setShowScrollFab] = useState(false);
+  const [reportTarget, setReportTarget] = useState<Post | null>(null);
+  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const feedFocusCountRef = useRef(0);
-  const listRef = useRef<FlatListType<Post>>(null);
+  const listRef = useRef<FlatListType<FeedListItem>>(null);
+  const scrollY = useSharedValue(0);
   const likeInFlightRef = useRef(new Set<string>());
+  const focusHandledRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    void readStoredFeedScope().then((scope) => {
+      setFeedScope(scope);
+      setFeedScopeReady(true);
+    });
+  }, []);
+
+  const setFeedScopePersisted = useCallback((scope: FeedScope) => {
+    setFeedScope(scope);
+    void writeStoredFeedScope(scope);
+    setVisibleCount(FEED_PAGE_SIZE);
+  }, []);
 
   const scrollFeedToTop = useCallback(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -84,6 +136,28 @@ export default function HomeFeedScreen() {
     [storyStripAuthors]
   );
 
+  const filteredPosts = useMemo(
+    () =>
+      filterFeedPosts(posts, feedScope, {
+        userId: user?.id,
+        followingIds,
+        mutedUserIds: mutedUserIdSet,
+      }),
+    [posts, feedScope, user?.id, followingIds, mutedUserIdSet]
+  );
+
+  const visiblePosts = useMemo(
+    () => filteredPosts.slice(0, visibleCount),
+    [filteredPosts, visibleCount]
+  );
+
+  const feedListItems = useMemo(() => buildFeedListItems(visiblePosts), [visiblePosts]);
+
+  const hasMoreToShow = visibleCount < filteredPosts.length;
+
+  const showFollowingHint =
+    feedScope === "following" && filteredPosts.length === 0 && !loading && !error;
+
   const refreshStories = useCallback(async () => {
     if (!user) return;
     try {
@@ -93,6 +167,45 @@ export default function HomeFeedScreen() {
       /* no bloquea el feed */
     }
   }, [user]);
+
+  const refreshFollowing = useCallback(async () => {
+    if (!user?.id) {
+      setFollowingIds([]);
+      return;
+    }
+    try {
+      const res = await getFollowing(user.id);
+      setFollowingIds(res.followingIds ?? []);
+    } catch {
+      setFollowingIds([]);
+    }
+  }, [user?.id]);
+
+  const refreshDiscover = useCallback(async () => {
+    setDiscoverLoading(true);
+    try {
+      const res = await getUsers();
+      setDiscoverUsers(res.users ?? []);
+    } catch {
+      setDiscoverUsers([]);
+    } finally {
+      setDiscoverLoading(false);
+    }
+  }, []);
+
+  const refreshWorkoutTitles = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const all = await getWorkouts();
+      const map: Record<string, string> = {};
+      for (const w of all) {
+        if (w.userId === user.id) map[w.id] = w.title;
+      }
+      setWorkoutTitles(map);
+    } catch {
+      /* opcional */
+    }
+  }, [user?.id]);
 
   const handleStoryCellClick = useCallback(
     (clickedUserId: string) => {
@@ -130,11 +243,6 @@ export default function HomeFeedScreen() {
     setMutedUserIdSet(new Set(ids));
   }, [user?.id]);
 
-  const visiblePosts = useMemo(
-    () => posts.filter((p) => !mutedUserIdSet.has(p.userId)),
-    [posts, mutedUserIdSet]
-  );
-
   const handleOpenAuthor = useCallback(
     (authorUserId: string) => {
       if (!authorUserId || authorUserId === user?.id) return;
@@ -149,7 +257,7 @@ export default function HomeFeedScreen() {
       await muteUser(user.id, authorUserId);
       await refreshMutedIds();
       setPosts((prev) => prev.filter((p) => p.userId !== authorUserId));
-      setActionMessage("Usuario silenciado. Puedes gestionarlo en Perfil → Privado.");
+      goiToast("Usuario silenciado");
     },
     [user?.id, refreshMutedIds]
   );
@@ -164,9 +272,23 @@ export default function HomeFeedScreen() {
         else next.delete(postId);
         return next;
       });
-      setActionMessage(nowSaved ? "Guardado en tu perfil" : "Quitado de guardados");
+      goiToast(nowSaved ? "Guardado en tu perfil" : "Quitado de guardados");
     },
     [user?.id]
+  );
+
+  const handleReportSubmit = useCallback(
+    async (reason: string) => {
+      if (!user?.id || !reportTarget) return;
+      await appendLocalReport(user.id, {
+        postId: reportTarget.id,
+        authorId: reportTarget.userId,
+        reason,
+      });
+      goiToast("Informe registrado en este dispositivo");
+      setReportTarget(null);
+    },
+    [user?.id, reportTarget]
   );
 
   const fetchPosts = useCallback(async (mode: "initial" | "refresh") => {
@@ -176,6 +298,7 @@ export default function HomeFeedScreen() {
     try {
       const data = await getPosts();
       setPosts(Array.isArray(data) ? data : []);
+      setVisibleCount(FEED_PAGE_SIZE);
     } catch (e) {
       if (e instanceof ApiError) {
         setError({
@@ -191,6 +314,45 @@ export default function HomeFeedScreen() {
     }
   }, []);
 
+  const loadMoreVisible = useCallback(() => {
+    if (!hasMoreToShow || loadingMore) return;
+    setLoadingMore(true);
+    requestAnimationFrame(() => {
+      setVisibleCount((n) => Math.min(n + FEED_PAGE_SIZE, filteredPosts.length));
+      setLoadingMore(false);
+    });
+  }, [hasMoreToShow, filteredPosts.length, loadingMore]);
+
+  const refreshSuggestionsDismissed = useCallback(async () => {
+    if (!user?.id) {
+      setSuggestionsDismissed(false);
+      return;
+    }
+    const dismissed = await loadSuggestionsDismissed(user.id);
+    setSuggestionsDismissed(dismissed);
+  }, [user?.id]);
+
+  const handleDismissSuggestions = useCallback(() => {
+    if (!user?.id) return;
+    setSuggestionsDismissed(true);
+    void persistSuggestionsDismissed(user.id, true);
+  }, [user?.id]);
+
+  const scrollToSuggestions = useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const updateScrollFab = useCallback((y: number) => {
+    setShowScrollFab(y > SCROLL_TOP_FAB_THRESHOLD);
+  }, []);
+
+  const onListScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+      runOnJS(updateScrollFab)(e.contentOffset.y);
+    },
+  });
+
   const handleToggleLike = useCallback(
     async (postId: string) => {
       if (!user?.id || likeInFlightRef.current.has(postId)) return;
@@ -201,7 +363,6 @@ export default function HomeFeedScreen() {
       const wasLiked = !!snapshot.likedByMe;
       const optimisticLiked = !wasLiked;
 
-      setActionMessage(null);
       setPosts((prev) =>
         prev.map((p) => {
           if (p.id !== postId) return p;
@@ -226,7 +387,7 @@ export default function HomeFeedScreen() {
         );
       } catch (e) {
         setPosts((prev) => prev.map((p) => (p.id === postId ? snapshot : p)));
-        setActionMessage(getErrorMessage(e, "No se pudo actualizar el me gusta."));
+        goiToast(getErrorMessage(e, "No se pudo actualizar el me gusta."));
       } finally {
         likeInFlightRef.current.delete(postId);
       }
@@ -245,7 +406,6 @@ export default function HomeFeedScreen() {
         return;
       }
 
-      setActionMessage(null);
       setCommentErrorsByPostId((prev) => ({ ...prev, [postId]: null }));
       setCommentingPostId(postId);
       try {
@@ -260,7 +420,7 @@ export default function HomeFeedScreen() {
             return { ...p, comments };
           })
         );
-        setActionMessage("Comentario publicado");
+        goiToast("Comentario publicado");
       } catch (e) {
         setCommentErrorsByPostId((prev) => ({
           ...prev,
@@ -276,7 +436,6 @@ export default function HomeFeedScreen() {
   const handleDeletePost = useCallback(
     async (postId: string) => {
       if (!user?.id || deletingPostId) return;
-      setActionMessage(null);
       setDeletingPostId(postId);
       try {
         await deletePost(postId);
@@ -291,15 +450,35 @@ export default function HomeFeedScreen() {
           delete next[postId];
           return next;
         });
-        setActionMessage("Publicación eliminada");
+        goiToast("Publicación eliminada");
       } catch (e) {
-        setActionMessage(getErrorMessage(e, "No se pudo eliminar la publicación."));
+        goiToast(getErrorMessage(e, "No se pudo eliminar la publicación."));
       } finally {
         setDeletingPostId(null);
       }
     },
     [deletingPostId, user?.id]
   );
+
+  const focusPostId = typeof focusPostIdParam === "string" ? focusPostIdParam : undefined;
+
+  useEffect(() => {
+    if (!focusPostId || loading || focusHandledRef.current === focusPostId) return;
+    const idx = feedListIndexForPostId(feedListItems, focusPostId);
+    if (idx < 0) {
+      if (hasMoreToShow) {
+        setVisibleCount(filteredPosts.length);
+      }
+      return;
+    }
+    focusHandledRef.current = focusPostId;
+    setHighlightedPostId(focusPostId);
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 });
+    });
+    const t = setTimeout(() => setHighlightedPostId(null), 3500);
+    return () => clearTimeout(t);
+  }, [focusPostId, loading, feedListItems, hasMoreToShow, filteredPosts.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -310,7 +489,85 @@ export default function HomeFeedScreen() {
       void refreshStories();
       void refreshSavedIds();
       void refreshMutedIds();
-    }, [isHydrated, isAuthenticated, fetchPosts, refreshStories, refreshSavedIds, refreshMutedIds])
+      void refreshFollowing();
+      void refreshDiscover();
+      void refreshWorkoutTitles();
+      void refreshSuggestionsDismissed();
+    }, [
+      isHydrated,
+      isAuthenticated,
+      fetchPosts,
+      refreshStories,
+      refreshSavedIds,
+      refreshMutedIds,
+      refreshFollowing,
+      refreshDiscover,
+      refreshWorkoutTitles,
+      refreshSuggestionsDismissed,
+    ])
+  );
+
+  const renderFeedItem = useCallback(
+    ({ item }: { item: FeedListItem }) => {
+      if (item.kind === "day") {
+        return <FeedDaySeparator label={item.label} />;
+      }
+      const post = item.post;
+      return (
+        <PostCard
+          post={post}
+          palette={palette}
+          typography={typography}
+          currentUserId={user?.id}
+          sessionAvatarUrl={user?.avatarUrl}
+          highlighted={highlightedPostId === post.id}
+          workoutTitle={post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null}
+          commentValue={commentByPostId[post.id] ?? ""}
+          onChangeComment={(value) => {
+            setCommentByPostId((prev) => ({ ...prev, [post.id]: value }));
+            if (commentErrorsByPostId[post.id]) {
+              setCommentErrorsByPostId((prev) => ({ ...prev, [post.id]: null }));
+            }
+          }}
+          onSubmitComment={() => void handleCreateComment(post.id)}
+          onToggleLike={() => void handleToggleLike(post.id)}
+          onDelete={(postId) => void handleDeletePost(postId)}
+          onEdit={(postId) => router.push({ pathname: "/editar-publicacion", params: { id: postId } })}
+          deleting={deletingPostId === post.id}
+          commenting={commentingPostId === post.id}
+          commentError={commentErrorsByPostId[post.id]}
+          saved={savedPostIdSet.has(post.id)}
+          onToggleSave={() => void handleToggleSave(post.id)}
+          onMuteAuthor={(authorId) => void handleMuteAuthor(authorId)}
+          onOpenAuthor={handleOpenAuthor}
+          onSharePost={() => void sharePost(post.id, post.authorUsername, post.content)}
+          onReportPost={() => setReportTarget(post)}
+        />
+      );
+    },
+    [
+      feedScope,
+      setFeedScopePersisted,
+      showFollowingHint,
+      palette,
+      typography,
+      user?.id,
+      user?.avatarUrl,
+      highlightedPostId,
+      workoutTitles,
+      commentByPostId,
+      commentErrorsByPostId,
+      commentingPostId,
+      deletingPostId,
+      savedPostIdSet,
+      router,
+      handleCreateComment,
+      handleToggleLike,
+      handleDeletePost,
+      handleToggleSave,
+      handleMuteAuthor,
+      handleOpenAuthor,
+    ]
   );
 
   if (!isHydrated) {
@@ -328,89 +585,99 @@ export default function HomeFeedScreen() {
   const listHeader = (
     <View style={styles.headerBlock}>
       {user ? (
-        <View style={styles.storiesSection}>
-          <Text style={styles.storiesTitle} maxFontSizeMultiplier={1.2}>
-            Historias
-          </Text>
-          <StoriesRow
-            authors={storyStripAuthors}
-            currentUserId={user.id}
-            seenRevision={storySeenRevision}
-            onSelectAuthor={handleStoryCellClick}
-          />
-        </View>
+        <FeedStoriesSection
+          authors={storyStripAuthors}
+          currentUserId={user.id}
+          seenRevision={storySeenRevision}
+          onSelectAuthor={handleStoryCellClick}
+        />
       ) : null}
-      <FeedStatusBanner
-        actionMessage={actionMessage}
+
+      <FeedSuggestionsRow
+        users={discoverUsers}
+        followingIds={followingIds}
+        currentUserId={user?.id}
+        loading={discoverLoading}
+        dismissed={suggestionsDismissed}
+        onDismiss={handleDismissSuggestions}
+        onFollowingChanged={(targetId, following) => {
+          setFollowingIds((prev) =>
+            following ? (prev.includes(targetId) ? prev : [...prev, targetId]) : prev.filter((id) => id !== targetId)
+          );
+        }}
+      />
+
+      {feedScopeReady ? (
+        <FeedStickyScopeHeader
+          mode={feedScope}
+          onChangeMode={setFeedScopePersisted}
+          showFollowingHint={showFollowingHint}
+        />
+      ) : null}
+
+      <FeedErrorBanner
         errorMessage={error?.message}
         errorDetail={error?.detail}
         onRetry={error ? () => void fetchPosts("initial") : undefined}
       />
+
       {loading && posts.length === 0 ? <FeedPostCardSkeleton count={3} /> : null}
     </View>
   );
 
-  const listEmpty =
-    !loading && !error && visiblePosts.length === 0 ? (
-      <View style={styles.emptyWrap}>
-        <Text style={styles.emptyTitle}>Aún no hay publicaciones</Text>
-        <Text style={styles.emptyBody}>
-          Pulsa el + del menú inferior para publicar, o tira hacia abajo para actualizar.
-        </Text>
-      </View>
-    ) : null;
+  const listFooter = (
+    <View>
+      {!loading && !error && filteredPosts.length === 0 ? (
+        <FeedEmptyState scope={feedScope} onScrollToSuggestions={scrollToSuggestions} />
+      ) : null}
+      <FeedLoadMoreFooter
+        hasMore={hasMoreToShow && visiblePosts.length > 0}
+        loadingMore={loadingMore}
+        onLoadMore={loadMoreVisible}
+      />
+    </View>
+  );
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <AppScreenShell>
         <View style={styles.screen}>
-          <FeedTopBar user={user} onBrandPress={scrollFeedToTop} />
-          <FlatList
+          <FeedTopBar user={user} onBrandPress={scrollFeedToTop} scrollY={scrollY} />
+          <Animated.FlatList
             ref={listRef}
             style={styles.list}
-            data={visiblePosts}
-            keyExtractor={(item) => item.id}
+            data={feedListItems}
+            keyExtractor={(item) => item.key}
             keyboardShouldPersistTaps="handled"
+            removeClippedSubviews={false}
+            windowSize={7}
+            maxToRenderPerBatch={6}
+            initialNumToRender={5}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
+            onEndReached={loadMoreVisible}
+            onEndReachedThreshold={0.4}
+            onScrollToIndexFailed={(info) => {
+              listRef.current?.scrollToOffset({
+                offset: info.averageItemLength * info.index,
+                animated: true,
+              });
+            }}
             extraData={{
               commentByPostId,
               commentErrorsByPostId,
               commentingPostId,
               deletingPostId,
               savedPostIdSet,
-              mutedUserIdSet,
+              highlightedPostId,
+              feedScope,
+              showFollowingHint,
             }}
             ItemSeparatorComponent={FeedListSeparator}
-            renderItem={({ item }) => (
-              <PostCard
-                post={item}
-                palette={palette}
-                typography={typography}
-                currentUserId={user?.id}
-                sessionAvatarUrl={user?.avatarUrl}
-                commentValue={commentByPostId[item.id] ?? ""}
-                onChangeComment={(value) => {
-                  setCommentByPostId((prev) => ({ ...prev, [item.id]: value }));
-                  if (commentErrorsByPostId[item.id]) {
-                    setCommentErrorsByPostId((prev) => ({ ...prev, [item.id]: null }));
-                  }
-                  if (actionMessage) setActionMessage(null);
-                }}
-                onSubmitComment={() => void handleCreateComment(item.id)}
-                onToggleLike={() => void handleToggleLike(item.id)}
-                onDelete={(postId) => void handleDeletePost(postId)}
-                onEdit={(postId) => router.push({ pathname: "/editar-publicacion", params: { id: postId } })}
-                deleting={deletingPostId === item.id}
-                commenting={commentingPostId === item.id}
-                commentError={commentErrorsByPostId[item.id]}
-                saved={savedPostIdSet.has(item.id)}
-                onToggleSave={() => void handleToggleSave(item.id)}
-                onMuteAuthor={(authorId) => void handleMuteAuthor(authorId)}
-                onOpenAuthor={handleOpenAuthor}
-              />
-            )}
+            renderItem={renderFeedItem}
             ListHeaderComponent={listHeader}
-            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
             contentContainerStyle={styles.listContent}
             refreshControl={
               <RefreshControl
@@ -418,11 +685,15 @@ export default function HomeFeedScreen() {
                 onRefresh={() => {
                   void fetchPosts("refresh");
                   void refreshStories();
+                  void refreshFollowing();
                 }}
                 tintColor={AUTH.gold}
+                colors={[AUTH.gold]}
+                progressBackgroundColor="#141416"
               />
             }
           />
+          <FeedScrollToTopFab visible={showScrollFab} onPress={scrollFeedToTop} />
         </View>
       </AppScreenShell>
 
@@ -434,6 +705,13 @@ export default function HomeFeedScreen() {
         onClose={() => setStoryViewerOpen(false)}
         onStoriesUiRefresh={() => setStorySeenRevision((n) => n + 1)}
       />
+
+      <FeedReportModal
+        visible={reportTarget != null}
+        authorUsername={reportTarget?.authorUsername ?? ""}
+        onClose={() => setReportTarget(null)}
+        onSubmit={(reason) => void handleReportSubmit(reason)}
+      />
     </>
   );
 }
@@ -441,11 +719,13 @@ export default function HomeFeedScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: "rgba(6, 6, 8, 1)",
   },
   list: {
     flex: 1,
   },
   listContent: {
+    flexGrow: 0,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: LIST_BOTTOM_PAD,
@@ -453,37 +733,10 @@ const styles = StyleSheet.create({
     maxWidth: FEED_MAX_WIDTH,
     alignSelf: "center",
   },
+  listGap: {
+    height: 16,
+  },
   headerBlock: {
     width: "100%",
-  },
-  storiesSection: {
-    marginBottom: 16,
-    gap: 10,
-  },
-  storiesTitle: {
-    color: AUTH.muted,
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  emptyWrap: {
-    alignItems: "center",
-    paddingHorizontal: 12,
-    paddingTop: 28,
-    paddingBottom: 16,
-    gap: 10,
-  },
-  emptyTitle: {
-    color: AUTH.neutral100,
-    fontSize: 16,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  emptyBody: {
-    color: AUTH.muted,
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 21,
   },
 });

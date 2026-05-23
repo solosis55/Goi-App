@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { SafeUser } from "../../types/auth";
@@ -8,26 +9,52 @@ import { FeedNotificationsBell } from "./FeedNotificationsBell";
 
 const LOGO_MARK = require("../../assets/branding/goi-logo-mark.png");
 
+const COLLAPSE_DISTANCE = 72;
+
 type FeedTopBarProps = {
   user: SafeUser | null;
   onBrandPress?: () => void;
+  scrollY?: SharedValue<number>;
 };
 
 const LOGO_SIZE = 28;
+const LOGO_SIZE_COLLAPSED = 24;
 const HEADER_AVATAR_SIZE = 32;
-/** Altura común de campana y avatar para alinear el logo en la misma línea. */
 const ACTION_SIZE = 36;
 
-export function FeedTopBar({ user, onBrandPress }: FeedTopBarProps) {
+export function FeedTopBar({ user, onBrandPress, scrollY }: FeedTopBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+
+  const barAnim = useAnimatedStyle(() => {
+    if (!scrollY) return {};
+    const y = scrollY.value;
+    return {
+      paddingBottom: interpolate(y, [0, COLLAPSE_DISTANCE], [8, 4], "clamp"),
+      opacity: interpolate(y, [0, COLLAPSE_DISTANCE], [1, 0.92], "clamp"),
+    };
+  });
+
+  const brandAnim = useAnimatedStyle(() => {
+    if (!scrollY) return {};
+    const size = interpolate(scrollY.value, [0, COLLAPSE_DISTANCE], [LOGO_SIZE, LOGO_SIZE_COLLAPSED], "clamp");
+    return { width: size, height: size, borderRadius: size / 2 };
+  });
+
+  const wordmarkAnim = useAnimatedStyle(() => {
+    if (!scrollY) return {};
+    return {
+      opacity: interpolate(scrollY.value, [0, COLLAPSE_DISTANCE * 0.6], [1, 0], "clamp"),
+      maxWidth: interpolate(scrollY.value, [0, COLLAPSE_DISTANCE * 0.6], [80, 0], "clamp"),
+    };
+  });
 
   const goProfile = () => {
     router.push("/(tabs)/perfil");
   };
 
   return (
-    <View style={[styles.bar, { paddingTop: Math.max(insets.top, 6) }]}>
+    <Animated.View style={[styles.bar, { paddingTop: Math.max(insets.top, 6) }, barAnim]}>
       <View style={styles.sideSpacer} />
 
       <Pressable
@@ -41,10 +68,15 @@ export function FeedTopBar({ user, onBrandPress }: FeedTopBarProps) {
           pressed && onBrandPress ? styles.brandPressed : null,
         ]}
       >
-        <Image source={LOGO_MARK} style={styles.logo} resizeMode="cover" accessibilityIgnoresInvertColors />
-        <Text style={styles.wordmark} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        <Animated.Image
+          source={LOGO_MARK}
+          style={[styles.logoBase, brandAnim]}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+        />
+        <Animated.Text style={[styles.wordmark, wordmarkAnim]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
           GoI
-        </Text>
+        </Animated.Text>
       </Pressable>
 
       <View style={styles.actionsWrap}>
@@ -67,7 +99,7 @@ export function FeedTopBar({ user, onBrandPress }: FeedTopBarProps) {
           <View style={{ width: ACTION_SIZE, height: ACTION_SIZE }} />
         )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -76,11 +108,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     minHeight: 44,
-    paddingBottom: 8,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(64, 64, 64, 0.75)",
     backgroundColor: "rgba(0, 0, 0, 0.94)",
+    zIndex: 10,
   },
   sideSpacer: {
     flex: 1,
@@ -92,14 +124,12 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 4,
     borderRadius: 10,
+    overflow: "hidden",
   },
   brandPressed: {
     opacity: 0.88,
   },
-  logo: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
-    borderRadius: LOGO_SIZE / 2,
+  logoBase: {
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.4)",
   },
@@ -109,6 +139,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 2,
     lineHeight: 20,
+    overflow: "hidden",
   },
   actionsWrap: {
     flex: 1,

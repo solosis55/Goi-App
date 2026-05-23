@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { GOI_DAILY_LABEL } from "../../constants/storyBranding";
 import { nuevaHistoriaHref } from "../../constants/storyRoutes";
 
 type CreateContentSheetProps = {
@@ -76,7 +77,7 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
         <Pressable
           onPress={goStory}
           accessibilityRole="button"
-          accessibilityLabel="Nueva historia"
+          accessibilityLabel={`Nuevo ${GOI_DAILY_LABEL}`}
           style={({ pressed }) => [styles.option, pressed ? styles.optionPressed : null]}
         >
           <View style={styles.optionIcon}>
@@ -84,10 +85,10 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
           </View>
           <View style={styles.optionText}>
             <Text style={styles.optionTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Historia
+              {GOI_DAILY_LABEL}
             </Text>
             <Text style={styles.optionDesc} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Momentos del gym que desaparecen en 24 h
+              Visible en el feed unas 24 horas
             </Text>
           </View>
         </Pressable>

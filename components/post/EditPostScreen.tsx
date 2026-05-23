@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -18,6 +17,7 @@ import { getPosts, updatePost } from "../../api/posts";
 import { resolveMediaUrl } from "../../api/config";
 import { ApiError } from "../../api/client";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { POST_BODY_MAX, POST_VISIBILITY_OPTIONS, type PostVisibility } from "../../constants/createPost";
 import type { Post } from "../../types/post";
 import { validateCreatePost } from "../../utils/createPostValidation";
@@ -29,6 +29,7 @@ type EditPostScreenProps = {
 
 export function EditPostScreen({ postId }: EditPostScreenProps) {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -76,15 +77,17 @@ export function EditPostScreen({ postId }: EditPostScreenProps) {
     try {
       await updatePost(postId, { content: content.trim(), visibility });
       router.back();
-      if (Platform.OS !== "web") {
-        Alert.alert("Goi", "Publicación actualizada.");
-      }
+      showAlert({
+        title: "Goi",
+        message: "Publicación actualizada.",
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "No se pudo guardar.");
     } finally {
       setSubmitting(false);
     }
-  }, [canSave, content, postId, router, visibility]);
+  }, [canSave, content, postId, router, showAlert, visibility]);
 
   if (loading) {
     return (

@@ -8,6 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import type { Post } from "../../types/post";
 import { applyProfilePostsFilter } from "../../utils/profilePostsDisplay";
 import { getErrorMessage } from "../../utils/errorMessages";
+import { ProfilePinnedPostPreview } from "./ProfilePinnedPostPreview";
 import { ProfilePostDetailModal } from "./ProfilePostDetailModal";
 import { ProfilePostsGrid } from "./ProfilePostsGrid";
 import { ProfilePostsGridSkeleton } from "./ProfilePostsGridSkeleton";
@@ -21,6 +22,7 @@ type PublicProfilePostsSectionProps = {
   showRestricted: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
+  workoutLabelByPostId?: Record<string, string>;
 };
 
 export function PublicProfilePostsSection({
@@ -32,6 +34,7 @@ export function PublicProfilePostsSection({
   showRestricted,
   hasMore,
   onLoadMore,
+  workoutLabelByPostId,
 }: PublicProfilePostsSectionProps) {
   const { user } = useAuth();
   const [filter, setFilter] = useState<ProfilePostsFilter>("all");
@@ -47,14 +50,20 @@ export function PublicProfilePostsSection({
   }, [posts]);
 
   const displayedPosts = useMemo(
-    () => applyProfilePostsFilter(localPosts, filter),
-    [localPosts, filter]
+    () => applyProfilePostsFilter(localPosts, filter, pinnedPostId),
+    [localPosts, filter, pinnedPostId]
   );
 
   const selectedPost = useMemo(() => {
     if (!selectedPostId) return null;
     return localPosts.find((p) => p.id === selectedPostId) ?? null;
   }, [selectedPostId, localPosts]);
+
+  const pinnedPost = useMemo(() => {
+    const pin = pinnedPostId?.trim();
+    if (!pin) return null;
+    return localPosts.find((p) => p.id === pin) ?? null;
+  }, [localPosts, pinnedPostId]);
 
   const handleToggleLike = useCallback(async (post: Post) => {
     if (likeInFlightRef.current.has(post.id)) return;
@@ -151,6 +160,10 @@ export function PublicProfilePostsSection({
         </View>
       </View>
 
+      {pinnedPost ? (
+        <ProfilePinnedPostPreview post={pinnedPost} onPress={() => setSelectedPostId(pinnedPost.id)} />
+      ) : null}
+
       {loading && posts.length === 0 ? <ProfilePostsGridSkeleton /> : null}
 
       {!loading && displayedPosts.length === 0 ? (
@@ -162,6 +175,7 @@ export function PublicProfilePostsSection({
           posts={displayedPosts}
           pinnedPostId={pinnedPostId}
           selectedId={selectedPostId}
+          workoutLabelByPostId={workoutLabelByPostId}
           onSelect={setSelectedPostId}
         />
       )}

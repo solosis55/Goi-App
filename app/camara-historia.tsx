@@ -4,7 +4,6 @@ import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   Pressable,
@@ -16,7 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createStory } from "../api/stories";
 import { ApiError } from "../api/client";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../constants/authUi";
+import { GOI_DAILY_LABEL } from "../constants/storyBranding";
 import { useAuth } from "../context/AuthContext";
+import { useGoiAlert } from "../context/GoiAlertContext";
 import { pickStoryPhotoFromLibrary } from "../utils/storyCapture";
 import { uriToStoryDataUrl } from "../utils/storyImage";
 
@@ -24,6 +25,7 @@ type Phase = "camera" | "preview";
 
 export default function CamaraHistoriaScreen() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const { isHydrated, isAuthenticated } = useAuth();
@@ -87,16 +89,18 @@ export default function CamaraHistoriaScreen() {
       const dataUrl = await uriToStoryDataUrl(previewUri);
       await createStory([{ type: "image", url: dataUrl }]);
       router.replace("/(tabs)");
-      if (Platform.OS !== "web") {
-        Alert.alert("Goi", "Historia publicada. Visible unas 24 horas.");
-      }
+      showAlert({
+        title: "Goi",
+        message: `${GOI_DAILY_LABEL} publicado. Visible unas 24 horas.`,
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "No se pudo publicar la historia.";
+      const msg = e instanceof ApiError ? e.message : `No se pudo publicar ${GOI_DAILY_LABEL}.`;
       setError(msg);
     } finally {
       setPublishing(false);
     }
-  }, [previewUri, publishing, router]);
+  }, [previewUri, publishing, router, showAlert]);
 
   if (!isHydrated) {
     return (
@@ -117,7 +121,7 @@ export default function CamaraHistoriaScreen() {
           Cámara no disponible en web
         </Text>
         <Text style={styles.webBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Usa la galería para subir una historia.
+          Usa la galería para subir un {GOI_DAILY_LABEL}.
         </Text>
         <Pressable onPress={() => void openGallery()} style={styles.webBtn}>
           <Text style={styles.webBtnText}>Elegir de galería</Text>
@@ -153,7 +157,7 @@ export default function CamaraHistoriaScreen() {
           Permiso de cámara
         </Text>
         <Text style={styles.permissionBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Goi necesita la cámara para grabar tu historia sin salir de la app.
+          Goi necesita la cámara para grabar tu {GOI_DAILY_LABEL} sin salir de la app.
         </Text>
         <Pressable onPress={() => void requestPermission()} style={styles.permissionBtn}>
           <Text style={styles.permissionBtnText}>Continuar</Text>
@@ -191,13 +195,13 @@ export default function CamaraHistoriaScreen() {
             disabled={publishing}
             style={({ pressed }) => [styles.publishBtn, pressed ? styles.publishPressed : null, publishing ? styles.publishDisabled : null]}
             accessibilityRole="button"
-            accessibilityLabel="Publicar historia"
+            accessibilityLabel={`Publicar ${GOI_DAILY_LABEL}`}
           >
             {publishing ? (
               <ActivityIndicator color="#000" />
             ) : (
               <Text style={styles.publishText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Tu historia
+                Publicar
               </Text>
             )}
           </Pressable>

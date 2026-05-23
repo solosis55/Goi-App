@@ -23,12 +23,14 @@ import { AuthTopGlow } from "../components/AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, authScreenStyles, collectFieldErrors } from "../constants/authUi";
 import { registerFormSchema } from "../constants/registerSchema";
 import { useAuth } from "../context/AuthContext";
+import { useGoiAlert } from "../context/GoiAlertContext";
 import { getErrorMessage } from "../utils/errorMessages";
 import { offerBiometricUnlockAfterLogin } from "../utils/offerBiometricUnlock";
 
 const RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 export default function RegisterScreen() {
+  const { showAlert } = useGoiAlert();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -99,7 +101,7 @@ export default function RegisterScreen() {
           /* sin módulo nativo */
         }
       }
-      offerBiometricUnlockAfterLogin(router, notifyBiometricUnlockOptIn);
+      offerBiometricUnlockAfterLogin(router, notifyBiometricUnlockOptIn, showAlert);
     } catch (e) {
       if (e instanceof ApiError && e.code === "AUTH_RATE_LIMITED") {
         setSubmitError({

@@ -1,11 +1,11 @@
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { formatProfileStatCount } from "../../utils/profileStatsFormat";
 
 type ProfileStatsRowProps = {
   postsCount: number | null;
   followersCount: number | null;
   followingCount: number | null;
-  routinesCount?: number | null;
   loading?: boolean;
 };
 
@@ -22,18 +22,10 @@ function StatCell({ value, label }: { value: string; label: string }) {
   );
 }
 
-function formatCount(n: number | null): string {
-  if (n === null) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `${Math.round(n / 1000)}k`;
-  return String(n);
-}
-
 export function ProfileStatsRow({
   postsCount,
   followersCount,
   followingCount,
-  routinesCount = null,
   loading,
 }: ProfileStatsRowProps) {
   return (
@@ -42,13 +34,11 @@ export function ProfileStatsRow({
         <ActivityIndicator color={AUTH.gold} size="small" style={styles.loader} />
       ) : (
         <>
-          <StatCell value={formatCount(postsCount)} label="publicaciones" />
+          <StatCell value={formatProfileStatCount(postsCount)} label="publicaciones" />
           <View style={styles.divider} />
-          <StatCell value={formatCount(followersCount)} label="seguidores" />
+          <StatCell value={formatProfileStatCount(followersCount)} label="seguidores" />
           <View style={styles.divider} />
-          <StatCell value={formatCount(followingCount)} label="siguiendo" />
-          <View style={styles.divider} />
-          <StatCell value={formatCount(routinesCount)} label="rutinas" />
+          <StatCell value={formatProfileStatCount(followingCount)} label="siguiendo" />
         </>
       )}
     </View>

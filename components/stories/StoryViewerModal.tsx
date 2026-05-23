@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { GOI_DAILY_LABEL } from "../../constants/storyBranding";
 import type { FeedStoryAuthor } from "../../types/story";
 import { markStoryAuthorSeen } from "../../utils/storySeen";
 import { UserAvatar } from "../ui/UserAvatar";
@@ -122,7 +123,7 @@ export function StoryViewerModal({
     <Modal visible={visible} animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
       <View style={styles.root}>
         <View style={[styles.topBar, { paddingTop: Math.max(insets.top, 8) }]}>
-          <Pressable onPress={handleClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar historias">
+          <Pressable onPress={handleClose} hitSlop={12} accessibilityRole="button" accessibilityLabel={`Cerrar ${GOI_DAILY_LABEL}`}>
             <Text style={styles.closeIcon}>×</Text>
           </Pressable>
           {author ? (
@@ -133,7 +134,7 @@ export function StoryViewerModal({
               </Text>
             </View>
           ) : (
-            <Text style={styles.muted}>Sin historias</Text>
+            <Text style={styles.muted}>Sin {GOI_DAILY_LABEL}</Text>
           )}
         </View>
 
@@ -160,7 +161,7 @@ export function StoryViewerModal({
 
         <View style={styles.mediaArea}>
           {!author || !slide || !mediaUri ? (
-            <Text style={styles.muted}>Historia no disponible</Text>
+            <Text style={styles.muted}>{GOI_DAILY_LABEL} no disponible</Text>
           ) : (
             <>
               <Image source={{ uri: mediaUri }} style={styles.image} resizeMode="contain" accessibilityIgnoresInvertColors />

@@ -6,14 +6,18 @@ import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "../context/AuthContext";
 import { AuthNavigationSync } from "../context/AuthNavigationSync";
+import { GoiAlertProvider } from "../context/GoiAlertContext";
+import { GoiToastProvider } from "../context/GoiToastContext";
 
 function ThemedRoot() {
   return (
     <SafeAreaProvider>
       <GluestackUIProvider config={config} colorMode="dark">
         <AuthProvider>
-          <AuthNavigationSync />
-          <Stack
+          <GoiAlertProvider>
+            <GoiToastProvider>
+              <AuthNavigationSync />
+              <Stack
             screenOptions={{ headerShown: false }}
             initialRouteName="index"
           >
@@ -62,7 +66,9 @@ function ThemedRoot() {
             <Stack.Screen name="rutina/nueva" options={{ animation: "slide_from_right", presentation: "card" }} />
             <Stack.Screen name="rutina/[id]" options={{ animation: "slide_from_right", presentation: "card" }} />
             <Stack.Screen name="entrenar/[workoutId]" options={{ animation: "slide_from_right", presentation: "card" }} />
-          </Stack>
+              </Stack>
+            </GoiToastProvider>
+          </GoiAlertProvider>
         </AuthProvider>
       </GluestackUIProvider>
     </SafeAreaProvider>

@@ -1,4 +1,13 @@
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { workoutScreenStyles } from "../../constants/workoutScreenUi";
 import { WorkoutBellOffIcon, WorkoutBellOnIcon } from "./WorkoutPerformIcons";
@@ -32,17 +41,43 @@ export function WorkoutRestTimerBar({
   soundEnabled,
   onToggleSound,
 }: WorkoutRestTimerBarProps) {
+  const pulse = useSharedValue(1);
+
+  useEffect(() => {
+    if (secondsLeft > 0 && secondsLeft <= 5) {
+      pulse.value = withRepeat(
+        withSequence(
+          withTiming(0.55, { duration: 380, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 380, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    } else {
+      pulse.value = withTiming(1, { duration: 120 });
+    }
+  }, [secondsLeft, pulse]);
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+  }));
+
   if (secondsLeft <= 0) return null;
 
   const pctRemaining = Math.round(Math.min(1, Math.max(0, progress)) * 100);
-  const urgent = secondsLeft <= 3;
+  const urgent = secondsLeft <= 5;
   const canSub15 = secondsLeft > 0;
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, urgent ? styles.wrapUrgent : null]}>
       <View style={styles.progressTrack}>
-        <View
-          style={[styles.progressFill, { width: `${pctRemaining}%` }, urgent ? styles.progressUrgent : null]}
+        <Animated.View
+          style={[
+            styles.progressFill,
+            { width: `${pctRemaining}%` },
+            urgent ? styles.progressUrgent : null,
+            pulseStyle,
+          ]}
         />
       </View>
       <View style={workoutScreenStyles.cardGlowLine} />
@@ -130,6 +165,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 12,
   },
+  wrapUrgent: {
+    borderTopColor: "rgba(251, 191, 36, 0.55)",
+    backgroundColor: "rgba(48, 40, 22, 0.92)",
+  },
   progressTrack: {
     height: 6,
     backgroundColor: "rgba(64, 64, 64, 0.55)",
@@ -183,8 +222,8 @@ const styles = StyleSheet.create({
     color: "#fbbf24",
   },
   iconChip: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: AUTH.fieldBorder,
@@ -196,11 +235,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(35, 32, 22, 0.65)",
   },
   chip: {
+    minHeight: 44,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: AUTH.fieldBorder,
+    justifyContent: "center",
   },
   chipPrimary: {
     borderColor: "rgba(212, 175, 55, 0.45)",

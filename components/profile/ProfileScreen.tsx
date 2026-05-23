@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,34 +17,40 @@ import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { DEFAULT_PROFILE_SECTION_TAB, type ProfileSectionTab } from "../../constants/profileTabs";
 import { camaraHistoriaHref } from "../../constants/storyRoutes";
 import { useAuth } from "../../context/AuthContext";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import type { FeedStoryAuthor } from "../../types/story";
+import { computeProfileBadges } from "../../utils/profileBadges";
+import { buildProfileActivityLine } from "../../utils/profileRecentActivity";
+import { shareProfile } from "../../utils/shareProfile";
 import { StoryViewerModal } from "../stories/StoryViewerModal";
 import { useProfileEditor } from "../../hooks/useProfileEditor";
 import { useProfileStats } from "../../hooks/useProfileStats";
+import { ProfileAccountSwitcherSheet } from "./ProfileAccountSwitcherSheet";
+import { ProfileDirtyBanner } from "./ProfileDirtyBanner";
 import { ProfileEditSection } from "./ProfileEditSection";
 import { ProfileHero } from "./ProfileHero";
 import { ProfilePostsSection } from "./ProfilePostsSection";
+import { ProfilePublicInfo } from "./ProfilePublicInfo";
+import { ProfilePublicWorkoutSummary } from "./ProfilePublicWorkoutSummary";
+import { ProfileSectionSurface } from "./ProfileSectionSurface";
 import { ProfileSkeleton } from "./ProfileSkeleton";
-import { ProfileStatsRow } from "./ProfileStatsRow";
+import { ProfileStoriesHighlights } from "./ProfileStoriesHighlights";
 import { ProfileTabBar } from "./ProfileTabBar";
 import { ProfilePreviewModal } from "./ProfilePreviewModal";
 import { ProfileWorkoutsSummary } from "./ProfileWorkoutsSummary";
-import { ProfileStoriesHighlights } from "./ProfileStoriesHighlights";
-import { ProfileAccountSwitcherSheet } from "./ProfileAccountSwitcherSheet";
-import { shareProfile } from "../../utils/shareProfile";
 
 const PAD = 16;
-const STICKY_TAB_INDEX = 2;
 
 export function ProfileScreen() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user, storedAccounts, switchAccount, updateSessionUser } = useAuth();
   const editor = useProfileEditor();
   const stats = useProfileStats(editor.user?.id);
   const [activeTab, setActiveTab] = useState<ProfileSectionTab>(DEFAULT_PROFILE_SECTION_TAB);
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
-  const [postsRefreshing, setPostsRefreshing] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyAuthor, setStoryAuthor] = useState<FeedStoryAuthor | null>(null);
@@ -83,6 +88,58 @@ export function ProfileScreen() {
   const canSave = editor.isDirty && !editor.restricted && !editor.busy;
   const showSaveInHeader = activeTab === "profile";
 
+  const socialStats = useMemo(
+    () => ({
+      postsCount: postsTotal,
+      followersCount: stats.followersCount,
+      followingCount: stats.followingCount,
+      loading: stats.loading && stats.followersCount === null,
+    }),
+    [postsTotal, stats.followersCount, stats.followingCount, stats.loading]
+  );
+
+  const workoutStats = useMemo(
+    () => ({
+      totalSessions: stats.totalSessions,
+      sessionsThisWeek: stats.sessionsThisWeek,
+      routinesCount: stats.routinesCount,
+      loading: stats.loading && stats.totalSessions === null,
+    }),
+    [stats.totalSessions, stats.sessionsThisWeek, stats.routinesCount, stats.loading]
+  );
+
+  const profileBadges = useMemo(
+    () =>
+      computeProfileBadges({
+        sessionsThisWeek: stats.sessionsThisWeek ?? 0,
+        totalSessions: stats.totalSessions ?? 0,
+        routinesCount: stats.routinesCount ?? 0,
+        postsCount: postsTotal ?? 0,
+      }),
+    [stats.sessionsThisWeek, stats.totalSessions, stats.routinesCount, postsTotal]
+  );
+
+  const activityLine = useMemo(
+    () => buildProfileActivityLine(undefined, stats.lastSession?.performedAt),
+    [stats.lastSession?.performedAt]
+  );
+
+  const handleSocialStatPress = useCallback(
+    (kind: "posts" | "followers" | "following") => {
+      if (kind === "posts") {
+        setActiveTab("posts");
+        return;
+      }
+      const label = kind === "followers" ? "seguidores" : "siguiendo";
+      showAlert({
+        title: "Próximamente",
+        message: `La lista de ${label} estará disponible en una próxima actualización.`,
+        buttons: [{ text: "Entendido", style: "default" }],
+      });
+    },
+    [showAlert]
+  );
+
   const handleSetPinned = useCallback(
     async (postId: string | null) => {
       if (!editor.user?.id) return;
@@ -96,33 +153,32 @@ export function ProfileScreen() {
   const handleTabChange = useCallback(
     (tab: ProfileSectionTab) => {
       if (activeTab === "profile" && tab !== "profile" && editor.isDirty) {
-        const apply = () => setActiveTab(tab);
-        if (Platform.OS === "web") {
-          if (typeof globalThis.confirm === "function" && globalThis.confirm("Tienes cambios sin guardar. ¿Descartarlos?")) {
-            apply();
-          }
-          return;
-        }
-        Alert.alert("Cambios sin guardar", "Si sales ahora perderás los cambios del formulario.", [
-          { text: "Seguir editando", style: "cancel" },
-          { text: "Descartar", style: "destructive", onPress: apply },
-        ]);
+        showAlert({
+          title: "Cambios sin guardar",
+          message: "Si sales ahora perderás los cambios del formulario.",
+          buttons: [
+            { text: "Seguir editando", style: "cancel" },
+            { text: "Descartar", style: "destructive", onPress: () => setActiveTab(tab) },
+          ],
+        });
         return;
       }
       setActiveTab(tab);
     },
-    [activeTab, editor.isDirty]
+    [activeTab, editor.isDirty, showAlert]
   );
 
-  const onPostsRefresh = useCallback(async () => {
-    setPostsRefreshing(true);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
     try {
-      await postsRefreshRef.current?.();
-      await stats.refresh();
+      if (activeTab === "posts") {
+        await postsRefreshRef.current?.();
+      }
+      await Promise.all([stats.refresh(), editor.loadProfile()]);
     } finally {
-      setPostsRefreshing(false);
+      setRefreshing(false);
     }
-  }, [stats]);
+  }, [activeTab, stats, editor]);
 
   if (editor.loading && !editor.form) {
     return (
@@ -157,6 +213,11 @@ export function ProfileScreen() {
   if (!editor.form || !editor.profile) return null;
 
   const form = editor.form;
+  const showDirtyBanner = editor.isDirty && activeTab !== "profile";
+
+  let stickyTabIndex = 2;
+  if (showDirtyBanner) stickyTabIndex += 1;
+  if (editor.user?.id) stickyTabIndex += 1;
 
   return (
     <View style={styles.root}>
@@ -175,11 +236,6 @@ export function ProfileScreen() {
           <Text style={styles.headerChevron} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             ▼
           </Text>
-          {form.username ? (
-            <Text style={styles.headerSubtitle} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              @{form.username}
-            </Text>
-          ) : null}
         </Pressable>
         {showSaveInHeader ? (
           <Pressable
@@ -194,11 +250,11 @@ export function ProfileScreen() {
               <ActivityIndicator color={AUTH.gold} size="small" />
             ) : (
               <Text
-              style={[styles.saveHeaderText, !canSave ? styles.saveHeaderDisabled : null]}
-              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-            >
-              {editor.isDirty ? "Guardar •" : "Guardar"}
-            </Text>
+                style={[styles.saveHeaderText, !canSave ? styles.saveHeaderDisabled : null]}
+                maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+              >
+                {editor.isDirty ? "Guardar •" : "Guardar"}
+              </Text>
             )}
           </Pressable>
         ) : (
@@ -215,22 +271,18 @@ export function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={[STICKY_TAB_INDEX]}
+          stickyHeaderIndices={[stickyTabIndex]}
           refreshControl={
-            activeTab === "posts" ? (
-              <RefreshControl
-                refreshing={postsRefreshing}
-                onRefresh={() => void onPostsRefresh()}
-                tintColor={AUTH.gold}
-                colors={[AUTH.gold]}
-              />
-            ) : undefined
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void onRefresh()}
+              tintColor={AUTH.gold}
+              colors={[AUTH.gold]}
+            />
           }
         >
           <ProfileHero
             username={form.username}
-            email={editor.profile.email}
-            goal={form.goal}
             avatarUrl={editor.profile.avatarUrl}
             bannerUrl={editor.profile.bannerUrl}
             restricted={editor.restricted}
@@ -243,7 +295,39 @@ export function ProfileScreen() {
             onShare={() => {
               if (editor.user?.id) void shareProfile(form.username, editor.user.id);
             }}
+            socialStats={socialStats}
+            onSocialStatPress={handleSocialStatPress}
           />
+
+          <ProfileSectionSurface>
+            <ProfilePublicInfo
+              bio={form.bio}
+              goal={form.goal}
+              location={form.location}
+              websiteUrl={form.websiteUrl}
+              instagramUrl={form.instagramUrl}
+              stravaUrl={form.stravaUrl}
+              restricted={editor.restricted}
+              showEditHint
+              onEditProfile={() => setActiveTab("profile")}
+              badges={profileBadges}
+              workoutStats={workoutStats}
+              activityLine={activityLine}
+              workoutSummary={
+                <ProfilePublicWorkoutSummary
+                  loading={stats.loading && stats.totalSessions === null}
+                  lastSession={stats.lastSession}
+                  recentRoutineTitles={stats.recentRoutineTitles}
+                  streakWeeks={stats.streakWeeks}
+                  sparklineCounts={stats.sparklineCounts}
+                />
+              }
+            />
+          </ProfileSectionSurface>
+
+          {showDirtyBanner ? (
+            <ProfileDirtyBanner onPressEdit={() => setActiveTab("profile")} />
+          ) : null}
 
           {editor.user?.id ? (
             <ProfileStoriesHighlights
@@ -260,15 +344,7 @@ export function ProfileScreen() {
             />
           ) : null}
 
-          <ProfileStatsRow
-            postsCount={postsTotal}
-            followersCount={stats.followersCount}
-            followingCount={stats.followingCount}
-            routinesCount={stats.routinesCount}
-            loading={stats.loading && stats.followersCount === null}
-          />
-
-          <ProfileTabBar active={activeTab} onChange={handleTabChange} />
+          <ProfileTabBar active={activeTab} onChange={handleTabChange} stickyElevated />
 
           {activeTab === "posts" ? (
             <ProfilePostsSection
@@ -367,11 +443,6 @@ const styles = StyleSheet.create({
     color: AUTH.gold,
     fontSize: 10,
     marginTop: -2,
-  },
-  headerSubtitle: {
-    color: AUTH.muted,
-    fontSize: 12,
-    maxWidth: "90%",
   },
   saveHeaderText: {
     color: AUTH.gold,

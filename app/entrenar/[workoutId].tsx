@@ -1,10 +1,11 @@
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { getWorkouts } from "../../api/workouts";
 import { WorkoutPerformScreen } from "../../components/workouts/WorkoutPerformScreen";
 import { AUTH, APP_STACK_SCREEN_OPTIONS, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useAuth } from "../../context/AuthContext";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import type { Workout } from "../../types/workout";
 import { getErrorMessage } from "../../utils/errorMessages";
 import { clearActiveWorkoutSession, readActiveWorkoutSession } from "../../utils/workoutSessionPerform";
@@ -14,6 +15,7 @@ export default function EntrenarRutinaScreen() {
   const workoutId = typeof rawId === "string" ? rawId.trim() : "";
   const router = useRouter();
   const { isHydrated, isAuthenticated, user } = useAuth();
+  const { showAlert } = useGoiAlert();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,27 +48,14 @@ export default function EntrenarRutinaScreen() {
               }
             });
           };
-          if (Platform.OS === "web") {
-            if (
-              typeof globalThis.confirm === "function" &&
-              globalThis.confirm(
-                `Tienes un entrenamiento en curso («${active.workoutTitle}»). ¿Abandonarlo y empezar esta rutina?`
-              )
-            ) {
-              switchWorkout();
-            } else if (!cancelled) {
-              router.back();
-            }
-            return;
-          }
-          Alert.alert(
-            "Entrenamiento en curso",
-            `Ya estás entrenando «${active.workoutTitle}». Si continúas, se descartará ese progreso.`,
-            [
+          showAlert({
+            title: "Entrenamiento en curso",
+            message: `Ya estás entrenando «${active.workoutTitle}». Si continúas, se descartará ese progreso.`,
+            buttons: [
               { text: "Cancelar", style: "cancel", onPress: () => router.back() },
               { text: "Empezar esta rutina", style: "destructive", onPress: switchWorkout },
-            ]
-          );
+            ],
+          });
           return;
         }
 
@@ -83,7 +72,7 @@ export default function EntrenarRutinaScreen() {
     return () => {
       cancelled = true;
     };
-  }, [workoutId, user?.id, router]);
+  }, [workoutId, user?.id, router, showAlert]);
 
   if (!isHydrated) {
     return (

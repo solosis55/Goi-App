@@ -1,8 +1,7 @@
 import * as Haptics from "expo-haptics";
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Platform,
   Pressable,
   StyleSheet,
@@ -10,13 +9,21 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import type { useGoiTheme } from "../../constants/theme";
 import type { Post, PostComment } from "../../types/post";
 import { formatPostRelative } from "../../utils/feedPostDate";
 import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
 import { UserAvatar } from "../ui/UserAvatar";
+import { TabDumbbellIcon } from "../navigation/TabBarIcons";
 import { PostActionBar } from "./PostActionBar";
 import { PostMediaCarousel } from "./PostMediaCarousel";
 import { FeedPostOverflowSheet } from "./FeedPostOverflowSheet";
@@ -47,6 +54,10 @@ type PostCardProps = ThemeSlice & {
   onSetPinned?: (postId: string | null) => void;
   onMuteAuthor?: (authorUserId: string) => void;
   onOpenAuthor?: (authorUserId: string, authorUsername: string) => void;
+  onSharePost?: () => void;
+  onReportPost?: () => void;
+  workoutTitle?: string | null;
+  highlighted?: boolean;
 };
 
 function CommentRow({
@@ -107,9 +118,13 @@ function PostCardInner({
   onSetPinned,
   onMuteAuthor,
   onOpenAuthor,
+  onSharePost,
+  onReportPost,
+  workoutTitle,
+  highlighted,
 }: PostCardProps) {
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [composerExpanded, setComposerExpanded] = useState(false);
+  const { showAlert } = useGoiAlert();
+  const [commentsSectionOpen, setCommentsSectionOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const commentsCount = post.comments.length;
@@ -119,10 +134,11 @@ function PostCardInner({
   const hasMedia = (post.media?.length ?? 0) > 0;
   const authorAvatarSrc =
     post.authorAvatarUrl?.trim() || (isOwner && sessionAvatarUrl?.trim() ? sessionAvatarUrl : "") || "";
-  const showComposer = composerExpanded || commentValue.trim().length > 0;
+  const showComposer = commentsSectionOpen || commentValue.trim().length > 0;
   const canSubmitComment = commentValue.trim().length > 0 && !commenting;
   const canManage = isOwner && (!!onDelete || !!onEdit || !!onSetPinned);
-  const canOverflow = !isOwner && !!onMuteAuthor;
+  const canOverflow = !isOwner && (!!onMuteAuthor || !!onReportPost || !!onSharePost);
+  const commentPreview = post.comments.slice(-2);
   const canOpenAuthor = !isOwner && !!onOpenAuthor;
   const isPinned = Boolean(pinnedPostId?.trim() && pinnedPostId === post.id);
 
@@ -130,10 +146,9 @@ function PostCardInner({
     if (canOpenAuthor && onOpenAuthor) onOpenAuthor(post.userId, post.authorUsername);
   }, [canOpenAuthor, onOpenAuthor, post.userId, post.authorUsername]);
 
-  const openCommentComposer = useCallback(() => {
-    if (commentsCount > 0) setCommentsOpen(true);
-    setComposerExpanded(true);
-  }, [commentsCount]);
+  const toggleCommentsSection = useCallback(() => {
+    setCommentsSectionOpen((open) => !open);
+  }, []);
 
   const onDoubleTapLike = useCallback(() => {
     hapticLike();
@@ -142,24 +157,53 @@ function PostCardInner({
 
   const confirmDelete = useCallback(() => {
     if (!onDelete) return;
-    const run = () => onDelete(post.id);
+    showAlert({
+      title: "Eliminar publicación",
+      message: "Esta acción no se puede deshacer.",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Eliminar", style: "destructive", onPress: () => onDelete(post.id) },
+      ],
+    });
+  }, [onDelete, post.id, showAlert]);
 
-    if (Platform.OS === "web") {
-      if (typeof globalThis.confirm === "function" && globalThis.confirm("¿Eliminar esta publicación?")) {
-        run();
-      }
-      return;
+  const showVisBadge = visibility !== "public";
+  const highlightOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (highlighted) {
+      highlightOpacity.value = withSequence(
+        withTiming(1, { duration: 200 }),
+        withTiming(1, { duration: 2400 }),
+        withTiming(0, { duration: 900 })
+      );
+    } else {
+      highlightOpacity.value = withTiming(0, { duration: 200 });
     }
+  }, [highlighted, highlightOpacity]);
 
-    Alert.alert("Eliminar publicación", "Esta acción no se puede deshacer.", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: run },
-    ]);
-  }, [onDelete, post.id]);
+  const highlightBorderStyle = useAnimatedStyle(() => ({
+    borderColor: `rgba(212, 175, 55, ${0.15 + highlightOpacity.value * 0.45})`,
+    borderWidth: 1 + highlightOpacity.value,
+  }));
+
+  const showLikesModal = useCallback(() => {
+    showAlert({
+      title: "Próximamente",
+      message: "La lista de me gusta estará disponible pronto.",
+      buttons: [{ text: "Entendido", style: "default" }],
+    });
+  }, [showAlert]);
 
   return (
-    <View style={styles.card}>
-      <View style={styles.headerPad}>
+    <Animated.View
+      style={[
+        styles.card,
+        !hasMedia ? styles.cardTextOnly : null,
+        highlightBorderStyle,
+      ]}
+    >
+      <View style={[styles.headerPad, !hasMedia ? styles.headerPadCompact : null]}>
         <View style={styles.headerRow}>
           <Pressable
             onPress={openAuthor}
@@ -195,11 +239,13 @@ function PostCardInner({
                   {formatPostRelative(post.createdAt)}
                 </Text>
               </View>
-              <View style={[styles.visBadge, { borderColor: visStyle.borderColor, backgroundColor: visStyle.backgroundColor }]}>
-                <Text style={[styles.visText, { color: visStyle.color }]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {visibilityLabel(visibility)}
-                </Text>
-              </View>
+              {showVisBadge ? (
+                <View style={[styles.visBadge, { borderColor: visStyle.borderColor, backgroundColor: visStyle.backgroundColor }]}>
+                  <Text style={[styles.visText, { color: visStyle.color }]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                    {visibilityLabel(visibility)}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </Pressable>
           {canManage || canOverflow ? (
@@ -225,39 +271,66 @@ function PostCardInner({
 
       {hasMedia ? <PostMediaCarousel media={post.media ?? []} onDoubleTapLike={onDoubleTapLike} /> : null}
 
+      {workoutTitle?.trim() ? (
+        <View style={styles.workoutChipWrap}>
+          <View style={styles.workoutChip}>
+            <TabDumbbellIcon size={14} color={AUTH.gold} filled />
+            <Text style={styles.workoutChipText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {workoutTitle.trim()}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       <PostActionBar
         liked={!!post.likedByMe}
         likesCount={post.likesCount}
+        commentsCount={commentsCount}
         onToggleLike={onToggleLike}
-        onPressComment={openCommentComposer}
+        onPressComment={toggleCommentsSection}
+        commentsExpanded={commentsSectionOpen}
+        onPressShare={onSharePost}
+        onPressLikesCount={showLikesModal}
+        onPressCommentsCount={toggleCommentsSection}
         saved={saved}
         onToggleSave={onToggleSave}
       />
 
-      <View style={styles.bodyPad}>
+      <View style={[styles.bodyPad, !hasMedia ? styles.bodyPadCompact : null]}>
         {post.content ? (
-          <Text style={styles.content} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          <Text
+            style={[styles.content, !hasMedia ? styles.contentTextOnly : null]}
+            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+          >
             {post.content}
           </Text>
         ) : null}
 
+        {commentsCount > 0 && !commentsSectionOpen ? (
+          <View style={styles.commentPreview}>
+            {commentPreview.map((c) => (
+              <CommentRow key={c.id} comment={c} currentUserId={currentUserId} />
+            ))}
+          </View>
+        ) : null}
+
         {commentsCount > 0 ? (
           <Pressable
-            onPress={() => setCommentsOpen((o) => !o)}
+            onPress={toggleCommentsSection}
             accessibilityRole="button"
-            accessibilityState={{ expanded: commentsOpen }}
+            accessibilityState={{ expanded: commentsSectionOpen }}
             hitSlop={6}
             style={styles.commentsToggle}
           >
             <Text style={styles.statsComments} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {commentsOpen
+              {commentsSectionOpen
                 ? "Ocultar comentarios"
                 : `Ver ${commentsCount} ${commentsCount === 1 ? "comentario" : "comentarios"}`}
             </Text>
           </Pressable>
         ) : null}
 
-        {commentsCount > 0 && commentsOpen ? (
+        {commentsCount > 0 && commentsSectionOpen ? (
           <View style={styles.commentsList}>
             {post.comments.map((c) => (
               <CommentRow key={c.id} comment={c} currentUserId={currentUserId} />
@@ -278,7 +351,7 @@ function PostCardInner({
               style={[styles.commentInput, { color: palette.textSteel, borderColor: palette.border, backgroundColor: palette.fieldBg }]}
               maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
               selectionColor={palette.primary}
-              onFocus={() => setComposerExpanded(true)}
+              onFocus={() => setCommentsSectionOpen(true)}
             />
             <View style={styles.composerFooter}>
               <Text style={styles.charCount} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -332,9 +405,11 @@ function PostCardInner({
           authorUsername={post.authorUsername}
           onClose={() => setOverflowOpen(false)}
           onMuteAuthor={() => onMuteAuthor?.(post.userId)}
+          onReport={onReportPost}
+          onShare={onSharePost}
         />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -343,7 +418,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(38, 38, 38, 0.9)",
-    backgroundColor: "rgba(9, 9, 11, 0.82)",
+    backgroundColor: "rgba(14, 14, 16, 0.92)",
     overflow: "hidden",
     ...Platform.select({
       ios: {
@@ -356,10 +431,40 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
+  cardTextOnly: {
+    backgroundColor: "rgba(22, 20, 14, 0.72)",
+    borderLeftWidth: 3,
+    borderLeftColor: "rgba(212, 175, 55, 0.42)",
+  },
   headerPad: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
+  },
+  headerPadCompact: {
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  workoutChipWrap: {
+    paddingHorizontal: 14,
+    paddingBottom: 4,
+  },
+  workoutChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.35)",
+    backgroundColor: "rgba(35, 32, 22, 0.65)",
+  },
+  workoutChipText: {
+    color: AUTH.gold,
+    fontSize: 12,
+    fontWeight: "600",
   },
   headerRow: {
     flexDirection: "row",
@@ -447,10 +552,21 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
   },
+  bodyPadCompact: {
+    paddingTop: 8,
+  },
+  commentPreview: {
+    gap: 8,
+    marginTop: 2,
+  },
   content: {
     color: AUTH.neutral100,
     fontSize: 16,
     lineHeight: 24,
+  },
+  contentTextOnly: {
+    fontSize: 17,
+    lineHeight: 26,
   },
   commentsToggle: {
     alignSelf: "flex-start",

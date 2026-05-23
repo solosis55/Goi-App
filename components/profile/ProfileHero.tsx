@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { UserAvatar } from "../ui/UserAvatar";
+import { ProfileBannerOverlay } from "./ProfileBannerOverlay";
+import { ProfileHeroActionsMenu } from "./ProfileHeroActionsMenu";
+import { ProfileSocialStatsRow, type ProfileSocialStatsProps } from "./ProfileSocialStatsRow";
 
 type ProfileHeroProps = {
   username: string;
-  email?: string;
-  goal?: string;
   avatarUrl?: string;
   bannerUrl?: string;
   restricted?: boolean;
@@ -17,12 +19,12 @@ type ProfileHeroProps = {
   onChangeBanner: () => void;
   onPreview?: () => void;
   onShare?: () => void;
+  socialStats: ProfileSocialStatsProps;
+  onSocialStatPress?: (kind: "posts" | "followers" | "following") => void;
 };
 
 export function ProfileHero({
   username,
-  email,
-  goal,
   avatarUrl,
   bannerUrl,
   restricted,
@@ -33,8 +35,12 @@ export function ProfileHero({
   onChangeBanner,
   onPreview,
   onShare,
+  socialStats,
+  onSocialStatPress,
 }: ProfileHeroProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const bannerUri = bannerUrl ? resolveMediaUrl(bannerUrl) : "";
+  const showMenu = Boolean(onPreview || onShare || (!restricted && onChangeBanner));
 
   return (
     <View style={styles.wrap}>
@@ -56,105 +62,83 @@ export function ProfileHero({
             </Text>
           </View>
         )}
+        <ProfileBannerOverlay />
         {uploadingBanner ? (
           <View style={styles.bannerOverlay}>
             <ActivityIndicator color={AUTH.gold} />
           </View>
         ) : null}
-        <View style={styles.bannerActions}>
-          {onPreview ? (
-            <Pressable
-              onPress={onPreview}
-              style={({ pressed }) => [styles.bannerBtn, pressed ? styles.pressed : null]}
-              accessibilityRole="button"
-              accessibilityLabel="Vista previa pública del perfil"
-            >
-              <Text style={styles.bannerBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Vista previa
-              </Text>
-            </Pressable>
-          ) : null}
-          {onShare ? (
-            <Pressable
-              onPress={onShare}
-              style={({ pressed }) => [styles.bannerBtn, pressed ? styles.pressed : null]}
-              accessibilityRole="button"
-              accessibilityLabel="Compartir perfil"
-            >
-              <Text style={styles.bannerBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Compartir
-              </Text>
-            </Pressable>
-          ) : null}
-          {!restricted ? (
-            <Pressable
-              onPress={onChangeBanner}
-              disabled={disabled || uploadingBanner}
-              style={({ pressed }) => [styles.bannerBtn, pressed ? styles.pressed : null]}
-              accessibilityRole="button"
-              accessibilityLabel={uploadingBanner ? "Subiendo cabecera" : "Cambiar imagen de cabecera"}
-              accessibilityState={{ busy: uploadingBanner }}
-            >
-              <Text style={styles.bannerBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Cabecera
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+        {showMenu ? (
+          <Pressable
+            onPress={() => setMenuOpen(true)}
+            style={({ pressed }) => [styles.menuBtn, pressed ? styles.pressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel="Más acciones del perfil"
+          >
+            <Text style={styles.menuBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              ⋯
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      <View style={styles.identityRow}>
-        <View style={styles.avatarSlot}>
-          <UserAvatar src={avatarUrl} username={username} size={92} />
-          {uploadingAvatar ? (
-            <View style={styles.avatarOverlay}>
-              <ActivityIndicator color={AUTH.gold} size="small" />
-            </View>
-          ) : null}
-          {!restricted ? (
-            <Pressable
-              onPress={onChangeAvatar}
-              disabled={disabled || uploadingAvatar}
-              style={({ pressed }) => [styles.avatarBtn, pressed ? styles.pressed : null]}
-              accessibilityRole="button"
-              accessibilityLabel={uploadingAvatar ? "Subiendo foto de perfil" : "Cambiar foto de perfil"}
-              accessibilityState={{ busy: uploadingAvatar }}
-            >
-              <Text style={styles.avatarBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Foto
+      <View style={styles.identityBlock}>
+        <View style={styles.identityRow}>
+          <View style={styles.avatarSlot}>
+            <UserAvatar src={avatarUrl} username={username} size={92} />
+            {uploadingAvatar ? (
+              <View style={styles.avatarOverlay}>
+                <ActivityIndicator color={AUTH.gold} size="small" />
+              </View>
+            ) : null}
+            {!restricted ? (
+              <Pressable
+                onPress={onChangeAvatar}
+                disabled={disabled || uploadingAvatar}
+                style={({ pressed }) => [styles.avatarBtn, pressed ? styles.pressed : null]}
+                accessibilityRole="button"
+                accessibilityLabel={uploadingAvatar ? "Subiendo foto de perfil" : "Cambiar foto de perfil"}
+                accessibilityState={{ busy: uploadingAvatar }}
+              >
+                <Text style={styles.avatarBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  Foto
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={styles.meta}>
+            <Text style={styles.handle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              @{username || "…"}
+            </Text>
+            {restricted ? (
+              <Text style={styles.restricted} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                Perfil limitado: solo seguidores ven el detalle completo.
               </Text>
-            </Pressable>
-          ) : null}
+            ) : null}
+          </View>
         </View>
 
-        <View style={styles.meta}>
-          <Text style={styles.handle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            @{username || "…"}
-          </Text>
-          {email ? (
-            <Text style={styles.email} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {email}
-            </Text>
-          ) : null}
-          {goal?.trim() ? (
-            <Text style={styles.goal} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {goal.trim()}
-            </Text>
-          ) : null}
-          {restricted ? (
-            <Text style={styles.restricted} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Perfil limitado: solo seguidores ven el detalle completo.
-            </Text>
-          ) : null}
-        </View>
+        {!restricted ? (
+          <ProfileSocialStatsRow {...socialStats} onStatPress={onSocialStatPress} />
+        ) : null}
       </View>
+
+      <ProfileHeroActionsMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onPreview={onPreview}
+        onShare={onShare}
+        onChangeBanner={!restricted ? onChangeBanner : undefined}
+        bannerDisabled={disabled || uploadingBanner}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: 8,
+    marginBottom: 0,
   },
   bannerWrap: {
     height: 148,
@@ -180,34 +164,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.45)",
   },
-  bannerActions: {
+  menuBtn: {
     position: "absolute",
-    right: 8,
+    right: 10,
     bottom: 10,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: 6,
-    maxWidth: "92%",
-  },
-  bannerBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "rgba(10, 10, 12, 0.88)",
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.4)",
   },
-  bannerBtnText: {
+  menuBtnText: {
     color: AUTH.gold,
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
+  },
+  identityBlock: {
+    paddingHorizontal: 16,
+    marginTop: -36,
+    gap: 10,
   },
   identityRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    paddingHorizontal: 16,
-    marginTop: -40,
+    alignItems: "flex-end",
     gap: 14,
   },
   avatarSlot: {
@@ -238,22 +221,13 @@ const styles = StyleSheet.create({
   },
   meta: {
     flex: 1,
-    paddingTop: 46,
-    gap: 4,
+    paddingBottom: 8,
+    minWidth: 0,
   },
   handle: {
     color: AUTH.neutral100,
     fontSize: 20,
     fontWeight: "700",
-  },
-  email: {
-    color: AUTH.muted,
-    fontSize: 13,
-  },
-  goal: {
-    color: AUTH.steel,
-    fontSize: 13,
-    marginTop: 4,
   },
   restricted: {
     color: "#fbbf24",

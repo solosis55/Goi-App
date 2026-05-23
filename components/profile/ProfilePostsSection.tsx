@@ -12,6 +12,7 @@ import { getErrorMessage } from "../../utils/errorMessages";
 import { ProfilePostDetailModal } from "./ProfilePostDetailModal";
 import { ProfilePostsGrid } from "./ProfilePostsGrid";
 import { ProfilePostsGridSkeleton } from "./ProfilePostsGridSkeleton";
+import { ProfilePinnedPostBanner } from "./ProfilePinnedPostBanner";
 import { ProfilePostsToolbar } from "./ProfilePostsToolbar";
 
 type ProfilePostsSectionProps = {
@@ -216,6 +217,11 @@ export function ProfilePostsSection({
         ? "Ningún guardado coincide con el filtro «Con foto»."
         : null;
 
+  const showPinnedBanner =
+    postsState.sourceTab === "mine" &&
+    Boolean(pinnedPostId?.trim()) &&
+    postsState.displayedPosts.some((p) => p.id === pinnedPostId?.trim());
+
   return (
     <View style={styles.wrap}>
       <ProfilePostsToolbar
@@ -266,6 +272,7 @@ export function ProfilePostsSection({
         </View>
       ) : (
         <>
+          {showPinnedBanner ? <ProfilePinnedPostBanner /> : null}
           <ProfilePostsGrid
             posts={postsState.displayedPosts}
             pinnedPostId={pinnedPostId}

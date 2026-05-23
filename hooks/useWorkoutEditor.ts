@@ -12,6 +12,7 @@ import type { Workout, WorkoutExerciseBlock } from "../types/workout";
 import { blocksFromLegacy } from "../utils/workoutBlocks";
 import {
   clearWorkoutCreateDraft,
+  isMeaningfulWorkoutCreateDraft,
   readWorkoutCreateDraft,
   writeWorkoutCreateDraft,
 } from "../utils/workoutCreateDraft";
@@ -50,6 +51,15 @@ function snapshotFromState(
 
 function snapshotsEqual(a: Snapshot, b: Snapshot): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function snapshotIsEmpty(s: Snapshot): boolean {
+  return (
+    !s.title.trim() &&
+    !s.description.trim() &&
+    !s.tagsInput.trim() &&
+    s.exerciseBlocks.length === 0
+  );
 }
 
 export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
@@ -100,11 +110,20 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
 
       void readWorkoutEditDraft().then((draft) => {
         if (cancelled) return;
-        const useDraft = draft?.workoutId === w.id;
-        const nextTitle = useDraft ? draft.title : w.title;
-        const nextDesc = useDraft ? draft.description : w.description;
-        const nextTags = useDraft ? draft.tagsInput : serverTags;
-        const nextBlocks = useDraft ? draft.exerciseBlocks : serverBlocks;
+        const draftMatchesWorkout =
+          draft?.workoutId === w.id &&
+          snapshotsEqual(
+            snapshotFromState(draft.title, draft.description, draft.tagsInput, draft.exerciseBlocks),
+            serverSnap
+          );
+        const useDraft = draft?.workoutId === w.id && !draftMatchesWorkout;
+        if (draftMatchesWorkout) {
+          void clearWorkoutEditDraft();
+        }
+        const nextTitle = useDraft ? draft!.title : w.title;
+        const nextDesc = useDraft ? draft!.description : w.description;
+        const nextTags = useDraft ? draft!.tagsInput : serverTags;
+        const nextBlocks = useDraft ? draft!.exerciseBlocks : serverBlocks;
         setTitle(nextTitle);
         setDescription(nextDesc);
         setTagsInput(nextTags);
@@ -117,8 +136,13 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
       };
     }
 
-    void readWorkoutCreateDraft().then((d) => {
+    void readWorkoutCreateDraft().then((rawDraft) => {
       if (cancelled) return;
+      let d = rawDraft;
+      if (d && !isMeaningfulWorkoutCreateDraft(d)) {
+        void clearWorkoutCreateDraft();
+        d = null;
+      }
       const nextTitle = d?.title ?? "";
       const nextDesc = d?.description ?? "";
       const nextTags = tagsToInputValue(d?.tags ?? []);
@@ -137,19 +161,6 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
     };
   }, [args]);
 
-  useEffect(() => {
-    if (args.mode !== "create" || !createDraftReady) return;
-    const t = setTimeout(() => {
-      void writeWorkoutCreateDraft({
-        title,
-        description,
-        exerciseBlocks,
-        tags: parseTagsInput(tagsInput),
-      });
-    }, 300);
-    return () => clearTimeout(t);
-  }, [args.mode, createDraftReady, title, description, exerciseBlocks, tagsInput]);
-
   const catalogById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog]);
 
   const currentSnapshot = useMemo(
@@ -161,6 +172,26 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
     if (!baselineRef.current) return false;
     return !snapshotsEqual(baselineRef.current, currentSnapshot);
   }, [currentSnapshot]);
+
+  useEffect(() => {
+    if (args.mode !== "create" || !createDraftReady) return;
+    if (!isDirty) {
+      const baseline = baselineRef.current;
+      if (!baseline || snapshotIsEmpty(baseline)) {
+        void clearWorkoutCreateDraft();
+      }
+      return;
+    }
+    const t = setTimeout(() => {
+      void writeWorkoutCreateDraft({
+        title,
+        description,
+        exerciseBlocks,
+        tags: parseTagsInput(tagsInput),
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [args.mode, createDraftReady, isDirty, title, description, exerciseBlocks, tagsInput]);
 
   useEffect(() => {
     if (args.mode !== "edit" || !hydrated) return;
@@ -240,6 +271,34 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
     }
   }, [args, titleTrim, description, exerciseBlocks, tagsInput]);
 
+  const clearDraft = useCallback(async () => {
+    if (args.mode === "create") {
+      setTitle("");
+      setDescription("");
+      setTagsInput("");
+      setExerciseBlocks([]);
+      baselineRef.current = snapshotFromState("", "", "", []);
+    } else {
+      const baseline = baselineRef.current;
+      if (baseline) {
+        setTitle(baseline.title);
+        setDescription(baseline.description);
+        setTagsInput(baseline.tagsInput);
+        setExerciseBlocks(
+          JSON.parse(JSON.stringify(baseline.exerciseBlocks)) as WorkoutExerciseBlock[]
+        );
+      }
+    }
+    setError(null);
+    if (args.mode === "create") {
+      await clearWorkoutCreateDraft();
+    } else {
+      await clearWorkoutEditDraft();
+    }
+  }, [args.mode]);
+
+  const hasDraftToClear = isDirty;
+
   return {
     title,
     setTitle,
@@ -262,5 +321,7 @@ export function useWorkoutEditor(args: UseWorkoutEditorArgs) {
     save,
     hydrated,
     isEdit: args.mode === "edit",
+    clearDraft,
+    hasDraftToClear,
   };
 }

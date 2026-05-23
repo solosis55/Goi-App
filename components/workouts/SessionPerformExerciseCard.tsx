@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  LayoutAnimation,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  UIManager,
-  View,
-} from "react-native";
+import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View } from "react-native";
+import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { WORKOUT_UI, workoutScreenStyles } from "../../constants/workoutScreenUi";
 import { WORKOUT_SETS_MAX_PER_EXERCISE } from "../../constants/workoutFormLimits";
 import type { Exercise } from "../../types/exercise";
@@ -23,6 +16,8 @@ import { antColumnForSet, lastDoneInSession } from "../../utils/performSetAnt";
 import { performBlockHeadMetaLine, performBlockSetsDoneRatio } from "../../utils/performBlockHeadMeta";
 import { formatRestDuration } from "../../constants/workoutRest";
 import { blockRestSec } from "../../utils/performBlockRest";
+import { buildVsLastSummary } from "../../utils/workoutVsLastSummary";
+import { WorkoutVsLastChip } from "./WorkoutVsLastChip";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { ExerciseBlockCardShell } from "./ExerciseBlockCardShell";
 import { ExerciseBlockMetaChips, formatExerciseMetaSummary } from "./ExerciseBlockMetaChips";
@@ -35,30 +30,6 @@ import { WORKOUT_BLOCK_NOTES_MAX } from "../../constants/workoutSessions";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
-}
-
-function confirmRemoveSet(setNumber: number, onConfirm: () => void) {
-  const message = `Se eliminará la serie ${setNumber} de este ejercicio.`;
-  if (Platform.OS === "web") {
-    if (typeof globalThis.confirm === "function" && globalThis.confirm(`¿Quitar la serie ${setNumber}?`)) {
-      onConfirm();
-    }
-    return;
-  }
-  Alert.alert("Quitar serie", message, [
-    { text: "Cancelar", style: "cancel" },
-    { text: "Quitar", style: "destructive", onPress: onConfirm },
-  ]);
-}
-
-function alertCannotRemoveLastSet() {
-  if (Platform.OS === "web") {
-    if (typeof globalThis.alert === "function") {
-      globalThis.alert("Debe quedar al menos una serie en el ejercicio.");
-    }
-    return;
-  }
-  Alert.alert("Quitar serie", "Debe quedar al menos una serie en el ejercicio.");
 }
 
 type SessionPerformExerciseCardProps = {
@@ -90,6 +61,7 @@ export function SessionPerformExerciseCard({
   onRemoveSet,
   lastPerformance,
 }: SessionPerformExerciseCardProps) {
+  const { showAlert } = useGoiAlert();
   const [collapsed, setCollapsed] = useState(false);
   const [setTypePickerIdx, setSetTypePickerIdx] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -109,6 +81,7 @@ export function SessionPerformExerciseCard({
   const canRemoveSet = totalSets > 1;
   const doneRatio = useMemo(() => performBlockSetsDoneRatio(doneCount, totalSets), [doneCount, totalSets]);
   const headMeta = performBlockHeadMetaLine(block, doneCount, totalSets);
+  const vsLast = useMemo(() => buildVsLastSummary(block, lastPerformance), [block, lastPerformance]);
   const metaHint = formatExerciseMetaSummary(block);
 
   const firstIncompleteIdx = useMemo(() => block.sets.findIndex((s) => !s.done), [block.sets]);
@@ -127,14 +100,26 @@ export function SessionPerformExerciseCard({
   const removeLastSet = () => {
     if (disabled) return;
     if (!canRemoveSet) {
-      alertCannotRemoveLastSet();
+      showAlert({
+        title: "Quitar serie",
+        message: "Debe quedar al menos una serie en el ejercicio.",
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
       return;
     }
     const setIndex = totalSets - 1;
-    confirmRemoveSet(setIndex + 1, () => onRemoveSet(setIndex));
+    showAlert({
+      title: "Quitar serie",
+      message: `Se eliminará la serie ${setIndex + 1} de este ejercicio.`,
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Quitar", style: "destructive", onPress: () => onRemoveSet(setIndex) },
+      ],
+    });
   };
 
   const toggleDone = (setIndex: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const row = block.sets[setIndex];
     if (!row) return;
     const nextDone = !row.done;
@@ -175,6 +160,7 @@ export function SessionPerformExerciseCard({
       <Text style={styles.headMetaLine} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
         {headMeta}
       </Text>
+      {vsLast ? <WorkoutVsLastChip label={vsLast.label} trend={vsLast.trend} /> : null}
       {progressBar}
     </>
   );
@@ -183,7 +169,7 @@ export function SessionPerformExerciseCard({
     <>
       <ExerciseBlockCardShell
         exerciseName={name}
-        imageUri={exercise?.imageUrl}
+        imageUri={exercise?.imageUrl ? resolveMediaUrl(exercise.imageUrl) : null}
         badgeLabel={allDone ? "✓" : index + 1}
         badgeDone={allDone}
         collapsed={collapsed}

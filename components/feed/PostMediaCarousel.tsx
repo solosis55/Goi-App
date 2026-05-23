@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { DoubleTapHeartBurst } from "./DoubleTapHeartBurst";
 import {
   Image,
   NativeScrollEvent,
@@ -75,19 +76,16 @@ function TappableSlide({
   height,
   slideIndex,
   onOpenLightbox,
-  onDoubleTapLike,
+  onDoubleTap,
 }: {
   uri: string;
   width: number;
   height: number;
   slideIndex: number;
   onOpenLightbox: (index: number) => void;
-  onDoubleTapLike?: () => void;
+  onDoubleTap: () => void;
 }) {
-  const onPress = useSingleDoubleTap(
-    () => onOpenLightbox(slideIndex),
-    () => onDoubleTapLike?.(),
-  );
+  const onPress = useSingleDoubleTap(() => onOpenLightbox(slideIndex), onDoubleTap);
 
   return <CarouselSlide uri={uri} width={width} height={height} onPress={onPress} />;
 }
@@ -101,6 +99,12 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
   const [index, setIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [heartBurst, setHeartBurst] = useState(0);
+
+  const handleDoubleTap = useCallback(() => {
+    setHeartBurst((n) => n + 1);
+    onDoubleTapLike?.();
+  }, [onDoubleTapLike]);
 
   const openLightbox = useCallback((i: number) => {
     setLightboxIndex(i);
@@ -128,7 +132,7 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
             height={slideHeight}
             slideIndex={0}
             onOpenLightbox={openLightbox}
-            onDoubleTapLike={onDoubleTapLike}
+            onDoubleTap={handleDoubleTap}
           />
         ) : (
           <>
@@ -149,7 +153,7 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
                   height={slideHeight}
                   slideIndex={i}
                   onOpenLightbox={openLightbox}
-                  onDoubleTapLike={onDoubleTapLike}
+                  onDoubleTap={handleDoubleTap}
                 />
               ))}
             </ScrollView>
@@ -165,6 +169,7 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
             </View>
           </>
         )}
+        <DoubleTapHeartBurst trigger={heartBurst} />
       </View>
 
       <PostMediaLightbox
@@ -181,6 +186,9 @@ const styles = StyleSheet.create({
   wrap: {
     position: "relative",
     backgroundColor: "#141416",
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: "hidden",
   },
   slide: {
     overflow: "hidden",
@@ -221,14 +229,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 10,
     right: 12,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: "rgba(0, 0, 0, 0.62)",
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.25)",
   },
   counterText: {
     color: AUTH.neutral100,
     fontSize: 11,
-    fontWeight: "600",
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
 });

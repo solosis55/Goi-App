@@ -222,10 +222,10 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   setRowDone: {
-    backgroundColor: "rgba(22, 40, 28, 0.4)",
+    backgroundColor: "rgba(22, 40, 28, 0.28)",
     borderLeftWidth: 2,
-    borderLeftColor: "rgba(134, 239, 172, 0.5)",
-    opacity: 0.92,
+    borderLeftColor: "rgba(134, 239, 172, 0.4)",
+    opacity: 0.55,
   },
   setRowActive: {
     backgroundColor: "rgba(48, 44, 28, 0.62)",

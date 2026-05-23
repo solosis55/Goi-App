@@ -24,6 +24,7 @@ import { AuthTopGlow } from "../components/AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, authScreenStyles, collectFieldErrors } from "../constants/authUi";
 import { loginFormSchema } from "../constants/loginSchema";
 import { useAuth } from "../context/AuthContext";
+import { useGoiAlert } from "../context/GoiAlertContext";
 import { getErrorMessage } from "../utils/errorMessages";
 import { loadLastLoginEmail, saveLastLoginEmail } from "../utils/lastLoginEmail";
 import { offerBiometricUnlockAfterLogin } from "../utils/offerBiometricUnlock";
@@ -43,6 +44,7 @@ function hapticLoginErrorLight() {
 }
 
 export default function LoginScreen() {
+  const { showAlert } = useGoiAlert();
   const router = useRouter();
   const { addAccount } = useLocalSearchParams<{ addAccount?: string }>();
   const isAddAccount = addAccount === "1";
@@ -126,7 +128,7 @@ export default function LoginScreen() {
         router.replace("/(tabs)/perfil");
         return;
       }
-      offerBiometricUnlockAfterLogin(router, notifyBiometricUnlockOptIn);
+      offerBiometricUnlockAfterLogin(router, notifyBiometricUnlockOptIn, showAlert);
     } catch (e) {
       hapticLoginErrorLight();
       if (e instanceof ApiError && e.code === "AUTH_RATE_LIMITED") {

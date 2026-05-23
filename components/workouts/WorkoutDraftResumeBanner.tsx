@@ -3,12 +3,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, authScreenStyles } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { WORKOUT_UI, workoutScreenStyles } from "../../constants/workoutScreenUi";
 import {
+  clearWorkoutCreateDraft,
   isMeaningfulWorkoutCreateDraft,
   readWorkoutCreateDraft,
 } from "../../utils/workoutCreateDraft";
 import {
+  clearWorkoutEditDraft,
   isMeaningfulWorkoutEditDraft,
   readWorkoutEditDraft,
 } from "../../utils/workoutEditDraft";
@@ -46,6 +49,7 @@ async function loadResumeTarget(): Promise<ResumeTarget | null> {
 
 export function WorkoutDraftResumeBanner() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const [target, setTarget] = useState<ResumeTarget | null>(null);
 
   const refresh = useCallback(() => {
@@ -65,7 +69,7 @@ export function WorkoutDraftResumeBanner() {
 
   if (!target) return null;
 
-  const onPress = () => {
+  const onContinue = () => {
     if (target.kind === "perform") {
       router.push({ pathname: "/entrenar/[workoutId]", params: { workoutId: target.workoutId } });
       return;
@@ -77,41 +81,85 @@ export function WorkoutDraftResumeBanner() {
     router.push({ pathname: "/rutina/[id]", params: { id: target.workoutId } });
   };
 
+  const onDiscardDraft = () => {
+    showAlert({
+      title: "Eliminar borrador",
+      message: "Se perderán los cambios locales que no hayas guardado en la rutina.",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              if (target.kind === "create") {
+                await clearWorkoutCreateDraft();
+              } else if (target.kind === "edit") {
+                await clearWorkoutEditDraft();
+              }
+              refresh();
+            })();
+          },
+        },
+      ],
+    });
+  };
+
   const isPerform = target.kind === "perform";
   const kicker = isPerform ? "Entrenamiento en curso" : "Borrador en curso";
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.banner,
-        isPerform ? styles.bannerLive : styles.bannerDraft,
-        pressed ? workoutScreenStyles.pressed : null,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={`Continuar: ${target.label}`}
-    >
+    <View style={[styles.banner, isPerform ? styles.bannerLive : styles.bannerDraft]}>
       <View style={workoutScreenStyles.cardGlowLine} />
-      <View style={[styles.iconWrap, isPerform ? styles.iconWrapLive : null]}>
-        <Text style={[styles.iconChar, isPerform ? styles.iconCharLive : null]}>{isPerform ? "▶" : "✎"}</Text>
-      </View>
-      <View style={styles.textCol}>
-        <Text style={styles.kicker} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          {kicker}
-        </Text>
-        <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          {target.label}
-        </Text>
-        {isPerform ? (
-          <Text style={styles.subProgress} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {target.progress}
+      <Pressable
+        onPress={onContinue}
+        style={({ pressed }) => [styles.mainHit, pressed ? workoutScreenStyles.pressed : null]}
+        accessibilityRole="button"
+        accessibilityLabel={`Continuar: ${target.label}`}
+      >
+        <View style={[styles.iconWrap, isPerform ? styles.iconWrapLive : null]}>
+          <Text style={[styles.iconChar, isPerform ? styles.iconCharLive : null]}>{isPerform ? "▶" : "✎"}</Text>
+        </View>
+        <View style={styles.textCol}>
+          <Text style={styles.kicker} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {kicker}
           </Text>
+          <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {target.label}
+          </Text>
+          {isPerform ? (
+            <Text style={styles.subProgress} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {target.progress}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
+
+      <View style={styles.actionsCol}>
+        <Pressable
+          onPress={onContinue}
+          style={({ pressed }) => [styles.actionBtn, pressed ? workoutScreenStyles.pressed : null]}
+          accessibilityRole="button"
+          accessibilityLabel="Continuar"
+        >
+          <Text style={[styles.cta, isPerform ? styles.ctaLive : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Continuar
+          </Text>
+        </Pressable>
+        {!isPerform ? (
+          <Pressable
+            onPress={onDiscardDraft}
+            style={({ pressed }) => [styles.discardBtn, pressed ? workoutScreenStyles.pressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel="Eliminar borrador"
+          >
+            <Text style={styles.discardText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Eliminar
+            </Text>
+          </Pressable>
         ) : null}
       </View>
-      <Text style={[styles.cta, isPerform ? styles.ctaLive : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Continuar
-      </Text>
-    </Pressable>
+    </View>
   );
 }
 
@@ -119,7 +167,7 @@ const styles = StyleSheet.create({
   banner: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
     marginBottom: 4,
     paddingVertical: 12,
     paddingHorizontal: 14,
@@ -134,6 +182,13 @@ const styles = StyleSheet.create({
   bannerDraft: {
     borderColor: AUTH.cardBorder,
     backgroundColor: WORKOUT_UI.surfaceCard,
+  },
+  mainHit: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 0,
   },
   iconWrap: {
     width: 40,
@@ -179,6 +234,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  actionsCol: {
+    alignItems: "flex-end",
+    gap: 6,
+    flexShrink: 0,
+  },
+  actionBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
   cta: authScreenStyles.linkText,
   ctaLive: authScreenStyles.linkText,
+  discardBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.45)",
+    backgroundColor: "rgba(40, 20, 20, 0.4)",
+  },
+  discardText: {
+    color: AUTH.danger,
+    fontSize: 11,
+    fontWeight: "700",
+  },
 });

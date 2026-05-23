@@ -1,10 +1,10 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Platform } from "react-native";
 import { getProfile, updateProfile, uploadProfileAvatar, uploadProfileBanner } from "../api/auth";
 import { ApiError } from "../api/client";
 import { profileFormSchema, type ProfileForm } from "../constants/profileSchema";
 import { useAuth } from "../context/AuthContext";
+import { useGoiAlert } from "../context/GoiAlertContext";
 import type { ProfileUser, SafeUser } from "../types/auth";
 import { getErrorMessage } from "../utils/errorMessages";
 import { pickProfileImage } from "../utils/profileImagePick";
@@ -39,6 +39,7 @@ function formsEqual(a: ProfileForm, b: ProfileForm): boolean {
 
 export function useProfileEditor() {
   const { user, updateSessionUser } = useAuth();
+  const { showAlert } = useGoiAlert();
 
   const [profile, setProfile] = useState<ProfileUser | null>(null);
   const [form, setForm] = useState<ProfileForm | null>(null);
@@ -171,9 +172,11 @@ export function useProfileEditor() {
         const res = await updateProfile(user.id, patch);
         await applyProfile(res.user);
 
-        if (Platform.OS !== "web") {
-          Alert.alert("Goi", kind === "avatar" ? "Foto actualizada." : "Cabecera actualizada.");
-        }
+        showAlert({
+          title: "Goi",
+          message: kind === "avatar" ? "Foto actualizada." : "Cabecera actualizada.",
+          buttons: [{ text: "Entendido", style: "cancel" }],
+        });
       } catch (e) {
         const fallback = kind === "avatar" ? "No se pudo subir la foto." : "No se pudo subir la cabecera.";
         setImageError(e instanceof ApiError ? getErrorMessage(e, fallback) : fallback);
@@ -181,7 +184,7 @@ export function useProfileEditor() {
         setUploading(false);
       }
     },
-    [user?.id, restricted, busy, applyProfile, profile?.email]
+    [user?.id, restricted, busy, applyProfile, profile?.email, showAlert]
   );
 
   return {

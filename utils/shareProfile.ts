@@ -1,4 +1,5 @@
-import { Alert, Platform, Share } from "react-native";
+import { Platform, Share } from "react-native";
+import { goiAlert } from "../context/GoiAlertContext";
 import { buildProfileShareContent } from "./profileShare";
 
 export async function shareProfile(username: string, userId: string): Promise<boolean> {
@@ -12,10 +13,18 @@ export async function shareProfile(username: string, userId: string): Promise<bo
       }
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(message);
-        Alert.alert("Goi", "Enlace copiado al portapapeles.");
+        goiAlert({
+          title: "Goi",
+          message: "Enlace copiado al portapapeles.",
+          buttons: [{ text: "Entendido", style: "cancel" }],
+        });
         return true;
       }
-      Alert.alert("Goi", message);
+      goiAlert({
+        title: "Goi",
+        message,
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
       return false;
     }
 

@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -21,41 +20,44 @@ import {
   POST_VISIBILITY_OPTIONS,
 } from "../../constants/createPost";
 import { useAuth } from "../../context/AuthContext";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { useCreatePostForm } from "../../hooks/useCreatePostForm";
 import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
 import { UserAvatar } from "../ui/UserAvatar";
 
 export function CreatePostScreen() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const form = useCreatePostForm();
 
   const close = useCallback(() => {
     if (form.hasDraft && !form.submitting) {
-      if (Platform.OS === "web") {
-        const ok = globalThis.confirm?.("¿Descartar la publicación?");
-        if (!ok) return;
-      } else {
-        Alert.alert("Descartar borrador", "Perderás el texto y las fotos.", [
+      showAlert({
+        title: "Descartar borrador",
+        message: "Perderás el texto y las fotos.",
+        buttons: [
           { text: "Seguir editando", style: "cancel" },
           { text: "Descartar", style: "destructive", onPress: () => router.back() },
-        ]);
-        return;
-      }
+        ],
+      });
+      return;
     }
     router.back();
-  }, [form.hasDraft, form.submitting, router]);
+  }, [form.hasDraft, form.submitting, router, showAlert]);
 
   const onPublish = useCallback(async () => {
     const result = await form.submit();
     if (result.ok) {
       router.replace("/(tabs)");
-      if (Platform.OS !== "web") {
-        Alert.alert("Goi", "Publicación creada.");
-      }
+      showAlert({
+        title: "Goi",
+        message: "Publicación creada.",
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
     }
-  }, [form, router]);
+  }, [form, router, showAlert]);
 
   const canPublish = form.validation.canSubmit && !form.submitting && !form.mediaBusy;
   const slotsLeft = POST_IMAGE_MAX_FILES - form.images.length;

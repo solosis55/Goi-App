@@ -1,8 +1,12 @@
-import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useCallback } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { WORKOUT_UI, workoutScreenStyles } from "../../constants/workoutScreenUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
+import { workoutScreenStyles } from "../../constants/workoutScreenUi";
 import type { WorkoutSessionWithTitle } from "../../types/workoutSession";
 import { formatSessionPerformedAt } from "../../utils/workoutSessionDate";
+import { groupSessionsByDay } from "../../utils/workoutSessionGroups";
+import { WorkoutHubEmptyState } from "./WorkoutHubEmptyState";
 
 type WorkoutSessionsListProps = {
   sessions: WorkoutSessionWithTitle[];
@@ -10,65 +14,81 @@ type WorkoutSessionsListProps = {
   onDelete: (id: string) => void;
 };
 
-function confirmDelete(onConfirm: () => void) {
-  if (Platform.OS === "web") {
-    if (typeof globalThis.confirm === "function" && globalThis.confirm("¿Quitar este entrenamiento del historial?")) {
-      onConfirm();
-    }
-    return;
-  }
-  Alert.alert("Quitar entrenamiento", "Se eliminará del historial.", [
-    { text: "Cancelar", style: "cancel" },
-    { text: "Quitar", style: "destructive", onPress: onConfirm },
-  ]);
-}
-
 export function WorkoutSessionsList({ sessions, loading, onDelete }: WorkoutSessionsListProps) {
+  const { showAlert } = useGoiAlert();
+
+  const confirmDelete = useCallback(
+    (onConfirm: () => void) => {
+      showAlert({
+        title: "Quitar entrenamiento",
+        message: "Se eliminará del historial.",
+        buttons: [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Quitar", style: "destructive", onPress: onConfirm },
+        ],
+      });
+    },
+    [showAlert]
+  );
+
+  const groups = groupSessionsByDay(sessions);
+
   if (loading && sessions.length === 0) {
     return <ActivityIndicator color={AUTH.gold} style={{ marginVertical: 24 }} />;
   }
 
   if (sessions.length === 0) {
     return (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Sin sesiones completadas
-        </Text>
-        <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Ve a Rutinas y pulsa «Entrenar» en una plantilla para realizar tu primer entreno.
-        </Text>
-      </View>
+      <WorkoutHubEmptyState
+        title="Sin sesiones completadas"
+        body="Ve a Rutinas y pulsa «Entrenar» en una plantilla para realizar tu primer entreno."
+      />
     );
   }
 
   return (
     <View style={styles.list} accessibilityRole="list">
-      {sessions.map((session) => (
-        <View key={session.id} style={styles.card}>
-          <View style={workoutScreenStyles.cardGlowLine} />
-          <View style={styles.cardBody}>
-            <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {session.workoutTitle}
+      {groups.map((group) => (
+        <View key={group.key} style={styles.group}>
+          <View style={styles.groupHeader}>
+            <View style={styles.timelineDot} />
+            <Text style={styles.groupLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {group.label}
             </Text>
-            <Text style={styles.when} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {formatSessionPerformedAt(session.performedAt)}
-            </Text>
-            {session.notes?.trim() ? (
-              <Text style={styles.notes} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                {session.notes.trim()}
-              </Text>
-            ) : null}
           </View>
-          <Pressable
-            onPress={() => confirmDelete(() => onDelete(session.id))}
-            style={({ pressed }) => [styles.deleteBtn, pressed ? styles.pressed : null]}
-            accessibilityRole="button"
-            accessibilityLabel={`Quitar entrenamiento ${session.workoutTitle}`}
-          >
-            <Text style={styles.deleteText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Quitar
-            </Text>
-          </Pressable>
+          <View style={styles.groupBody}>
+            <View style={styles.timelineLine} />
+            <View style={styles.groupCards}>
+              {group.sessions.map((session) => (
+                <View key={session.id} style={styles.card}>
+                  <View style={workoutScreenStyles.cardGlowLine} />
+                  <View style={styles.cardBody}>
+                    <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      {session.workoutTitle}
+                    </Text>
+                    <Text style={styles.when} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      {formatSessionPerformedAt(session.performedAt)}
+                    </Text>
+                    {session.notes?.trim() ? (
+                      <Text style={styles.notes} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                        {session.notes.trim()}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Pressable
+                    onPress={() => confirmDelete(() => onDelete(session.id))}
+                    style={({ pressed }) => [styles.deleteBtn, pressed ? styles.pressed : null]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Quitar entrenamiento ${session.workoutTitle}`}
+                  >
+                    <Text style={styles.deleteText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Quitar
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </View>
         </View>
       ))}
     </View>
@@ -77,7 +97,48 @@ export function WorkoutSessionsList({ sessions, loading, onDelete }: WorkoutSess
 
 const styles = StyleSheet.create({
   list: {
+    gap: 16,
+  },
+  group: {
+    gap: 8,
+  },
+  groupHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
+    paddingLeft: 2,
+  },
+  timelineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: AUTH.gold,
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.55)",
+  },
+  groupLabel: {
+    color: AUTH.gold,
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "capitalize",
+  },
+  groupBody: {
+    flexDirection: "row",
+    gap: 12,
+    paddingLeft: 5,
+  },
+  timelineLine: {
+    width: 2,
+    borderRadius: 1,
+    backgroundColor: "rgba(212, 175, 55, 0.22)",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  groupCards: {
+    flex: 1,
+    gap: 10,
+    minWidth: 0,
   },
   card: {
     ...workoutScreenStyles.listCard,
@@ -107,33 +168,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   deleteBtn: {
+    minHeight: 44,
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(248, 113, 113, 0.35)",
+    justifyContent: "center",
   },
   deleteText: {
     color: AUTH.danger,
     fontSize: 13,
     fontWeight: "600",
-  },
-  empty: {
-    paddingVertical: 28,
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 12,
-  },
-  emptyTitle: {
-    color: AUTH.neutral100,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyBody: {
-    color: AUTH.muted,
-    fontSize: 14,
-    textAlign: "center",
-    lineHeight: 20,
   },
   pressed: {
     opacity: 0.88,

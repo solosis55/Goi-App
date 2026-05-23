@@ -7,6 +7,7 @@ type ProfileEditSubTabBarProps = {
   onChange: (tab: ProfileEditSubTab) => void;
 };
 
+/** Misma jerarquía visual que las pestañas principales del perfil. */
 export function ProfileEditSubTabBar({ active, onChange }: ProfileEditSubTabBarProps) {
   return (
     <View style={styles.wrap} accessibilityRole="tablist" accessibilityLabel="Sección del perfil">
@@ -16,11 +17,7 @@ export function ProfileEditSubTabBar({ active, onChange }: ProfileEditSubTabBarP
           <Pressable
             key={tab.id}
             onPress={() => onChange(tab.id)}
-            style={({ pressed }) => [
-              styles.segment,
-              selected ? styles.segmentActive : null,
-              pressed ? styles.segmentPressed : null,
-            ]}
+            style={({ pressed }) => [styles.tab, pressed ? styles.tabPressed : null]}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={tab.label}
@@ -31,6 +28,7 @@ export function ProfileEditSubTabBar({ active, onChange }: ProfileEditSubTabBarP
             >
               {tab.label}
             </Text>
+            {selected ? <View style={styles.indicator} /> : <View style={styles.indicatorPlaceholder} />}
           </Pressable>
         );
       })}
@@ -41,27 +39,19 @@ export function ProfileEditSubTabBar({ active, onChange }: ProfileEditSubTabBarP
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
-    padding: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: AUTH.fieldBorder,
-    backgroundColor: "rgba(23, 23, 23, 0.75)",
-    marginBottom: 4,
+    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(64, 64, 64, 0.65)",
   },
-  segment: {
+  tab: {
     flex: 1,
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
   },
-  segmentActive: {
-    backgroundColor: "rgba(35, 32, 22, 0.95)",
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.4)",
-  },
-  segmentPressed: {
-    opacity: 0.9,
+  tabPressed: {
+    opacity: 0.88,
   },
   label: {
     color: AUTH.muted,
@@ -70,5 +60,19 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: AUTH.gold,
+  },
+  indicator: {
+    marginTop: 8,
+    height: 2,
+    width: "70%",
+    maxWidth: 64,
+    borderRadius: 1,
+    backgroundColor: AUTH.gold,
+  },
+  indicatorPlaceholder: {
+    marginTop: 8,
+    height: 2,
+    width: "70%",
+    maxWidth: 64,
   },
 });

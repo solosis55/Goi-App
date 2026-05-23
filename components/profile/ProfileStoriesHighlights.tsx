@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { getStories } from "../../api/stories";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { GOI_DAILY_LABEL } from "../../constants/storyBranding";
 import type { FeedStoryAuthor } from "../../types/story";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { UserAvatar } from "../ui/UserAvatar";
@@ -14,6 +15,8 @@ type ProfileStoriesHighlightsProps = {
   isSelf: boolean;
   onViewStory: (author: FeedStoryAuthor) => void;
   onCreateStory?: () => void;
+  /** Sin borde inferior cuando va dentro de la pestaña Publicaciones. */
+  embedded?: boolean;
 };
 
 export function ProfileStoriesHighlights({
@@ -23,6 +26,7 @@ export function ProfileStoriesHighlights({
   isSelf,
   onViewStory,
   onCreateStory,
+  embedded,
 }: ProfileStoriesHighlightsProps) {
   const [author, setAuthor] = useState<FeedStoryAuthor | null>(null);
   const [seenMap, setSeenMap] = useState<Record<string, string>>({});
@@ -80,16 +84,16 @@ export function ProfileStoriesHighlights({
   };
 
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, embedded ? styles.wrapEmbedded : null]}>
       <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Historias
+        {GOI_DAILY_LABEL}
       </Text>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.strip}
         accessibilityRole="list"
-        accessibilityLabel="Historias destacadas del perfil"
+        accessibilityLabel={`${GOI_DAILY_LABEL} en el perfil`}
       >
         <Pressable
           onPress={onPress}
@@ -97,12 +101,12 @@ export function ProfileStoriesHighlights({
           accessibilityRole="button"
           accessibilityLabel={
             isNewSlot
-              ? "Crear nueva historia"
+              ? `Publicar ${GOI_DAILY_LABEL}`
               : hasSlides
                 ? unseen
-                  ? `Historia de ${username}, sin ver`
-                  : `Historia de ${username}`
-                : `Sin historia activa de ${username}`
+                  ? `${GOI_DAILY_LABEL} de ${username}, sin ver`
+                  : `${GOI_DAILY_LABEL} de ${username}`
+                : `Sin ${GOI_DAILY_LABEL} activo de ${username}`
           }
         >
           <View
@@ -119,7 +123,7 @@ export function ProfileStoriesHighlights({
             ) : null}
           </View>
           <Text style={styles.caption} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {isNewSlot ? "Nueva" : hasSlides ? (isSelf ? "Tu historia" : username) : "—"}
+            {isNewSlot ? "Nueva" : hasSlides ? (isSelf ? "Tu Daily" : username) : "—"}
           </Text>
         </Pressable>
       </ScrollView>
@@ -133,6 +137,11 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(64, 64, 64, 0.65)",
+  },
+  wrapEmbedded: {
+    borderBottomWidth: 0,
+    paddingTop: 8,
+    backgroundColor: "rgba(10, 10, 12, 0.35)",
   },
   title: {
     color: AUTH.muted,

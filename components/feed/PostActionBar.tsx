@@ -1,13 +1,21 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { FeedHeartIcon } from "./FeedHeartIcon";
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 type PostActionBarProps = {
   liked: boolean;
   likesCount: number;
+  commentsCount?: number;
   onToggleLike: () => void;
   onPressComment: () => void;
+  commentsExpanded?: boolean;
+  onPressShare?: () => void;
+  onPressLikesCount?: () => void;
+  onPressCommentsCount?: () => void;
   saved?: boolean;
   onToggleSave?: () => void;
 };
@@ -17,6 +25,19 @@ function CommentIcon({ size = 24, color = AUTH.neutral100 }: { size?: number; co
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M21 11.5a8.38 8.38 0 0 1-1.9 5.4 8.5 8.5 0 0 1-6.6 3.1 8.38 8.38 0 0 1-3.9-.8L3 21l1.8-5.7a8.38 8.38 0 0 1-.8-3.9 8.5 8.5 0 0 1 3.1-6.6 8.38 8.38 0 0 1 5.4-1.9h.5a8.48 8.48 0 0 1 8 8v.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function ShareIcon({ color = AUTH.neutral100 }: { color?: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M16 8l-8 4 8 4V8zM6 6h2v12H6V6zm10 0h2v12h-2V6z"
         stroke={color}
         strokeWidth={1.75}
         strokeLinejoin="round"
@@ -38,58 +59,135 @@ function BookmarkIcon({ filled, color }: { filled: boolean; color: string }) {
   );
 }
 
+function bounceScale() {
+  return withSequence(withSpring(1.28, { damping: 8, stiffness: 380 }), withSpring(1, { damping: 12 }));
+}
+
 export function PostActionBar({
   liked,
   likesCount,
+  commentsCount = 0,
   onToggleLike,
   onPressComment,
+  commentsExpanded = false,
+  onPressShare,
+  onPressLikesCount,
+  onPressCommentsCount,
   saved = false,
   onToggleSave,
 }: PostActionBarProps) {
   const heartColor = liked ? AUTH.gold : AUTH.neutral100;
+  const likeScale = useSharedValue(1);
+  const saveScale = useSharedValue(1);
+
+  const likeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: likeScale.value }],
+  }));
+
+  const saveAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: saveScale.value }],
+  }));
+
+  const handleLike = () => {
+    likeScale.value = bounceScale();
+    onToggleLike();
+  };
+
+  const handleSave = () => {
+    saveScale.value = bounceScale();
+    onToggleSave?.();
+  };
+
+  const likesLabel = likesCount === 1 ? "1 me gusta" : `${likesCount} me gusta`;
+  const commentsLabel =
+    commentsCount === 1 ? "1 comentario" : `${commentsCount} comentarios`;
 
   return (
     <View style={styles.bar}>
       <View style={styles.icons}>
-        <Pressable
-          onPress={onToggleLike}
+        <AnimatedPressable
+          onPress={handleLike}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityState={{ selected: liked }}
           accessibilityLabel={liked ? "Quitar me gusta" : "Dar me gusta"}
-          style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [styles.iconBtn, likeAnimStyle, pressed ? styles.pressed : null]}
         >
           <FeedHeartIcon filled={liked} color={heartColor} size={26} />
-        </Pressable>
+        </AnimatedPressable>
 
         <Pressable
           onPress={onPressComment}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Comentar"
+          accessibilityState={{ expanded: commentsExpanded }}
+          accessibilityLabel={commentsExpanded ? "Ocultar comentarios" : "Comentar"}
           style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
         >
           <CommentIcon />
         </Pressable>
 
-        {onToggleSave ? (
+        {onPressShare ? (
           <Pressable
-            onPress={onToggleSave}
+            onPress={onPressShare}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Compartir publicación"
+            style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
+          >
+            <ShareIcon />
+          </Pressable>
+        ) : null}
+
+        {onToggleSave ? (
+          <AnimatedPressable
+            onPress={handleSave}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityState={{ selected: saved }}
             accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
-            style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.iconBtn, saveAnimStyle, pressed ? styles.pressed : null]}
           >
             <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
-          </Pressable>
+          </AnimatedPressable>
         ) : null}
       </View>
 
-      {likesCount > 0 ? (
-        <Text style={styles.likesLine} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          {likesCount === 1 ? "1 me gusta" : `${likesCount} me gusta`}
-        </Text>
+      {likesCount > 0 || commentsCount > 0 ? (
+        <View style={styles.statsRow}>
+          {likesCount > 0 ? (
+            onPressLikesCount ? (
+              <Pressable onPress={onPressLikesCount} hitSlop={6} accessibilityRole="button">
+                <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {likesLabel}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                {likesLabel}
+              </Text>
+            )
+          ) : null}
+          {likesCount > 0 && commentsCount > 0 ? (
+            <Text style={styles.statsDot} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {" "}
+              ·{" "}
+            </Text>
+          ) : null}
+          {commentsCount > 0 ? (
+            onPressCommentsCount ? (
+              <Pressable onPress={onPressCommentsCount} hitSlop={6} accessibilityRole="button">
+                <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {commentsLabel}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                {commentsLabel}
+              </Text>
+            )
+          ) : null}
+        </View>
       ) : null}
     </View>
   );
@@ -118,9 +216,19 @@ const styles = StyleSheet.create({
     opacity: 0.75,
     backgroundColor: "rgba(255, 255, 255, 0.04)",
   },
-  likesLine: {
+  statsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  statsText: {
     color: AUTH.neutral100,
     fontSize: 14,
     fontWeight: "600",
+  },
+  statsDot: {
+    color: AUTH.faint,
+    fontSize: 14,
+    fontWeight: "400",
   },
 });

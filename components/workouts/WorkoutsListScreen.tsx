@@ -3,7 +3,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -17,43 +16,41 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { deleteWorkout } from "../../api/workouts";
 import { deleteWorkoutSession } from "../../api/workoutSessions";
+import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, AUTH_PAD, authScreenStyles } from "../../constants/authUi";
 import { useAuth } from "../../context/AuthContext";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { useWorkoutHubData } from "../../hooks/useWorkoutHubData";
 import type { Workout } from "../../types/workout";
 import { blocksFromLegacy } from "../../utils/workoutBlocks";
+import { buildWorkoutHubHeroCopy } from "../../utils/workoutHubHeroCopy";
 import { formatSessionPerformedAt } from "../../utils/workoutSessionDate";
+import { getRoutineTrainStatus, routineStatusAccentColor } from "../../utils/workoutRoutineStatus";
+import { sessionsPerDayLast7 } from "../../utils/workoutWeekSparkline";
 import { getErrorMessage } from "../../utils/errorMessages";
 import { WORKOUT_UI, workoutScreenStyles } from "../../constants/workoutScreenUi";
 import { sortWorkouts, type WorkoutListSort } from "../../constants/workoutListSort";
 import { seedDuplicateWorkoutDraft } from "../../utils/duplicateWorkoutDraft";
 import { workoutHapticLight } from "../../utils/workoutHaptics";
 import { AnimatedGoldButton } from "../auth/AnimatedGoldButton";
+import { ExerciseImageSlot } from "./ExerciseImageSlot";
 import { WorkoutDraftResumeBanner } from "./WorkoutDraftResumeBanner";
+import { WorkoutExerciseChips } from "./WorkoutExerciseChips";
+import { WorkoutHubEmptyState } from "./WorkoutHubEmptyState";
 import { WorkoutHubHero } from "./WorkoutHubHero";
 import { WorkoutListSkeleton } from "./WorkoutListSkeleton";
+import { WorkoutRoutineStatusBadge } from "./WorkoutRoutineStatusBadge";
 import { WorkoutRowMenuSheet } from "./WorkoutRowMenuSheet";
 import { WorkoutSortBar } from "./WorkoutSortBar";
 import { WorkoutStatPills } from "./WorkoutStatPills";
 import { WorkoutSessionsList } from "./WorkoutSessionsList";
+import { WorkoutWeekSparkline } from "./WorkoutWeekSparkline";
 import { WorkoutsSubTabBar, type WorkoutsSubTab } from "./WorkoutsSubTabBar";
-
-function confirmDeleteRoutine(onConfirm: () => void) {
-  if (Platform.OS === "web") {
-    if (typeof globalThis.confirm === "function" && globalThis.confirm("¿Eliminar esta rutina?")) {
-      onConfirm();
-    }
-    return;
-  }
-  Alert.alert("Eliminar rutina", "Esta acción no se puede deshacer.", [
-    { text: "Cancelar", style: "cancel" },
-    { text: "Eliminar", style: "destructive", onPress: onConfirm },
-  ]);
-}
 
 type WorkoutRowProps = {
   workout: Workout;
   exerciseNames: string[];
+  firstExerciseImageUrl?: string | null;
   sessionCount: number;
   lastSessionAt: string | null;
   onEdit: () => void;
@@ -65,6 +62,7 @@ type WorkoutRowProps = {
 function WorkoutRow({
   workout,
   exerciseNames,
+  firstExerciseImageUrl,
   sessionCount,
   lastSessionAt,
   onEdit,
@@ -74,16 +72,35 @@ function WorkoutRow({
 }: WorkoutRowProps) {
   const canTrain = exerciseNames.length > 0;
   const [menuOpen, setMenuOpen] = useState(false);
+  const trainStatus = getRoutineTrainStatus(lastSessionAt, sessionCount);
+  const statusAccent = routineStatusAccentColor(trainStatus);
+  const cardAccent =
+    trainStatus === "this_week"
+      ? { borderColor: "rgba(212, 175, 55, 0.42)" }
+      : trainStatus === "never"
+        ? null
+        : { borderLeftWidth: 3, borderLeftColor: statusAccent };
 
   return (
     <>
-      <View style={styles.card}>
+      <View style={[styles.card, cardAccent]}>
         <View style={workoutScreenStyles.cardGlowLine} />
         <View style={styles.cardTop}>
+          {firstExerciseImageUrl || exerciseNames.length > 0 ? (
+            <View style={styles.cardThumb}>
+              <ExerciseImageSlot
+                imageUri={firstExerciseImageUrl ? resolveMediaUrl(firstExerciseImageUrl) : null}
+                size={44}
+              />
+            </View>
+          ) : null}
           <View style={styles.cardTitleCol}>
-            <Text style={styles.cardTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {workout.title}
-            </Text>
+            <View style={styles.titleRow}>
+              <WorkoutRoutineStatusBadge compact lastSessionAt={lastSessionAt} sessionCount={sessionCount} />
+              <Text style={styles.cardTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER} numberOfLines={2}>
+                {workout.title}
+              </Text>
+            </View>
             {workout.description?.trim() ? (
               <Text style={styles.cardDesc} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {workout.description.trim()}
@@ -102,6 +119,7 @@ function WorkoutRow({
         </View>
 
         <View style={styles.metaRow}>
+          <WorkoutRoutineStatusBadge lastSessionAt={lastSessionAt} sessionCount={sessionCount} />
           <Text style={styles.cardMeta} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             {exerciseNames.length} ejercicio{exerciseNames.length === 1 ? "" : "s"}
           </Text>
@@ -117,36 +135,39 @@ function WorkoutRow({
           ) : null}
         </View>
 
-        {exerciseNames.length > 0 ? (
-          <Text style={styles.cardExList} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {exerciseNames.join(" · ")}
-          </Text>
-        ) : null}
+        {exerciseNames.length > 0 ? <WorkoutExerciseChips names={exerciseNames} /> : null}
 
-        <View style={styles.ctaWrap}>
-          <AnimatedGoldButton
-            label={canTrain ? "Comenzar entrenamiento" : "Añade ejercicios"}
-            loadingLabel="…"
-            loading={false}
-            disabled={!canTrain}
+        <View style={styles.cardActions}>
+          <Pressable
+            onPress={onEdit}
+            style={({ pressed }) => [styles.editBtn, pressed ? styles.pressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar ${workout.title}`}
+          >
+            <Text style={workoutScreenStyles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Editar
+            </Text>
+          </Pressable>
+          <Pressable
             onPress={() => {
+              if (!canTrain) return;
               workoutHapticLight();
               onStartWorkout();
             }}
+            disabled={!canTrain}
+            style={({ pressed }) => [
+              styles.trainBtn,
+              !canTrain ? styles.trainBtnDisabled : null,
+              pressed && canTrain ? styles.pressed : null,
+            ]}
+            accessibilityRole="button"
             accessibilityLabel={canTrain ? `Entrenar ${workout.title}` : `${workout.title} sin ejercicios`}
-          />
+          >
+            <Text style={[styles.trainBtnText, !canTrain ? styles.trainBtnTextDisabled : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {canTrain ? "▶ Entrenar" : "Sin ejercicios"}
+            </Text>
+          </Pressable>
         </View>
-
-        <Pressable
-          onPress={onEdit}
-          style={({ pressed }) => [styles.editLink, pressed ? styles.pressed : null]}
-          accessibilityRole="button"
-          accessibilityLabel={`Editar ${workout.title}`}
-        >
-          <Text style={workoutScreenStyles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Editar rutina
-          </Text>
-        </Pressable>
       </View>
 
       <WorkoutRowMenuSheet
@@ -162,6 +183,7 @@ function WorkoutRow({
 
 export function WorkoutsListScreen() {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const hub = useWorkoutHubData(user?.id);
@@ -184,7 +206,11 @@ export function WorkoutsListScreen() {
     setRefreshing(false);
   }, [hub]);
 
-  const catalogById = useMemo(() => new Map(hub.catalog.map((e) => [e.id, e.name])), [hub.catalog]);
+  const catalogById = useMemo(() => new Map(hub.catalog.map((e) => [e.id, e])), [hub.catalog]);
+
+  const weekSparkCounts = useMemo(() => sessionsPerDayLast7(hub.sessions), [hub.sessions]);
+
+  const heroCopy = useMemo(() => buildWorkoutHubHeroCopy(hub.stats), [hub.stats]);
 
   const sessionCountMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -211,7 +237,7 @@ export function WorkoutsListScreen() {
           w.title.toLowerCase().includes(q) ||
           w.description.toLowerCase().includes(q) ||
           blocksFromLegacy(w.exerciseIds, w.exerciseBlocks).some((b) =>
-            (catalogById.get(b.exerciseId) ?? "").toLowerCase().includes(q)
+            (catalogById.get(b.exerciseId)?.name ?? "").toLowerCase().includes(q)
           )
       );
     }
@@ -232,8 +258,20 @@ export function WorkoutsListScreen() {
   const exerciseNamesFor = useCallback(
     (w: Workout) =>
       blocksFromLegacy(w.exerciseIds, w.exerciseBlocks).map(
-        (b) => catalogById.get(b.exerciseId) ?? "Ejercicio"
+        (b) => catalogById.get(b.exerciseId)?.name ?? "Ejercicio"
       ),
+    [catalogById]
+  );
+
+  const firstExerciseImageFor = useCallback(
+    (w: Workout): string | null => {
+      const blocks = blocksFromLegacy(w.exerciseIds, w.exerciseBlocks);
+      for (const b of blocks) {
+        const ex = catalogById.get(b.exerciseId);
+        if (ex?.imageUrl?.trim()) return ex.imageUrl;
+      }
+      return null;
+    },
     [catalogById]
   );
 
@@ -246,16 +284,23 @@ export function WorkoutsListScreen() {
 
   const header = (
     <View style={styles.listHeader}>
-      <WorkoutHubHero compact />
+      <WorkoutHubHero compact title={heroCopy.title} body={heroCopy.body} />
 
       <WorkoutStatPills
         compact
         items={[
           { label: "Rutinas", value: String(hub.stats.routineCount) },
           { label: "Entrenos", value: String(hub.stats.totalSessions) },
-          { label: "Semana", value: String(hub.stats.sessionsThisWeek) },
+          { label: "Semana", value: String(hub.stats.sessionsThisWeek), accent: hub.stats.sessionsThisWeek > 0 },
+          {
+            label: "Racha",
+            value: `${weekSparkCounts.filter((n) => n > 0).length}d`,
+            accent: weekSparkCounts.filter((n) => n > 0).length >= 3,
+          },
         ]}
       />
+
+      {hub.stats.totalSessions > 0 ? <WorkoutWeekSparkline counts={weekSparkCounts} /> : null}
 
       <WorkoutDraftResumeBanner />
 
@@ -325,6 +370,7 @@ export function WorkoutsListScreen() {
               <WorkoutRow
                 workout={item}
                 exerciseNames={exerciseNamesFor(item)}
+                firstExerciseImageUrl={firstExerciseImageFor(item)}
                 sessionCount={st?.sessionCount ?? 0}
                 lastSessionAt={st?.lastSessionPerformedAt ?? null}
                 onEdit={() => router.push({ pathname: "/rutina/[id]", params: { id: item.id } })}
@@ -332,10 +378,21 @@ export function WorkoutsListScreen() {
                   void seedDuplicateWorkoutDraft(item).then(() => router.push("/rutina/nueva"));
                 }}
                 onDelete={() => {
-                  confirmDeleteRoutine(() => {
-                    void deleteWorkout(item.id)
-                      .then(() => hub.setWorkouts((prev) => prev.filter((w) => w.id !== item.id)))
-                      .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
+                  showAlert({
+                    title: "Eliminar rutina",
+                    message: "Esta acción no se puede deshacer.",
+                    buttons: [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Eliminar",
+                        style: "destructive",
+                        onPress: () => {
+                          void deleteWorkout(item.id)
+                            .then(() => hub.setWorkouts((prev) => prev.filter((w) => w.id !== item.id)))
+                            .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
+                        },
+                      },
+                    ],
                   });
                 }}
                 onStartWorkout={() => startWorkout(item.id)}
@@ -358,18 +415,15 @@ export function WorkoutsListScreen() {
           }
           ListEmptyComponent={
             hub.loading ? null : (
-              <View style={styles.empty}>
-                <Text style={styles.emptyIcon} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  ▣
-                </Text>
-                <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {query.trim() ? "Sin coincidencias" : "Aún no tienes rutinas"}
-                </Text>
-                <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {query.trim() ? "Prueba otro término." : "Crea tu primera plantilla y empieza a entrenar."}
-                </Text>
-                {!query.trim() ? (
-                  <View style={styles.emptyCta}>
+              <WorkoutHubEmptyState
+                title={query.trim() ? "Sin coincidencias" : "Aún no tienes rutinas"}
+                body={
+                  query.trim()
+                    ? "Prueba otro término de búsqueda."
+                    : "Crea tu primera plantilla y empieza a entrenar serie a serie."
+                }
+                cta={
+                  !query.trim() ? (
                     <AnimatedGoldButton
                       label="Crear primera rutina"
                       loadingLabel="…"
@@ -377,9 +431,9 @@ export function WorkoutsListScreen() {
                       onPress={() => router.push("/rutina/nueva")}
                       accessibilityLabel="Crear primera rutina"
                     />
-                  </View>
-                ) : null}
-              </View>
+                  ) : undefined
+                }
+              />
             )
           }
           contentContainerStyle={[styles.listContent, { paddingBottom: fabBottom + 72 }]}
@@ -432,12 +486,51 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 24,
   },
-  ctaWrap: {
+  cardThumb: {
+    flexShrink: 0,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  cardActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     marginTop: 4,
   },
-  editLink: {
-    alignSelf: "flex-start",
-    paddingVertical: 6,
+  editBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  trainBtn: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.55)",
+    backgroundColor: WORKOUT_UI.goldGlow,
+  },
+  trainBtnDisabled: {
+    opacity: 0.45,
+    borderColor: AUTH.fieldBorder,
+    backgroundColor: "rgba(10, 10, 12, 0.6)",
+  },
+  trainBtnText: {
+    color: AUTH.gold,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  trainBtnTextDisabled: {
+    color: AUTH.muted,
+    fontWeight: "600",
   },
   search: {
     ...authScreenStyles.input,
@@ -463,6 +556,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardTitle: {
+    flex: 1,
     color: AUTH.neutral100,
     fontSize: 17,
     fontWeight: "600",
@@ -500,37 +594,6 @@ const styles = StyleSheet.create({
   cardMetaMuted: {
     color: AUTH.faint,
     fontSize: 12,
-  },
-  cardExList: {
-    color: AUTH.faint,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  empty: {
-    paddingVertical: 32,
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 8,
-  },
-  emptyIcon: {
-    fontSize: 40,
-    color: AUTH.faint,
-    opacity: 0.6,
-  },
-  emptyCta: {
-    alignSelf: "stretch",
-    width: "100%",
-    marginTop: 8,
-  },
-  emptyTitle: {
-    color: AUTH.neutral100,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyBody: {
-    color: AUTH.muted,
-    fontSize: 14,
-    textAlign: "center",
   },
   fabRound: {
     position: "absolute",

@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
+import type { GoiAlertOptions } from "../context/GoiAlertContext";
 import { setBiometricUnlockEnabled } from "./biometricPreference";
 
 type Replaceable = { replace: (href: string) => void };
@@ -9,7 +10,11 @@ type Replaceable = { replace: (href: string) => void };
  * Tras un login o registro correcto: ofrece activar desbloqueo biométrico al abrir la app.
  * Si no hay hardware / enrolamiento, navega al feed directamente.
  */
-export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () => void): void {
+export function offerBiometricUnlockAfterLogin(
+  router: Replaceable,
+  onOptIn: () => void,
+  showAlert: (options: GoiAlertOptions) => void
+): void {
   if (Platform.OS === "web") {
     router.replace("/(tabs)");
     return;
@@ -24,10 +29,10 @@ export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () 
         return;
       }
 
-      Alert.alert(
-        "Proteger acceso",
-        "¿Activar Face ID o huella para desbloquear la app al abrirla?",
-        [
+      showAlert({
+        title: "Proteger acceso",
+        message: "¿Activar Face ID o huella para desbloquear la app al abrirla?",
+        buttons: [
           {
             text: "Ahora no",
             style: "cancel",
@@ -58,8 +63,7 @@ export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () 
             },
           },
         ],
-        { cancelable: true, onDismiss: () => router.replace("/feed") }
-      );
+      });
     } catch {
       router.replace("/(tabs)");
     }

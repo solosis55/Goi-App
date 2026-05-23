@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   LayoutAnimation,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, AUTH_PAD, authScreenStyles } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { AppScreenShell } from "../AppScreenShell";
 import { workoutScreenStyles, WORKOUT_UI } from "../../constants/workoutScreenUi";
 import { WORKOUT_SESSION_NOTES_MAX } from "../../constants/workoutSessions";
@@ -47,6 +47,7 @@ import { WorkoutSessionTimerIcon } from "./WorkoutSessionTimerIcon";
 import { WorkoutRestTimerBar } from "./WorkoutRestTimerBar";
 import { WorkoutNotesIcon } from "./WorkoutPerformIcons";
 import { WorkoutSessionNotesSheet } from "./WorkoutSessionNotesSheet";
+import { WorkoutHubEmptyState } from "./WorkoutHubEmptyState";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -59,6 +60,7 @@ type WorkoutPerformScreenProps = {
 export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showAlert } = useGoiAlert();
   const perform = useWorkoutPerform(workout);
   const [collapseAll, setCollapseAll] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
@@ -68,6 +70,10 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
   const [restSoundEnabled, setRestSoundEnabled] = useState(true);
   const [notesOpen, setNotesOpen] = useState(false);
   const restWarned3sRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const blocksTopYRef = useRef(0);
+  const blockOffsetsRef = useRef<Record<number, number>>({});
+  const prevActiveBlockRef = useRef(-1);
   const [restExerciseLabel, setRestExerciseLabel] = useState<string | null>(null);
   const lastPerformanceMap = useExerciseLastPerformance();
   const restTimer = useWorkoutRestTimer({
@@ -100,73 +106,51 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
       await perform.abandonSession();
       router.back();
     };
-    if (Platform.OS === "web") {
-      if (
-        typeof globalThis.confirm === "function" &&
-        globalThis.confirm("¿Descartar este entrenamiento? No se guardará en tu historial.")
-      ) {
-        void run();
-      }
-      return;
-    }
-    Alert.alert(
-      "Descartar entrenamiento",
-      "Se borrará el progreso de esta sesión. No se guardará en tu historial.",
-      [
+    showAlert({
+      title: "Descartar entrenamiento",
+      message: "Se borrará el progreso de esta sesión. No se guardará en tu historial.",
+      buttons: [
         { text: "Cancelar", style: "cancel" },
         { text: "Descartar", style: "destructive", onPress: () => void run() },
-      ]
-    );
-  }, [perform, router]);
+      ],
+    });
+  }, [perform, router, showAlert]);
 
   const handleBack = useCallback(() => {
     const leave = () => router.back();
-    if (Platform.OS === "web") {
-      if (
-        typeof globalThis.confirm === "function" &&
-        globalThis.confirm("¿Salir del entrenamiento? El progreso se guarda y podrás continuar después.")
-      ) {
-        leave();
-      }
-      return;
-    }
-    Alert.alert("Entrenamiento en curso", "Tu progreso queda guardado. ¿Qué quieres hacer?", [
-      { text: "Seguir entrenando", style: "cancel" },
-      { text: "Salir", onPress: leave },
-      { text: "Descartar", style: "destructive", onPress: () => void confirmAbandon() },
-    ]);
-  }, [router, confirmAbandon]);
+    showAlert({
+      title: "Entrenamiento en curso",
+      message: "Tu progreso queda guardado. ¿Qué quieres hacer?",
+      buttons: [
+        { text: "Seguir entrenando", style: "cancel" },
+        { text: "Salir", onPress: leave },
+        { text: "Descartar", style: "destructive", onPress: () => void confirmAbandon() },
+      ],
+    });
+  }, [router, confirmAbandon, showAlert]);
 
   const openFinish = useCallback(() => {
     if (!perform.allSetsDone) {
-      const proceed = () => {
-        setFinishNotes(perform.session?.notes ?? "");
-        setFinishModalOpen(true);
-      };
-      if (Platform.OS === "web") {
-        if (
-          typeof globalThis.confirm === "function" &&
-          globalThis.confirm(
-            `Quedan ${perform.progress.totalSets - perform.progress.completedSets} series sin marcar. ¿Finalizar igual?`
-          )
-        ) {
-          proceed();
-        }
-        return;
-      }
-      Alert.alert(
-        "Series pendientes",
-        `Aún faltan ${perform.progress.totalSets - perform.progress.completedSets} series por marcar. ¿Quieres finalizar el entrenamiento igualmente?`,
-        [
+      const pending = perform.progress.totalSets - perform.progress.completedSets;
+      showAlert({
+        title: "Series pendientes",
+        message: `Aún faltan ${pending} series por marcar. ¿Quieres finalizar el entrenamiento igualmente?`,
+        buttons: [
           { text: "Seguir", style: "cancel" },
-          { text: "Finalizar", onPress: proceed },
-        ]
-      );
+          {
+            text: "Finalizar",
+            onPress: () => {
+              setFinishNotes(perform.session?.notes ?? "");
+              setFinishModalOpen(true);
+            },
+          },
+        ],
+      });
       return;
     }
     setFinishNotes(perform.session?.notes ?? "");
     setFinishModalOpen(true);
-  }, [perform.allSetsDone, perform.progress, perform.session?.notes]);
+  }, [perform.allSetsDone, perform.progress, perform.session?.notes, showAlert]);
 
   const confirmFinish = useCallback(async () => {
     const ok = await perform.finishSession(finishNotes);
@@ -185,6 +169,15 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
   const activeBlockIndex = useMemo(() => firstIncompleteBlockIndex(blocks), [blocks]);
 
   const volumeKg = useMemo(() => estimateSessionVolumeKg(blocks), [blocks]);
+
+  useEffect(() => {
+    if (activeBlockIndex < 0 || activeBlockIndex === prevActiveBlockRef.current) return;
+    prevActiveBlockRef.current = activeBlockIndex;
+    const blockY = blockOffsetsRef.current[activeBlockIndex];
+    if (blockY == null) return;
+    const targetY = Math.max(0, blocksTopYRef.current + blockY - 72);
+    scrollRef.current?.scrollTo({ y: targetY, animated: true });
+  }, [activeBlockIndex]);
 
   useEffect(() => {
     if (restTimer.secondsLeft === 3) {
@@ -268,8 +261,15 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
     <WorkoutKeepAwake />
     <View style={workoutScreenStyles.screenRoot}>
       <View style={styles.progressWrap}>
-        <View style={workoutScreenStyles.progressTrack}>
-          <View style={[workoutScreenStyles.progressFill, { width: `${progressPct}%` }]} />
+        <View style={styles.progressRow}>
+          <Text style={styles.progressPct} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {progressPct}%
+          </Text>
+          <View style={styles.progressBarFlex}>
+            <View style={workoutScreenStyles.progressTrack}>
+              <View style={[workoutScreenStyles.progressFill, { width: `${progressPct}%` }]} />
+            </View>
+          </View>
         </View>
         <View style={styles.headerMainRow}>
           <View style={styles.headerPills}>
@@ -321,6 +321,7 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollFlex}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
@@ -352,19 +353,25 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
         </View>
 
         {blocks.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Sin ejercicios en la sesión
-            </Text>
-            <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Pulsa «Añadir ejercicio» abajo para abrir el catálogo.
-            </Text>
-          </View>
+          <WorkoutHubEmptyState
+            title="Sin ejercicios en la sesión"
+            body="Pulsa «+ Ejercicio» abajo para abrir el catálogo."
+          />
         ) : (
-          <View style={styles.blocks}>
+          <View
+            style={styles.blocks}
+            onLayout={(e) => {
+              blocksTopYRef.current = e.nativeEvent.layout.y;
+            }}
+          >
             {blocks.map((block, index) => (
-              <SessionPerformExerciseCard
+              <View
                 key={blockKeys[index] ?? `${block.exerciseId}-${index}`}
+                onLayout={(e) => {
+                  blockOffsetsRef.current[index] = e.nativeEvent.layout.y;
+                }}
+              >
+              <SessionPerformExerciseCard
                 index={index}
                 block={block}
                 exercise={perform.catalogById.get(block.exerciseId)}
@@ -378,6 +385,7 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
                 onAddSet={() => perform.addSet(index, false)}
                 onRemoveSet={(setIndex) => perform.removeSet(index, setIndex)}
               />
+              </View>
             ))}
           </View>
         )}
@@ -561,6 +569,22 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: "transparent",
   },
+  progressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  progressPct: {
+    color: AUTH.gold,
+    fontSize: 22,
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
+    minWidth: 48,
+  },
+  progressBarFlex: {
+    flex: 1,
+    justifyContent: "center",
+  },
   headerMainRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -654,9 +678,19 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 40,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: AUTH.cardBorder,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(212, 175, 55, 0.22)",
     backgroundColor: AUTH.cardBg,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: { elevation: 16 },
+      default: {},
+    }),
   },
   footer: {
     flexDirection: "row",

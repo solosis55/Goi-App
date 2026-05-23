@@ -1,8 +1,11 @@
-import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { ProfileUser } from "../../types/auth";
-import { UserAvatar } from "../ui/UserAvatar";
+import { ProfileAvatarStoryRing } from "./ProfileAvatarStoryRing";
+import { ProfileBannerOverlay } from "./ProfileBannerOverlay";
+import { ProfileRelationshipRow } from "./ProfileRelationshipRow";
+import { ProfileSocialStatsRow, type ProfileSocialStatsProps } from "./ProfileSocialStatsRow";
 
 type PublicProfileHeroProps = {
   profile: ProfileUser | null;
@@ -10,15 +13,17 @@ type PublicProfileHeroProps = {
   restricted?: boolean;
   following?: boolean;
   followBusy?: boolean;
+  followsYou?: boolean;
+  mutualCount?: number;
+  memberSinceLabel?: string;
+  unseenDaily?: boolean;
   onBack: () => void;
   onToggleFollow: () => void;
+  onShare?: () => void;
+  onAvatarPress?: () => void;
+  socialStats: ProfileSocialStatsProps;
+  onSocialStatPress?: (kind: "posts" | "followers" | "following") => void;
 };
-
-function openUrl(url: string) {
-  const trimmed = url.trim();
-  if (!trimmed) return;
-  void Linking.openURL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`);
-}
 
 export function PublicProfileHero({
   profile,
@@ -26,119 +31,116 @@ export function PublicProfileHero({
   restricted,
   following,
   followBusy,
+  followsYou = false,
+  mutualCount = 0,
+  memberSinceLabel,
+  unseenDaily,
   onBack,
   onToggleFollow,
+  onShare,
+  onAvatarPress,
+  socialStats,
+  onSocialStatPress,
 }: PublicProfileHeroProps) {
   const username = profile?.username?.trim() ?? "";
   const bannerUri = profile?.bannerUrl?.trim() ? resolveMediaUrl(profile.bannerUrl) : "";
-  const showBanner =
-    Boolean(bannerUri) && profile?.bannerShowInFeed !== false && !restricted;
+  const showBanner = Boolean(bannerUri) && profile?.bannerShowInFeed !== false && !restricted;
 
   return (
     <View style={styles.wrap}>
       <View style={styles.bannerWrap} accessibilityLabel="Cabecera del perfil">
         {showBanner ? (
-          <Image source={{ uri: bannerUri }} style={styles.banner} resizeMode="cover" accessibilityIgnoresInvertColors />
+          <Image
+            source={{ uri: bannerUri }}
+            style={styles.banner}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+          />
         ) : (
           <View style={styles.bannerEmpty} />
         )}
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [styles.backBtn, pressed ? styles.pressed : null]}
-          accessibilityRole="button"
-          accessibilityLabel="Volver"
-        >
-          <Text style={styles.backText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            ← Volver
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.identityRow}>
-        <UserAvatar src={profile?.avatarUrl} username={username || "…"} size={92} />
-        <View style={styles.meta}>
-          <Text style={styles.handle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            @{loading && !username ? "…" : username || "usuario"}
-          </Text>
-          {!restricted && profile?.location?.trim() ? (
-            <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {profile.location.trim()}
+        <ProfileBannerOverlay />
+        <View style={styles.bannerActions}>
+          <Pressable
+            onPress={onBack}
+            style={({ pressed }) => [styles.backBtn, pressed ? styles.pressed : null]}
+            accessibilityRole="button"
+            accessibilityLabel="Volver"
+          >
+            <Text style={styles.backText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              ← Volver
             </Text>
-          ) : null}
-          {!restricted && profile?.goal?.trim() ? (
-            <Text style={styles.goal} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {profile.goal.trim()}
-            </Text>
-          ) : null}
-          <Text style={styles.bio} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {restricted
-              ? "Perfil limitado hasta que sigas a esta cuenta."
-              : profile?.bio?.trim() || ""}
-          </Text>
-        </View>
-      </View>
-
-      {!restricted &&
-      (profile?.websiteUrl?.trim() || profile?.instagramUrl?.trim() || profile?.stravaUrl?.trim()) ? (
-        <View style={styles.links}>
-          {profile?.websiteUrl?.trim() ? (
+          </Pressable>
+          {!restricted && onShare ? (
             <Pressable
-              onPress={() => openUrl(profile.websiteUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
+              onPress={onShare}
+              style={({ pressed }) => [styles.shareBtn, pressed ? styles.pressed : null]}
+              accessibilityRole="button"
+              accessibilityLabel="Compartir perfil"
             >
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Web
-              </Text>
-            </Pressable>
-          ) : null}
-          {profile?.instagramUrl?.trim() ? (
-            <Pressable
-              onPress={() => openUrl(profile.instagramUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
-            >
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Instagram
-              </Text>
-            </Pressable>
-          ) : null}
-          {profile?.stravaUrl?.trim() ? (
-            <Pressable
-              onPress={() => openUrl(profile.stravaUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
-            >
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Strava
+              <Text style={styles.shareText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                Compartir
               </Text>
             </Pressable>
           ) : null}
         </View>
-      ) : null}
+      </View>
 
-      <View style={styles.followRow}>
-        <Pressable
-          onPress={onToggleFollow}
-          disabled={followBusy || loading}
-          style={({ pressed }) => [
-            styles.followBtn,
-            following ? styles.followBtnActive : null,
-            pressed ? styles.pressed : null,
-            followBusy ? styles.followBusy : null,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={following ? "Dejar de seguir" : "Seguir usuario"}
-          accessibilityState={{ busy: followBusy, disabled: followBusy || loading }}
-        >
-          {followBusy ? (
-            <ActivityIndicator color={following ? AUTH.gold : "#0a0a0a"} size="small" />
-          ) : (
-            <Text
-              style={[styles.followText, following ? styles.followTextActive : null]}
-              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-            >
-              {following ? "Siguiendo" : "Seguir"}
+      <View style={styles.identityBlock}>
+        <View style={styles.identityRow}>
+          <ProfileAvatarStoryRing
+            src={profile?.avatarUrl}
+            username={username || "…"}
+            size={92}
+            unseenDaily={unseenDaily}
+            onPress={onAvatarPress}
+          />
+          <View style={styles.meta}>
+            <Text style={styles.handle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              @{loading && !username ? "…" : username || "usuario"}
             </Text>
-          )}
-        </Pressable>
+            {memberSinceLabel ? (
+              <Text style={styles.memberSince} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                En GoI desde {memberSinceLabel}
+              </Text>
+            ) : null}
+            {!restricted ? (
+              <ProfileRelationshipRow
+                following={!!following}
+                followsYou={followsYou}
+                mutualCount={mutualCount}
+              />
+            ) : null}
+            {!restricted ? (
+              <Pressable
+                onPress={onToggleFollow}
+                disabled={followBusy || loading}
+                style={({ pressed }) => [
+                  styles.followBtn,
+                  following ? styles.followBtnActive : null,
+                  pressed ? styles.pressed : null,
+                  followBusy ? styles.followBusy : null,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={following ? "Dejar de seguir" : "Seguir usuario"}
+                accessibilityState={{ busy: followBusy, disabled: followBusy || loading }}
+              >
+                {followBusy ? (
+                  <ActivityIndicator color={following ? AUTH.gold : "#0a0a0a"} size="small" />
+                ) : (
+                  <Text
+                    style={[styles.followText, following ? styles.followTextActive : null]}
+                    maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+                  >
+                    {following ? "Siguiendo" : "Seguir"}
+                  </Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+
+        {!restricted ? <ProfileSocialStatsRow {...socialStats} onStatPress={onSocialStatPress} /> : null}
       </View>
     </View>
   );
@@ -146,7 +148,7 @@ export function PublicProfileHero({
 
 const styles = StyleSheet.create({
   wrap: {
-    marginBottom: 4,
+    marginBottom: 0,
   },
   bannerWrap: {
     height: 148,
@@ -161,10 +163,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(38, 38, 38, 0.95)",
   },
-  backBtn: {
+  bannerActions: {
     position: "absolute",
     left: 12,
+    right: 12,
     top: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  backBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
@@ -172,73 +181,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.35)",
   },
+  shareBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(10, 10, 12, 0.88)",
+    borderWidth: 1,
+    borderColor: "rgba(82, 82, 82, 0.9)",
+  },
   backText: {
     color: AUTH.neutral100,
     fontSize: 13,
     fontWeight: "600",
   },
+  shareText: {
+    color: AUTH.steel,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  identityBlock: {
+    paddingHorizontal: 16,
+    marginTop: -36,
+    gap: 10,
+    marginBottom: 4,
+  },
   identityRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 16,
-    marginTop: -40,
     gap: 14,
   },
   meta: {
     flex: 1,
-    paddingTop: 46,
-    gap: 4,
+    paddingTop: 40,
+    gap: 8,
+    minWidth: 0,
   },
   handle: {
     color: AUTH.neutral100,
     fontSize: 20,
     fontWeight: "700",
   },
-  sub: {
-    color: AUTH.muted,
-    fontSize: 13,
-  },
-  goal: {
-    color: AUTH.gold,
-    fontSize: 13,
-  },
-  bio: {
-    color: AUTH.steel,
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
-  },
-  links: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  linkChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(82, 82, 82, 0.9)",
-    backgroundColor: "rgba(23, 23, 23, 0.8)",
-  },
-  linkText: {
-    color: AUTH.neutral100,
+  memberSince: {
+    color: AUTH.faint,
     fontSize: 12,
-    fontWeight: "600",
-  },
-  followRow: {
-    paddingHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 4,
-    alignItems: "flex-end",
   },
   followBtn: {
-    minWidth: 120,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 24,
+    alignSelf: "flex-start",
+    minWidth: 108,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+    borderRadius: 22,
     alignItems: "center",
     backgroundColor: AUTH.gold,
   },
@@ -249,7 +241,7 @@ const styles = StyleSheet.create({
   },
   followText: {
     color: "#0a0a0a",
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "700",
   },
   followTextActive: {

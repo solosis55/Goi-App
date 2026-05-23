@@ -38,7 +38,7 @@ export async function captureStoryPhotoFromCamera(): Promise<StoryCaptureResult>
 
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) {
-    return { ok: false, error: "Necesitamos permiso de cámara para hacer una historia." };
+    return { ok: false, error: "Necesitamos permiso de cámara para publicar GoI Daily." };
   }
 
   return launchPicker(() => ImagePicker.launchCameraAsync(STORY_PICKER_OPTIONS));
@@ -48,7 +48,7 @@ export async function captureStoryPhotoFromCamera(): Promise<StoryCaptureResult>
 export async function pickStoryPhotoFromLibrary(): Promise<StoryCaptureResult> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    return { ok: false, error: "Necesitamos acceso a tus fotos para publicar una historia." };
+    return { ok: false, error: "Necesitamos acceso a tus fotos para publicar GoI Daily." };
   }
 
   return launchPicker(() => ImagePicker.launchImageLibraryAsync(STORY_PICKER_OPTIONS));

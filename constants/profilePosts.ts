@@ -10,7 +10,7 @@ export const PROFILE_POSTS_SOURCE_TABS: ReadonlyArray<{
   label: string;
 }> = [
   { id: "mine", label: "Mías" },
-  { id: "saved", label: "Guardadas" },
+  { id: "saved", label: "Guardados" },
 ] as const;
 
 export const PROFILE_POSTS_FILTERS: ReadonlyArray<{

@@ -1,8 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { useCallback } from "react";
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 
 type FeedNotificationsBellProps = {
   /** Cuando exista `GET /posts/notifications`, pasar el contador real. */
@@ -35,16 +36,18 @@ function BellIcon({ size = 22, color = AUTH.neutral100 }: { size?: number; color
 }
 
 export function FeedNotificationsBell({ unreadCount = 0, compact = false }: FeedNotificationsBellProps) {
+  const { showAlert } = useGoiAlert();
   const showBadge = unreadCount > 0;
 
   const onPress = useCallback(() => {
     hapticLight();
-    Alert.alert(
-      "Notificaciones",
-      "Las alertas de likes, comentarios y seguidores estarán disponibles pronto en la app. En Goi Web ya puedes verlas en la campana del Inicio.",
-      [{ text: "Entendido", style: "default" }]
-    );
-  }, []);
+    showAlert({
+      title: "Notificaciones",
+      message:
+        "Las alertas de likes, comentarios y seguidores estarán disponibles pronto en la app. En Goi Web ya puedes verlas en la campana del Inicio.",
+      buttons: [{ text: "Entendido", style: "cancel" }],
+    });
+  }, [showAlert]);
 
   return (
     <Pressable

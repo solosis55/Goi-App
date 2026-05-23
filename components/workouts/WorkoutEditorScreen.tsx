@@ -2,9 +2,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +23,7 @@ import { duplicateExerciseBlock } from "../../utils/duplicateExerciseBlock";
 import { countWorkoutSets } from "../../utils/workoutEditorMetrics";
 import { workoutEditorSaveBlockReason } from "../../utils/workoutEditorSaveHint";
 import { workoutHapticLight, workoutHapticSuccess } from "../../utils/workoutHaptics";
+import { useGoiAlert } from "../../context/GoiAlertContext";
 import { AppScreenShell } from "../AppScreenShell";
 import { AnimatedGoldButton } from "../auth/AnimatedGoldButton";
 import { workoutScreenStyles, WORKOUT_UI } from "../../constants/workoutScreenUi";
@@ -41,6 +40,7 @@ type WorkoutEditorScreenProps =
 
 export function WorkoutEditorScreen(props: WorkoutEditorScreenProps) {
   const router = useRouter();
+  const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const editor = useWorkoutEditor(props);
   const { width: pageWidth } = useWindowDimensions();
@@ -102,22 +102,15 @@ export function WorkoutEditorScreen(props: WorkoutEditorScreenProps) {
       router.back();
       return;
     }
-    const leave = () => router.back();
-    if (Platform.OS === "web") {
-      if (typeof globalThis.confirm === "function" && globalThis.confirm("Tienes cambios sin guardar. ¿Salir?")) {
-        leave();
-      }
-      return;
-    }
-    Alert.alert(
-      "Cambios sin guardar",
-      "Tu progreso se guarda como borrador. Puedes retomarlo desde Entrenar.",
-      [
+    showAlert({
+      title: "Cambios sin guardar",
+      message: "Tu progreso se guarda como borrador. Puedes retomarlo desde Entrenar.",
+      buttons: [
         { text: "Seguir editando", style: "cancel" },
-        { text: "Salir", style: "destructive", onPress: leave },
-      ]
-    );
-  }, [editor.isDirty, onCatalogPage, goToEditor, router]);
+        { text: "Salir", style: "destructive", onPress: () => router.back() },
+      ],
+    });
+  }, [editor.isDirty, onCatalogPage, goToEditor, router, showAlert]);
 
   useWorkoutScreenHeader({
     title: pageTitle,
@@ -220,6 +213,29 @@ export function WorkoutEditorScreen(props: WorkoutEditorScreenProps) {
     }
   }, [editor, router]);
 
+  const handleClearDraft = useCallback(() => {
+    showAlert({
+      title: "Limpiar borrador",
+      message: editor.isEdit
+        ? "Volverás al último estado guardado de la rutina. Los cambios locales se descartarán."
+        : "Se borrará el borrador local y el formulario quedará vacío.",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Limpiar",
+          style: "destructive",
+          onPress: () => {
+            void editor.clearDraft().then(() => {
+              setBlockKeys([]);
+              setHighlightBlockKey(null);
+              workoutHapticLight();
+            });
+          },
+        },
+      ],
+    });
+  }, [editor, showAlert]);
+
   if (!editor.hydrated) {
     return (
       <View style={[styles.centered, { paddingTop: insets.top }]}>
@@ -262,9 +278,28 @@ export function WorkoutEditorScreen(props: WorkoutEditorScreenProps) {
 
                 <View style={workoutScreenStyles.sectionCard}>
                   <View style={workoutScreenStyles.cardGlowLine} />
-                  <Text style={workoutScreenStyles.fieldLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                    Título
-                  </Text>
+                  <View style={styles.titleRow}>
+                    <Text style={workoutScreenStyles.fieldLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Título
+                    </Text>
+                    {editor.hasDraftToClear ? (
+                      <Pressable
+                        onPress={handleClearDraft}
+                        disabled={editor.saving}
+                        style={({ pressed }) => [
+                          styles.clearDraftBtn,
+                          editor.saving ? styles.footerBtnDisabled : null,
+                          pressed ? workoutScreenStyles.pressed : null,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Limpiar borrador local"
+                      >
+                        <Text style={styles.clearDraftText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                          Limpiar borrador
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                   <TextInput
                     value={editor.title}
                     onChangeText={editor.setTitle}
@@ -457,6 +492,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: AUTH_PAD,
     paddingTop: 8,
     gap: 14,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  clearDraftBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(248, 113, 113, 0.4)",
+    backgroundColor: "rgba(40, 20, 20, 0.35)",
+  },
+  clearDraftText: {
+    color: AUTH.danger,
+    fontSize: 11,
+    fontWeight: "600",
   },
   titleCardStats: {
     marginTop: 4,

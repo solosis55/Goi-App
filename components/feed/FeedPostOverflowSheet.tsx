@@ -7,6 +7,8 @@ type FeedPostOverflowSheetProps = {
   authorUsername: string;
   onClose: () => void;
   onMuteAuthor: () => void;
+  onReport?: () => void;
+  onShare?: () => void;
 };
 
 export function FeedPostOverflowSheet({
@@ -14,27 +16,39 @@ export function FeedPostOverflowSheet({
   authorUsername,
   onClose,
   onMuteAuthor,
+  onReport,
+  onShare,
 }: FeedPostOverflowSheetProps) {
   const insets = useSafeAreaInsets();
+
+  const row = (label: string, onPress: () => void, destructive?: boolean) => (
+    <Pressable
+      key={label}
+      onPress={() => {
+        onClose();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.row, pressed ? styles.rowPressed : null]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Text
+        style={[styles.rowText, destructive ? styles.rowDestructive : null]}
+        maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar menú" />
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <View style={styles.handle} />
-        <Pressable
-          onPress={() => {
-            onClose();
-            onMuteAuthor();
-          }}
-          style={({ pressed }) => [styles.row, pressed ? styles.rowPressed : null]}
-          accessibilityRole="button"
-          accessibilityLabel={`Silenciar a ${authorUsername}`}
-        >
-          <Text style={styles.rowText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Silenciar @{authorUsername}
-          </Text>
-        </Pressable>
+        {onShare ? row("Compartir publicación", onShare) : null}
+        {onReport ? row("Reportar publicación", onReport) : null}
+        {row(`Silenciar @${authorUsername}`, onMuteAuthor, true)}
         <Pressable onPress={onClose} style={styles.cancel} accessibilityRole="button" accessibilityLabel="Cancelar">
           <Text style={styles.cancelText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             Cancelar
@@ -79,6 +93,9 @@ const styles = StyleSheet.create({
     color: AUTH.neutral100,
     fontSize: 17,
     fontWeight: "600",
+  },
+  rowDestructive: {
+    color: AUTH.danger,
   },
   cancel: {
     marginTop: 4,

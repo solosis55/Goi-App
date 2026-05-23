@@ -4,6 +4,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const savedKey = (userId: string) => `goi:feedSaved:${userId}`;
 const mutedKey = (userId: string) => `goi:feedMuted:${userId}`;
+const reportsKey = (userId: string) => `goi:feedReports:${userId}`;
+const suggestionsDismissedKey = (userId: string) => `goi:feedSuggestionsDismissed:${userId}`;
+
+export type LocalFeedReport = {
+  postId: string;
+  authorId: string;
+  reason: string;
+  createdAt: string;
+};
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -75,4 +84,25 @@ export async function muteUser(userId: string, targetUserId: string): Promise<vo
 export async function unmuteUser(userId: string, targetUserId: string): Promise<void> {
   const ids = (await loadMutedUserIds(userId)).filter((id) => id !== targetUserId);
   await saveMutedUserIds(userId, ids);
+}
+
+export async function loadSuggestionsDismissed(userId: string): Promise<boolean> {
+  return readJson<boolean>(suggestionsDismissedKey(userId), false);
+}
+
+export async function setSuggestionsDismissed(userId: string, dismissed: boolean): Promise<void> {
+  await writeJson(suggestionsDismissedKey(userId), dismissed);
+}
+
+export async function appendLocalReport(
+  viewerId: string,
+  entry: Omit<LocalFeedReport, "createdAt"> & { createdAt?: string }
+): Promise<void> {
+  const list = await readJson<LocalFeedReport[]>(reportsKey(viewerId), []);
+  const row: LocalFeedReport = {
+    ...entry,
+    createdAt: entry.createdAt ?? new Date().toISOString(),
+  };
+  list.unshift(row);
+  await writeJson(reportsKey(viewerId), list.slice(0, 200));
 }
