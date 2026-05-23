@@ -22,6 +22,9 @@ const codeMessageMap: Record<string, string> = {
   API_NETWORK_ERROR:
     "No se pudo conectar con la API. Revisa la red o EXPO_PUBLIC_API_URL y que el servidor Goi Web esté en marcha.",
   API_INVALID_RESPONSE: "La API devolvió un formato inesperado. Revisa la URL del backend.",
+  COMMENT_INVALID_INPUT: "El comentario debe tener entre 1 y 180 caracteres.",
+  POST_NOT_FOUND: "La publicación ya no existe.",
+  POST_FORBIDDEN: "No puedes interactuar con esta publicación.",
 };
 
 export function getErrorMessage(error: unknown, fallback: string) {

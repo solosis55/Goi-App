@@ -3,9 +3,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Platform } from "react-native";
 import * as LocalAuthentication from "expo-local-authentication";
 import { onAuthExpired } from "../api/authEvents";
-import { clearStoredAuth, loadStoredAuth, persistAuth } from "../api/session";
+import { clearStoredAuth, loadStoredAuth, persistAuth, switchStoredAuth } from "../api/session";
 import type { SafeUser } from "../types/auth";
+import { listStoredAccounts, type AccountListItem } from "../utils/accountVault";
 import { getBiometricUnlockEnabled, setBiometricUnlockEnabled } from "../utils/biometricPreference";
+import { mergeSafeUser } from "../utils/mergeSafeUser";
 
 type AuthState = {
   /** `true` tras leer almacenamiento al arranque (y biometría si aplica). */
@@ -16,6 +18,12 @@ type AuthState = {
   /** Nativo: el usuario activó desbloqueo biométrico al abrir la app. */
   biometricUnlockActive: boolean;
   signIn: (token: string, user: SafeUser) => Promise<void>;
+  /** Tras editar perfil: persiste y actualiza el usuario en sesión. */
+  updateSessionUser: (user: SafeUser) => Promise<void>;
+  /** Cuentas guardadas en el dispositivo (sesión activa marcada con `user.id`). */
+  storedAccounts: AccountListItem[];
+  switchAccount: (userId: string) => Promise<boolean>;
+  refreshStoredAccounts: () => Promise<void>;
   signOut: () => Promise<void>;
   /** Tras aceptar el aviso post-login (solo actualiza estado en memoria; la pref ya está guardada). */
   notifyBiometricUnlockOptIn: () => void;
@@ -30,6 +38,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SafeUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [biometricUnlockActive, setBiometricUnlockActive] = useState(false);
+  const [storedAccounts, setStoredAccounts] = useState<AccountListItem[]>([]);
+
+  const refreshStoredAccounts = useCallback(async () => {
+    const list = await listStoredAccounts();
+    setStoredAccounts(list);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setToken(nextToken);
           setUser(nextUser);
           setBiometricUnlockActive(nextBioActive);
+          if (nextUser) {
+            const list = await listStoredAccounts();
+            if (!cancelled) setStoredAccounts(list);
+          } else {
+            setStoredAccounts([]);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -111,18 +131,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (nextToken: string, nextUser: SafeUser) => {
-    await persistAuth(nextToken, nextUser);
+    const merged = mergeSafeUser(nextUser);
+    await persistAuth(nextToken, merged);
     setToken(nextToken);
-    setUser(nextUser);
-  }, []);
+    setUser(merged);
+    await refreshStoredAccounts();
+  }, [refreshStoredAccounts]);
+
+  const switchAccount = useCallback(
+    async (userId: string) => {
+      if (!user || userId === user.id) return true;
+      const next = await switchStoredAuth(userId);
+      if (!next) return false;
+      setToken(next.token);
+      setUser(next.user);
+      await refreshStoredAccounts();
+      return true;
+    },
+    [user, refreshStoredAccounts]
+  );
+
+  const updateSessionUser = useCallback(
+    async (nextUser: SafeUser) => {
+      const merged = mergeSafeUser(nextUser);
+      if (token) {
+        await persistAuth(token, merged);
+        await refreshStoredAccounts();
+      }
+      setUser(merged);
+    },
+    [token, refreshStoredAccounts]
+  );
 
   const signOut = useCallback(async () => {
-    await setBiometricUnlockEnabled(false);
-    setBiometricUnlockActive(false);
-    await clearStoredAuth();
-    setToken(null);
-    setUser(null);
-  }, []);
+    const remaining = await clearStoredAuth();
+    if (!remaining.token || !remaining.user) {
+      const { clearAllWorkoutDrafts } = await import("../utils/workoutDrafts");
+      await clearAllWorkoutDrafts();
+      await setBiometricUnlockEnabled(false);
+      setBiometricUnlockActive(false);
+      setToken(null);
+      setUser(null);
+      setStoredAccounts([]);
+      return;
+    }
+    setToken(remaining.token);
+    setUser(remaining.user);
+    await refreshStoredAccounts();
+  }, [refreshStoredAccounts]);
 
   const value = useMemo<AuthState>(
     () => ({
@@ -132,6 +188,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       biometricUnlockActive,
       signIn,
+      updateSessionUser,
+      storedAccounts,
+      switchAccount,
+      refreshStoredAccounts,
       signOut,
       notifyBiometricUnlockOptIn,
       disableBiometricUnlock,
@@ -142,6 +202,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       biometricUnlockActive,
       signIn,
+      updateSessionUser,
+      storedAccounts,
+      switchAccount,
+      refreshStoredAccounts,
       signOut,
       notifyBiometricUnlockOptIn,
       disableBiometricUnlock,

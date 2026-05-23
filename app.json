@@ -6,8 +6,8 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -16,7 +16,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Goi usa Face ID para proteger el acceso a tu cuenta en este dispositivo."
+        "NSFaceIDUsageDescription": "Goi usa Face ID para proteger el acceso a tu cuenta en este dispositivo.",
+        "NSCameraUsageDescription": "Goi usa la cámara para publicar historias del gym."
       }
     },
     "android": {
@@ -32,7 +33,21 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Goi necesita acceso a tus fotos para publicar historias.",
+          "cameraPermission": "Goi necesita la cámara para publicar historias."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Goi necesita la cámara para publicar historias.",
+          "recordAudioAndroid": false
+        }
+      ]
     ]
   }
 }

@@ -1,4 +1,4 @@
-import { Stack, useRouter } from "expo-router";
+import { Redirect, Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -50,11 +50,6 @@ export default function ForgotPasswordScreen() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isHydrated || !isAuthenticated) return;
-    router.replace("/feed");
-  }, [isHydrated, isAuthenticated, router]);
 
   const scheduleRateLimitCooldown = useCallback(() => {
     if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
@@ -117,12 +112,7 @@ export default function ForgotPasswordScreen() {
   }
 
   if (isAuthenticated) {
-    return (
-      <View style={[authScreenStyles.root, authScreenStyles.center]}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color={AUTH.gold} />
-      </View>
-    );
+    return <Redirect href="/(tabs)" />;
   }
 
   return (

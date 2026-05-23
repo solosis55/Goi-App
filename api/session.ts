@@ -3,6 +3,14 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { AUTH_SECURE_STORAGE_KEY, AUTH_STORAGE_KEY } from "../constants/storageKeys";
 import type { SafeUser } from "../types/auth";
+import {
+  clearAccountsVault,
+  getActiveVaultEntry,
+  loadAccountsVault,
+  removeVaultAccount,
+  setActiveVaultUser,
+  upsertVaultAccount,
+} from "../utils/accountVault";
 import { mergeSafeUser } from "../utils/mergeSafeUser";
 
 let tokenCache: string | null = null;
@@ -83,19 +91,37 @@ export async function getAuthToken(): Promise<string | null> {
   return tokenCache;
 }
 
+async function loadFromLegacyAuth(): Promise<{ token: string | null; user: SafeUser | null }> {
+  const raw = await readPersistedAuthRaw();
+  if (!raw) return { token: null, user: null };
+  const parsed = JSON.parse(raw) as { token?: string; user?: SafeUser };
+  const token = typeof parsed.token === "string" ? parsed.token : null;
+  const user = parsed.user && typeof parsed.user === "object" ? mergeSafeUser(parsed.user) : null;
+  return { token, user };
+}
+
 export async function loadStoredAuth(): Promise<{ token: string | null; user: SafeUser | null }> {
   try {
-    const raw = await readPersistedAuthRaw();
-    if (!raw) {
-      invalidateMemoryCache();
-      return { token: null, user: null };
+    const vaultEntry = await getActiveVaultEntry();
+    if (vaultEntry) {
+      tokenCache = vaultEntry.token;
+      cacheLoaded = true;
+      await writePersistedAuthRaw(
+        JSON.stringify({ token: vaultEntry.token, user: vaultEntry.user })
+      );
+      return { token: vaultEntry.token, user: vaultEntry.user };
     }
-    const parsed = JSON.parse(raw) as { token?: string; user?: SafeUser };
-    const token = typeof parsed.token === "string" ? parsed.token : null;
-    const user = parsed.user && typeof parsed.user === "object" ? mergeSafeUser(parsed.user) : null;
-    tokenCache = token;
-    cacheLoaded = true;
-    return { token, user };
+
+    const legacy = await loadFromLegacyAuth();
+    if (legacy.token && legacy.user) {
+      await upsertVaultAccount(legacy.token, legacy.user);
+      tokenCache = legacy.token;
+      cacheLoaded = true;
+      return legacy;
+    }
+
+    invalidateMemoryCache();
+    return { token: null, user: null };
   } catch {
     invalidateMemoryCache();
     return { token: null, user: null };
@@ -105,12 +131,48 @@ export async function loadStoredAuth(): Promise<{ token: string | null; user: Sa
 /** Persiste sesión en el mismo formato que Goi Web (`goi-auth`). En iOS/Android usa SecureStore. */
 export async function persistAuth(token: string, user: SafeUser): Promise<void> {
   const merged = mergeSafeUser(user);
+  await upsertVaultAccount(token, merged);
   await writePersistedAuthRaw(JSON.stringify({ token, user: merged }));
   tokenCache = token;
   cacheLoaded = true;
 }
 
-export async function clearStoredAuth(): Promise<void> {
+/** Quita la cuenta activa del almacén; devuelve la siguiente sesión si queda alguna. */
+export async function clearStoredAuth(): Promise<{
+  token: string | null;
+  user: SafeUser | null;
+}> {
+  const vault = await loadAccountsVault();
+  const activeId = vault?.activeUserId;
+  if (activeId) {
+    const nextVault = await removeVaultAccount(activeId);
+    if (nextVault) {
+      const entry = nextVault.accounts.find((a) => a.userId === nextVault.activeUserId);
+      if (entry) {
+        await writePersistedAuthRaw(JSON.stringify({ token: entry.token, user: entry.user }));
+        tokenCache = entry.token;
+        cacheLoaded = true;
+        return { token: entry.token, user: entry.user };
+      }
+    }
+  }
   await removePersistedAuthRaw();
+  await clearAccountsVault();
   invalidateMemoryCache();
+  return { token: null, user: null };
+}
+
+export async function switchStoredAuth(userId: string): Promise<{
+  token: string;
+  user: SafeUser;
+} | null> {
+  const vault = await loadAccountsVault();
+  const entry = vault?.accounts.find((a) => a.userId === userId);
+  if (!entry) return null;
+  const active = await setActiveVaultUser(userId);
+  if (!active) return null;
+  await writePersistedAuthRaw(JSON.stringify({ token: active.token, user: active.user }));
+  tokenCache = active.token;
+  cacheLoaded = true;
+  return { token: active.token, user: active.user };
 }

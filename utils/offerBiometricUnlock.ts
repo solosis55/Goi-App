@@ -11,7 +11,7 @@ type Replaceable = { replace: (href: string) => void };
  */
 export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () => void): void {
   if (Platform.OS === "web") {
-    router.replace("/feed");
+    router.replace("/(tabs)");
     return;
   }
 
@@ -20,7 +20,7 @@ export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () 
       const compatible = await LocalAuthentication.hasHardwareAsync();
       const enrolled = await LocalAuthentication.isEnrolledAsync();
       if (!compatible || !enrolled) {
-        router.replace("/feed");
+        router.replace("/(tabs)");
         return;
       }
 
@@ -52,7 +52,7 @@ export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () 
                     }
                   }
                 } finally {
-                  router.replace("/feed");
+                  router.replace("/(tabs)");
                 }
               })();
             },
@@ -61,7 +61,7 @@ export function offerBiometricUnlockAfterLogin(router: Replaceable, onOptIn: () 
         { cancelable: true, onDismiss: () => router.replace("/feed") }
       );
     } catch {
-      router.replace("/feed");
+      router.replace("/(tabs)");
     }
   })();
 }

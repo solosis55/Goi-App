@@ -42,7 +42,7 @@ function fallbackMessageForFailedRequest(status: number): string {
     return "No tienes permiso para esta acción (403).";
   }
   if (status === 0) {
-    return "No se pudo conectar con la API.";
+    return `No se pudo conectar con la API (${API_BASE_URL}). Comprueba que el servidor Goi Web esté en marcha y, en móvil físico, EXPO_PUBLIC_API_URL o npm start con la IP del PC.`;
   }
   return `La API respondió con un error (${status}).`;
 }

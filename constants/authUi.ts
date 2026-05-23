@@ -23,6 +23,14 @@ export const AUTH_PAD = 18;
 /** Límite de escala de fuente del sistema en textos de auth (evita que rompan el layout). */
 export const AUTH_MAX_FONT_MULTIPLIER = 1.35;
 
+/** Cabeceras de Stack en feed, perfil, nueva publicación (mismo look que auth). */
+export const APP_STACK_SCREEN_OPTIONS = {
+  headerStyle: { backgroundColor: AUTH.bg },
+  headerShadowVisible: false,
+  headerTintColor: AUTH.gold,
+  headerTitleStyle: { color: AUTH.neutral100, fontWeight: "600" as const, fontSize: 17 },
+} as const;
+
 export function collectFieldErrors(
   issues: ReadonlyArray<{ readonly path: readonly PropertyKey[]; message: string }>
 ) {

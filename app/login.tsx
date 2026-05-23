@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import Constants from "expo-constants";
-import { Stack, useRouter } from "expo-router";
+import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -44,6 +44,8 @@ function hapticLoginErrorLight() {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { addAccount } = useLocalSearchParams<{ addAccount?: string }>();
+  const isAddAccount = addAccount === "1";
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { isHydrated, isAuthenticated, signIn, notifyBiometricUnlockOptIn } = useAuth();
@@ -65,11 +67,11 @@ export default function LoginScreen() {
   const [rateLimited, setRateLimited] = useState(false);
 
   useEffect(() => {
-    if (!isHydrated || isAuthenticated) return;
+    if (!isHydrated || (isAuthenticated && !isAddAccount)) return;
     void loadLastLoginEmail().then((saved) => {
-      if (saved) setEmail(saved);
+      if (saved && !isAddAccount) setEmail(saved);
     });
-  }, [isHydrated, isAuthenticated]);
+  }, [isHydrated, isAuthenticated, isAddAccount]);
 
   useEffect(() => {
     return () => {
@@ -79,11 +81,6 @@ export default function LoginScreen() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isHydrated || !isAuthenticated) return;
-    router.replace("/feed");
-  }, [isHydrated, isAuthenticated, router]);
 
   const scheduleRateLimitCooldown = useCallback(() => {
     if (rateLimitTimerRef.current) clearTimeout(rateLimitTimerRef.current);
@@ -125,6 +122,10 @@ export default function LoginScreen() {
           /* sin módulo nativo */
         }
       }
+      if (isAddAccount) {
+        router.replace("/(tabs)/perfil");
+        return;
+      }
       offerBiometricUnlockAfterLogin(router, notifyBiometricUnlockOptIn);
     } catch (e) {
       hapticLoginErrorLight();
@@ -151,7 +152,17 @@ export default function LoginScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [email, password, notifyBiometricUnlockOptIn, rateLimited, router, scheduleRateLimitCooldown, signIn, submitting]);
+  }, [
+    email,
+    isAddAccount,
+    password,
+    notifyBiometricUnlockOptIn,
+    rateLimited,
+    router,
+    scheduleRateLimitCooldown,
+    signIn,
+    submitting,
+  ]);
 
   const inputBorder = (key: "email" | "password") =>
     focusedField === key ? AUTH.fieldBorderFocus : AUTH.fieldBorder;
@@ -165,20 +176,15 @@ export default function LoginScreen() {
     );
   }
 
-  if (isAuthenticated) {
-    return (
-      <View style={[authScreenStyles.root, authScreenStyles.center]}>
-        <StatusBar style="light" />
-        <ActivityIndicator size="large" color={AUTH.gold} />
-      </View>
-    );
+  if (isAuthenticated && !isAddAccount) {
+    return <Redirect href="/(tabs)" />;
   }
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Iniciar sesión",
+          title: isAddAccount ? "Añadir cuenta" : "Iniciar sesión",
           headerShown: true,
           headerStyle: { backgroundColor: AUTH.bg },
           headerShadowVisible: false,
@@ -186,12 +192,12 @@ export default function LoginScreen() {
           headerTitleStyle: { color: AUTH.neutral100, fontWeight: "600", fontSize: 17 },
           headerLeft: () => (
             <Pressable
-              onPress={() => router.replace("/")}
+              onPress={() => (isAddAccount ? router.back() : router.replace("/"))}
               hitSlop={10}
               style={{ paddingHorizontal: 12, paddingVertical: 8 }}
             >
               <Text style={authScreenStyles.headerLink} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Inicio
+                {isAddAccount ? "Volver" : "Inicio"}
               </Text>
             </Pressable>
           ),

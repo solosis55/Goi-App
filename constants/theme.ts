@@ -1,7 +1,4 @@
-import { useColorScheme, type ColorSchemeName } from "react-native";
-
-/** Modo de color que usa la app (si el sistema no informa, se asume claro). */
-export type GoiColorScheme = "light" | "dark";
+import { AUTH } from "./authUi";
 
 /**
  * Espaciados base (múltiplos de 4). Úsalos en `padding`, `margin`, `gap`, etc.
@@ -20,10 +17,6 @@ export const spacing = {
 
 export type SpacingKey = keyof typeof spacing;
 
-/**
- * Escala tipográfica. En RN los tamaños son numéricos (unidad lógica ~dp).
- * `fontFamily.sans` usa la fuente del sistema hasta cargar una custom.
- */
 export const typography = {
   fontFamily: {
     sans: "System",
@@ -52,64 +45,48 @@ export const typography = {
   },
 } as const;
 
-/** Paleta Goi: fondos neutros, primario azul (confianza), acento verde (progreso/salud). */
-export const colors = {
-  light: {
-    background: "#F8FAFC",
-    surface: "#FFFFFF",
-    surfaceMuted: "#F1F5F9",
-    border: "#E2E8F0",
-    text: "#0F172A",
-    textMuted: "#64748B",
-    primary: "#2563EB",
-    primaryForeground: "#FFFFFF",
-    accent: "#16A34A",
-    danger: "#DC2626",
-    warning: "#D97706",
-    success: "#15803D",
-  },
-  dark: {
-    background: "#020617",
-    surface: "#0F172A",
-    surfaceMuted: "#1E293B",
-    border: "#334155",
-    text: "#F8FAFC",
-    textMuted: "#94A3B8",
-    primary: "#3B82F6",
-    primaryForeground: "#FFFFFF",
-    accent: "#4ADE80",
-    danger: "#F87171",
-    warning: "#FBBF24",
-    success: "#4ADE80",
-  },
+/**
+ * Paleta única de la app móvil: alineada con Goi Web oscuro y pantallas de auth/login.
+ * No depende del modo claro del sistema.
+ */
+export const goiAppPalette = {
+  background: AUTH.bg,
+  surface: "#0a0a0c",
+  surfaceMuted: "#141416",
+  border: AUTH.fieldBorder,
+  cardBorder: AUTH.cardBorder,
+  text: AUTH.neutral100,
+  textMuted: AUTH.muted,
+  textSteel: AUTH.steel,
+  primary: AUTH.gold,
+  primaryForeground: AUTH.bg,
+  accent: AUTH.gold,
+  danger: AUTH.danger,
+  warning: "#fbbf24",
+  success: AUTH.success,
+  fieldBg: AUTH.fieldBg,
+  fieldBorderFocus: AUTH.fieldBorderFocus,
 } as const;
 
-export type GoiPalette = (typeof colors)[GoiColorScheme];
+export type GoiPalette = typeof goiAppPalette;
 
-export function resolveGoiColorScheme(
-  scheme: ColorSchemeName | null | undefined
-): GoiColorScheme {
-  return scheme === "dark" ? "dark" : "light";
-}
+/** @deprecated Solo referencia histórica; la app usa siempre `goiAppPalette`. */
+export const colors = {
+  light: goiAppPalette,
+  dark: goiAppPalette,
+} as const;
 
-export function getGoiPalette(scheme: GoiColorScheme): GoiPalette {
-  return colors[scheme];
-}
+export type GoiColorScheme = "dark";
 
 /**
- * Tema de aplicación según el modo del sistema (`useColorScheme` de React Native).
- * Úsalo en pantallas para leer colores / tipografía / espaciado propios de Goi.
+ * Tema visual de Goi App (oscuro + dorado, como login y Goi Web).
  */
 export function useGoiTheme() {
-  const systemScheme = useColorScheme();
-  const colorScheme = resolveGoiColorScheme(systemScheme);
-  const palette = getGoiPalette(colorScheme);
-
   return {
-    colorScheme,
-    palette,
+    colorScheme: "dark" as const,
+    palette: goiAppPalette,
     spacing,
     typography,
-    isDark: colorScheme === "dark",
+    isDark: true,
   };
 }

@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -122,11 +122,6 @@ export default function InicioScreen() {
   };
 
   useLayoutEffect(() => {
-    if (!isHydrated || !isAuthenticated) return;
-    router.replace("/feed");
-  }, [isHydrated, isAuthenticated, router]);
-
-  useLayoutEffect(() => {
     if (!isHydrated || isAuthenticated) return;
 
     let cancelled = false;
@@ -211,13 +206,17 @@ export default function InicioScreen() {
     };
   }, [haloPulse, heroEnter, logoBreath, isAuthenticated, isHydrated]);
 
-  if (!isHydrated || isAuthenticated) {
+  if (!isHydrated) {
     return (
       <View style={[styles.center, { backgroundColor: AUTH.bg }]}>
         <StatusBar style="light" />
         <ActivityIndicator size="large" color={AUTH.gold} />
       </View>
     );
+  }
+
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)" />;
   }
 
   return (

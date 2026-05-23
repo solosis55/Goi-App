@@ -1,9 +1,13 @@
 import type {
   AuthResponse,
+  DiscoverUser,
   ForgotPasswordResponse,
   LoginInput,
+  ProfileUser,
   RegisterInput,
   ResetPasswordInput,
+  SafeUser,
+  UpdateProfileInput,
 } from "../types/auth";
 import { apiFetch } from "./client";
 
@@ -33,4 +37,61 @@ export function resetPasswordWithToken(input: ResetPasswordInput) {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function getProfile(userId: string) {
+  return apiFetch<{ user: ProfileUser }>(`/auth/profile/${encodeURIComponent(userId)}`);
+}
+
+export function updateProfile(userId: string, input: UpdateProfileInput) {
+  return apiFetch<{ message: string; user: SafeUser }>(`/auth/profile/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+type ProfileImageUploadResponse = { url: string };
+
+function profileImageFormData(uri: string, filename: string, mimeType: string): FormData {
+  const form = new FormData();
+  form.append("file", { uri, name: filename, type: mimeType } as unknown as Blob);
+  return form;
+}
+
+export function uploadProfileAvatar(userId: string, uri: string, mimeType = "image/jpeg") {
+  return apiFetch<ProfileImageUploadResponse>(
+    `/auth/profile/${encodeURIComponent(userId)}/avatar`,
+    {
+      method: "POST",
+      body: profileImageFormData(uri, "avatar.jpg", mimeType),
+    }
+  );
+}
+
+export function getFollowing(userId: string) {
+  return apiFetch<{ followingIds: string[] }>(`/auth/following/${encodeURIComponent(userId)}`);
+}
+
+export function getFollowers(userId: string) {
+  return apiFetch<{ followerIds: string[] }>(`/auth/followers/${encodeURIComponent(userId)}`);
+}
+
+export function getUsers() {
+  return apiFetch<{ users: DiscoverUser[] }>("/auth/users");
+}
+
+export function toggleFollow(targetUserId: string) {
+  return apiFetch<{ following: boolean }>(`/auth/follow/${encodeURIComponent(targetUserId)}`, {
+    method: "POST",
+  });
+}
+
+export function uploadProfileBanner(userId: string, uri: string, mimeType = "image/jpeg") {
+  return apiFetch<ProfileImageUploadResponse>(
+    `/auth/profile/${encodeURIComponent(userId)}/banner`,
+    {
+      method: "POST",
+      body: profileImageFormData(uri, "banner.jpg", mimeType),
+    }
+  );
 }
