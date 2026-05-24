@@ -15,9 +15,9 @@ function newImageId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function useCreatePostForm() {
+export function useCreatePostForm(initialVisibility: PostVisibility = "public") {
   const [content, setContent] = useState("");
-  const [visibility, setVisibility] = useState<PostVisibility>("public");
+  const [visibility, setVisibility] = useState<PostVisibility>(initialVisibility);
   const [images, setImages] = useState<PendingPostImage[]>([]);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);

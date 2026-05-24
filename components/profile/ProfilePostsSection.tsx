@@ -9,6 +9,11 @@ import { useProfilePosts } from "../../hooks/useProfilePosts";
 import type { Post } from "../../types/post";
 import { loadSavedPostIds, toggleSavedPost } from "../../utils/feedLocalPrefs";
 import { getErrorMessage } from "../../utils/errorMessages";
+import { useSyncProfilePostFromDetail } from "../../hooks/useSyncProfilePostFromDetail";
+import {
+  openProfilePostDetail,
+  usesProfilePostDetailScreen,
+} from "../../utils/openProfilePostDetail";
 import { ProfilePostDetailModal } from "./ProfilePostDetailModal";
 import { ProfilePostsGrid } from "./ProfilePostsGrid";
 import { ProfilePostsGridSkeleton } from "./ProfilePostsGridSkeleton";
@@ -32,9 +37,12 @@ export function ProfilePostsSection({
 }: ProfilePostsSectionProps) {
   const router = useRouter();
   const { user } = useAuth();
+  const useDetailScreen = usesProfilePostDetailScreen();
   const postsState = useProfilePosts(userId, pinnedPostId);
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [modalPost, setModalPost] = useState<Post | null>(null);
+  const [gridThumbKey, setGridThumbKey] = useState(0);
   const [savedIdSet, setSavedIdSet] = useState<Set<string>>(new Set());
   const [commentByPostId, setCommentByPostId] = useState<Record<string, string>>({});
   const [commentErrorsByPostId, setCommentErrorsByPostId] = useState<Record<string, string | null>>({});
@@ -74,11 +82,59 @@ export function ProfilePostsSection({
     );
   }, [selectedPostId, postsState.displayedPosts, postsState.myPosts, postsState.savedPosts]);
 
+  useEffect(() => {
+    if (selectedPost) setModalPost(selectedPost);
+  }, [selectedPost]);
+
+  const detailPost = modalPost ?? selectedPost;
+
+  const closePostDetail = useCallback(() => {
+    setGridThumbKey((k) => k + 1);
+    setSelectedPostId(null);
+  }, []);
+
   const patchPostInLists = useCallback(
     (postId: string, updater: (p: Post) => Post) => {
       postsState.setMyPosts((prev) => prev.map((p) => (p.id === postId ? updater(p) : p)));
     },
     [postsState]
+  );
+
+  const applyPostSync = useCallback(
+    (sync: { post: Post | null; deleted?: boolean }) => {
+      if (sync.deleted && sync.post) {
+        postsState.removePost(sync.post.id);
+        if (pinnedPostId === sync.post.id) void onSetPinned(null);
+        return;
+      }
+      if (sync.post) {
+        patchPostInLists(sync.post.id, () => sync.post!);
+      }
+    },
+    [postsState, pinnedPostId, onSetPinned, patchPostInLists]
+  );
+
+  useSyncProfilePostFromDetail(applyPostSync);
+
+  const openPost = useCallback(
+    (id: string) => {
+      const p =
+        postsState.displayedPosts.find((x) => x.id === id) ??
+        postsState.myPosts.find((x) => x.id === id) ??
+        postsState.savedPosts.find((x) => x.id === id);
+      if (!p) return;
+      openProfilePostDetail({
+        router,
+        post: p,
+        ownProfile: true,
+        openingMeta: { pinnedPostId, onSetPinned },
+        onOpenModal: () => {
+          setModalPost(p);
+          setSelectedPostId(id);
+        },
+      });
+    },
+    [postsState.displayedPosts, postsState.myPosts, postsState.savedPosts, router, pinnedPostId, onSetPinned]
   );
 
   const handleToggleLike = useCallback(async () => {
@@ -277,7 +333,9 @@ export function ProfilePostsSection({
             posts={postsState.displayedPosts}
             pinnedPostId={pinnedPostId}
             selectedId={selectedPostId}
-            onSelect={setSelectedPostId}
+            thumbRemountKey={gridThumbKey}
+            openPostId={useDetailScreen ? null : selectedPostId}
+            onSelect={openPost}
           />
           {postsState.hasMore ? (
             <Pressable
@@ -300,31 +358,34 @@ export function ProfilePostsSection({
         </>
       )}
 
-      <ProfilePostDetailModal
-        visible={selectedPostId != null}
-        post={selectedPost}
-        currentUserId={user?.id}
-        sessionAvatarUrl={user?.avatarUrl}
-        commentValue={selectedPostId ? commentByPostId[selectedPostId] ?? "" : ""}
-        onChangeComment={(value) => {
-          if (!selectedPostId) return;
-          setCommentByPostId((prev) => ({ ...prev, [selectedPostId]: value }));
-        }}
-        onSubmitComment={() => void handleCreateComment()}
-        onToggleLike={() => void handleToggleLike()}
-        onDelete={(id) => void handleDeletePost(id)}
-        onEdit={handleEdit}
-        deleting={deletingPostId === selectedPostId}
-        commenting={commentingPostId === selectedPostId}
-        commentError={selectedPostId ? commentErrorsByPostId[selectedPostId] : null}
-        onClose={() => setSelectedPostId(null)}
-        saved={selectedPostId ? savedIdSet.has(selectedPostId) : false}
-        onToggleSave={
-          selectedPostId ? () => void handleToggleSave(selectedPostId) : undefined
-        }
-        pinnedPostId={pinnedPostId}
-        onSetPinned={(id) => void handlePin(id)}
-      />
+      {!useDetailScreen ? (
+        <ProfilePostDetailModal
+          visible={selectedPostId != null}
+          post={detailPost}
+          currentUserId={user?.id}
+          sessionAvatarUrl={user?.avatarUrl}
+          commentValue={detailPost ? commentByPostId[detailPost.id] ?? "" : ""}
+          onChangeComment={(value) => {
+            if (!detailPost) return;
+            setCommentByPostId((prev) => ({ ...prev, [detailPost.id]: value }));
+          }}
+          onSubmitComment={() => void handleCreateComment()}
+          onToggleLike={() => void handleToggleLike()}
+          onDelete={(id) => void handleDeletePost(id)}
+          onEdit={handleEdit}
+          deleting={deletingPostId === selectedPostId}
+          commenting={commentingPostId === selectedPostId}
+          commentError={selectedPostId ? commentErrorsByPostId[selectedPostId] : null}
+          onClose={closePostDetail}
+          onAfterClose={() => setModalPost(null)}
+          saved={selectedPostId ? savedIdSet.has(selectedPostId) : false}
+          onToggleSave={
+            selectedPostId ? () => void handleToggleSave(selectedPostId) : undefined
+          }
+          pinnedPostId={pinnedPostId}
+          onSetPinned={(id) => void handlePin(id)}
+        />
+      ) : null}
     </View>
   );
 }

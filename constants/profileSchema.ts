@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const sectionVisibilitySchema = z.enum(["public", "followers", "private"]);
+const statsVisibilitySchema = z.enum(["public", "followers", "hidden"]);
+
 /** Validación alineada con `updateProfile` del servidor Goi Web. */
 export const profileFormSchema = z.object({
   username: z
@@ -13,7 +16,16 @@ export const profileFormSchema = z.object({
   websiteUrl: z.string().trim(),
   instagramUrl: z.string().trim(),
   stravaUrl: z.string().trim(),
-  profileVisibility: z.enum(["public", "followers"]),
+  profileVisibility: z.enum(["public", "followers", "private", "request"]),
+  profileSections: z.object({
+    bio: sectionVisibilitySchema,
+    stats: statsVisibilitySchema,
+    sessions: sectionVisibilitySchema,
+    socialLists: statsVisibilitySchema,
+  }),
+  discoverable: z.boolean(),
+  requireAuthToView: z.boolean(),
+  defaultPostVisibility: z.enum(["public", "followers", "private"]),
   bannerShowInFeed: z.boolean(),
 });
 

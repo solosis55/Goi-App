@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { ProfileBadge } from "../../utils/profileBadges";
@@ -9,8 +8,6 @@ import {
   ProfileLinkWebIcon,
   ProfileLocationIcon,
 } from "./ProfileLinkIcons";
-import { ProfileWorkoutStatsBar, type ProfileWorkoutStatsBarProps } from "./ProfileWorkoutStatsBar";
-
 export type ProfilePublicInfoProps = {
   bio?: string;
   goal?: string;
@@ -23,9 +20,7 @@ export type ProfilePublicInfoProps = {
   showEditHint?: boolean;
   onEditProfile?: () => void;
   badges?: ProfileBadge[];
-  workoutStats?: ProfileWorkoutStatsBarProps;
   activityLine?: string | null;
-  workoutSummary?: ReactNode;
 };
 
 function openUrl(url: string) {
@@ -46,9 +41,7 @@ export function ProfilePublicInfo({
   showEditHint,
   onEditProfile,
   badges = [],
-  workoutStats,
   activityLine,
-  workoutSummary,
 }: ProfilePublicInfoProps) {
   if (restricted && restrictedMessage) {
     return (
@@ -97,10 +90,6 @@ export function ProfilePublicInfo({
         </Text>
       ) : null}
 
-      {workoutStats ? <ProfileWorkoutStatsBar {...workoutStats} /> : null}
-
-      {workoutSummary}
-
       {hasLocation ? (
         <View style={styles.locationRow}>
           <ProfileLocationIcon color={AUTH.muted} />
@@ -111,14 +100,9 @@ export function ProfilePublicInfo({
       ) : null}
 
       {hasGoal ? (
-        <View style={styles.goalRow}>
-          <Text style={styles.goalIcon} accessibilityElementsHidden>
-            🎯
-          </Text>
-          <Text style={styles.goal} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {goal!.trim()}
-          </Text>
-        </View>
+        <Text style={styles.goalHeadline} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          {goal!.trim()}
+        </Text>
       ) : null}
 
       <ProfileBadgesRow badges={badges} />
@@ -152,37 +136,31 @@ export function ProfilePublicInfo({
           {websiteUrl?.trim() ? (
             <Pressable
               onPress={() => openUrl(websiteUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
+              style={({ pressed }) => [styles.linkIconBtn, pressed ? styles.pressed : null]}
               accessibilityRole="link"
+              accessibilityLabel="Sitio web"
             >
               <ProfileLinkWebIcon color={AUTH.gold} />
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Web
-              </Text>
             </Pressable>
           ) : null}
           {instagramUrl?.trim() ? (
             <Pressable
               onPress={() => openUrl(instagramUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
+              style={({ pressed }) => [styles.linkIconBtn, pressed ? styles.pressed : null]}
               accessibilityRole="link"
+              accessibilityLabel="Instagram"
             >
               <ProfileLinkInstagramIcon color={AUTH.gold} />
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Instagram
-              </Text>
             </Pressable>
           ) : null}
           {stravaUrl?.trim() ? (
             <Pressable
               onPress={() => openUrl(stravaUrl)}
-              style={({ pressed }) => [styles.linkChip, pressed ? styles.pressed : null]}
+              style={({ pressed }) => [styles.linkIconBtn, pressed ? styles.pressed : null]}
               accessibilityRole="link"
+              accessibilityLabel="Strava"
             >
               <ProfileLinkStravaIcon color={AUTH.gold} />
-              <Text style={styles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Strava
-              </Text>
             </Pressable>
           ) : null}
         </View>
@@ -237,21 +215,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
-  goalRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-  },
-  goalIcon: {
+  goalHeadline: {
+    color: "rgba(240, 216, 120, 0.92)",
     fontSize: 15,
-    lineHeight: 20,
-  },
-  goal: {
-    flex: 1,
-    color: AUTH.gold,
-    fontSize: 14,
     fontWeight: "600",
-    lineHeight: 20,
+    lineHeight: 21,
+    letterSpacing: -0.15,
   },
   bio: {
     color: AUTH.steel,
@@ -267,24 +236,18 @@ const styles = StyleSheet.create({
   links: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 2,
+    gap: 10,
+    marginTop: 4,
   },
-  linkChip: {
-    flexDirection: "row",
+  linkIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(82, 82, 82, 0.9)",
-    backgroundColor: "rgba(23, 23, 23, 0.8)",
-  },
-  linkText: {
-    color: AUTH.neutral100,
-    fontSize: 12,
-    fontWeight: "600",
+    borderColor: "rgba(212, 175, 55, 0.28)",
+    backgroundColor: "rgba(212, 175, 55, 0.08)",
   },
   emptyCard: {
     padding: 14,

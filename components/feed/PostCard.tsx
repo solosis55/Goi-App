@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -22,9 +23,13 @@ import type { useGoiTheme } from "../../constants/theme";
 import type { Post, PostComment } from "../../types/post";
 import { formatPostRelative } from "../../utils/feedPostDate";
 import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
+import { useFeedGoldBeam } from "../../context/FeedGoldBeamContext";
+import { PostCardGoldBeam } from "./PostCardGoldBeam";
 import { UserAvatar } from "../ui/UserAvatar";
 import { TabDumbbellIcon } from "../navigation/TabBarIcons";
 import { PostActionBar } from "./PostActionBar";
+import { usePressGuard } from "../../hooks/usePressGuard";
+import { TapSlopPressable } from "../ui/TapSlopPressable";
 import { PostMediaCarousel } from "./PostMediaCarousel";
 import { FeedPostOverflowSheet } from "./FeedPostOverflowSheet";
 import { PostOwnerMenuSheet } from "./PostOwnerMenuSheet";
@@ -58,27 +63,40 @@ type PostCardProps = ThemeSlice & {
   onReportPost?: () => void;
   workoutTitle?: string | null;
   highlighted?: boolean;
+  /** Tarjeta central del feed: muestra el brillo dorado al hacer scroll. */
+  isBeamActive?: boolean;
+  /** Dentro de un ScrollView con scroll vertical (detalle desde perfil). */
+  guardScrollPresses?: boolean;
 };
 
 function CommentRow({
   comment,
   currentUserId,
+  onOpenAuthor,
 }: {
   comment: PostComment;
   currentUserId: string | undefined;
+  onOpenAuthor?: (userId: string) => void;
 }) {
-  const avatarUri = comment.authorAvatarUrl ? resolveMediaUrl(comment.authorAvatarUrl) : "";
   const isOwn = currentUserId != null && comment.userId === currentUserId;
+  const canOpen = !isOwn && !!onOpenAuthor;
 
   return (
     <View style={styles.commentRow}>
-      <UserAvatar
-        src={comment.authorAvatarUrl}
-        username={comment.authorUsername}
-        size={32}
-      />
+      <Pressable
+        onPress={canOpen ? () => onOpenAuthor?.(comment.userId) : undefined}
+        disabled={!canOpen}
+        accessibilityRole={canOpen ? "button" : undefined}
+        accessibilityLabel={canOpen ? `Ver perfil de ${comment.authorUsername}` : undefined}
+      >
+        <UserAvatar src={comment.authorAvatarUrl} username={comment.authorUsername} size={32} />
+      </Pressable>
       <Text style={styles.commentBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        <Text style={styles.commentAuthor}>
+        <Text
+          style={styles.commentAuthor}
+          onPress={canOpen ? () => onOpenAuthor?.(comment.userId) : undefined}
+          suppressHighlighting={!canOpen}
+        >
           {comment.authorUsername}
           {isOwn ? <Text style={styles.commentOwn}> (tú)</Text> : null}
         </Text>
@@ -122,7 +140,16 @@ function PostCardInner({
   onReportPost,
   workoutTitle,
   highlighted,
+  isBeamActive = false,
+  guardScrollPresses = false,
 }: PostCardProps) {
+  const press = usePressGuard(guardScrollPresses);
+  const Touchable = guardScrollPresses ? TapSlopPressable : Pressable;
+  const feedBeam = useFeedGoldBeam();
+  const cardWrapRef = useRef<View>(null);
+  const [cardSize, setCardSize] = useState({ w: 0, h: 0 });
+  const { width: screenWidth } = useWindowDimensions();
+  const mediaSlideWidth = Math.min(screenWidth, 672);
   const { showAlert } = useGoiAlert();
   const [commentsSectionOpen, setCommentsSectionOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -142,18 +169,27 @@ function PostCardInner({
   const canOpenAuthor = !isOwner && !!onOpenAuthor;
   const isPinned = Boolean(pinnedPostId?.trim() && pinnedPostId === post.id);
 
-  const openAuthor = useCallback(() => {
-    if (canOpenAuthor && onOpenAuthor) onOpenAuthor(post.userId, post.authorUsername);
-  }, [canOpenAuthor, onOpenAuthor, post.userId, post.authorUsername]);
+  const openAuthor = useCallback(
+    press(() => {
+      if (canOpenAuthor && onOpenAuthor) onOpenAuthor(post.userId, post.authorUsername);
+    }),
+    [press, canOpenAuthor, onOpenAuthor, post.userId, post.authorUsername]
+  );
 
-  const toggleCommentsSection = useCallback(() => {
-    setCommentsSectionOpen((open) => !open);
-  }, []);
+  const toggleCommentsSection = useCallback(
+    press(() => {
+      setCommentsSectionOpen((open) => !open);
+    }),
+    [press]
+  );
 
-  const onDoubleTapLike = useCallback(() => {
-    hapticLike();
-    onToggleLike();
-  }, [onToggleLike]);
+  const onDoubleTapLike = useCallback(
+    press(() => {
+      hapticLike();
+      onToggleLike();
+    }),
+    [press, onToggleLike]
+  );
 
   const confirmDelete = useCallback(() => {
     if (!onDelete) return;
@@ -196,16 +232,26 @@ function PostCardInner({
   }, [showAlert]);
 
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        !hasMedia ? styles.cardTextOnly : null,
-        highlightBorderStyle,
-      ]}
+    <View
+      ref={cardWrapRef}
+      collapsable={false}
+      style={styles.cardWrap}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (width > 0 && height > 0) setCardSize({ w: width, h: height });
+      }}
     >
+      <Animated.View
+        style={[
+          styles.card,
+          styles.cardClip,
+          !hasMedia ? styles.cardTextOnly : null,
+          highlightBorderStyle,
+        ]}
+      >
       <View style={[styles.headerPad, !hasMedia ? styles.headerPadCompact : null]}>
         <View style={styles.headerRow}>
-          <Pressable
+          <Touchable
             onPress={openAuthor}
             disabled={!canOpenAuthor}
             style={({ pressed }) => [styles.authorTap, pressed && canOpenAuthor ? styles.hitPressed : null]}
@@ -217,8 +263,8 @@ function PostCardInner({
             <View style={styles.avatarSlot}>
               <UserAvatar src={authorAvatarSrc} username={post.authorUsername} size={46} />
             </View>
-          </Pressable>
-          <Pressable
+          </Touchable>
+          <Touchable
             onPress={openAuthor}
             disabled={!canOpenAuthor}
             style={({ pressed }) => [
@@ -247,10 +293,10 @@ function PostCardInner({
                 </View>
               ) : null}
             </View>
-          </Pressable>
+          </Touchable>
           {canManage || canOverflow ? (
-            <Pressable
-              onPress={() => (canManage ? setMenuOpen(true) : setOverflowOpen(true))}
+            <Touchable
+              onPress={press(() => (canManage ? setMenuOpen(true) : setOverflowOpen(true)))}
               disabled={deleting}
               hitSlop={8}
               accessibilityRole="button"
@@ -262,14 +308,23 @@ function PostCardInner({
               ) : (
                 <Text style={styles.menuIcon}>⋯</Text>
               )}
-            </Pressable>
+            </Touchable>
           ) : (
             <View style={styles.menuSpacer} />
           )}
         </View>
       </View>
 
-      {hasMedia ? <PostMediaCarousel media={post.media ?? []} onDoubleTapLike={onDoubleTapLike} /> : null}
+      {hasMedia ? (
+        <View style={styles.mediaBleed}>
+          <PostMediaCarousel
+            media={post.media ?? []}
+            onDoubleTapLike={onDoubleTapLike}
+            slideWidth={mediaSlideWidth}
+            guardScrollPresses={guardScrollPresses}
+          />
+        </View>
+      ) : null}
 
       {workoutTitle?.trim() ? (
         <View style={styles.workoutChipWrap}>
@@ -282,19 +337,22 @@ function PostCardInner({
         </View>
       ) : null}
 
-      <PostActionBar
-        liked={!!post.likedByMe}
-        likesCount={post.likesCount}
-        commentsCount={commentsCount}
-        onToggleLike={onToggleLike}
-        onPressComment={toggleCommentsSection}
-        commentsExpanded={commentsSectionOpen}
-        onPressShare={onSharePost}
-        onPressLikesCount={showLikesModal}
-        onPressCommentsCount={toggleCommentsSection}
-        saved={saved}
-        onToggleSave={onToggleSave}
-      />
+      <View style={styles.actionBarPad}>
+        <PostActionBar
+          liked={!!post.likedByMe}
+          likesCount={post.likesCount}
+          commentsCount={commentsCount}
+          onToggleLike={press(onToggleLike)}
+          onPressComment={toggleCommentsSection}
+          commentsExpanded={commentsSectionOpen}
+          onPressShare={onSharePost ? press(onSharePost) : undefined}
+          onPressLikesCount={press(showLikesModal)}
+          onPressCommentsCount={toggleCommentsSection}
+          saved={saved}
+          onToggleSave={onToggleSave ? press(onToggleSave) : undefined}
+          guardScrollPresses={guardScrollPresses}
+        />
+      </View>
 
       <View style={[styles.bodyPad, !hasMedia ? styles.bodyPadCompact : null]}>
         {post.content ? (
@@ -309,13 +367,22 @@ function PostCardInner({
         {commentsCount > 0 && !commentsSectionOpen ? (
           <View style={styles.commentPreview}>
             {commentPreview.map((c) => (
-              <CommentRow key={c.id} comment={c} currentUserId={currentUserId} />
+              <CommentRow
+                key={c.id}
+                comment={c}
+                currentUserId={currentUserId}
+                onOpenAuthor={
+                  canOpenAuthor && onOpenAuthor
+                    ? (id) => onOpenAuthor(id, c.authorUsername)
+                    : undefined
+                }
+              />
             ))}
           </View>
         ) : null}
 
         {commentsCount > 0 ? (
-          <Pressable
+          <Touchable
             onPress={toggleCommentsSection}
             accessibilityRole="button"
             accessibilityState={{ expanded: commentsSectionOpen }}
@@ -327,13 +394,22 @@ function PostCardInner({
                 ? "Ocultar comentarios"
                 : `Ver ${commentsCount} ${commentsCount === 1 ? "comentario" : "comentarios"}`}
             </Text>
-          </Pressable>
+          </Touchable>
         ) : null}
 
         {commentsCount > 0 && commentsSectionOpen ? (
           <View style={styles.commentsList}>
             {post.comments.map((c) => (
-              <CommentRow key={c.id} comment={c} currentUserId={currentUserId} />
+              <CommentRow
+                key={c.id}
+                comment={c}
+                currentUserId={currentUserId}
+                onOpenAuthor={
+                  canOpenAuthor && onOpenAuthor
+                    ? (id) => onOpenAuthor(id, c.authorUsername)
+                    : undefined
+                }
+              />
             ))}
           </View>
         ) : null}
@@ -357,8 +433,8 @@ function PostCardInner({
               <Text style={styles.charCount} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {commentValue.trim().length}/180
               </Text>
-              <Pressable
-                onPress={onSubmitComment}
+              <Touchable
+                onPress={press(onSubmitComment)}
                 disabled={!canSubmitComment}
                 accessibilityRole="button"
                 accessibilityLabel="Publicar comentario"
@@ -378,7 +454,7 @@ function PostCardInner({
                     Enviar
                   </Text>
                 )}
-              </Pressable>
+              </Touchable>
             </View>
             {commentError ? (
               <Text style={styles.commentError} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -409,17 +485,26 @@ function PostCardInner({
           onShare={onSharePost}
         />
       ) : null}
-    </Animated.View>
+
+      </Animated.View>
+
+      {isBeamActive && feedBeam && cardSize.w > 0 && cardSize.h > 0 ? (
+        <PostCardGoldBeam hostRef={cardWrapRef} width={cardSize.w} height={cardSize.h} />
+      ) : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  cardWrap: {
+    position: "relative",
+    overflow: "visible",
+  },
   card: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(38, 38, 38, 0.9)",
-    backgroundColor: "rgba(14, 14, 16, 0.92)",
-    overflow: "hidden",
+    borderColor: "rgba(212, 175, 55, 0.14)",
+    backgroundColor: "#0a0a0c",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
@@ -430,6 +515,10 @@ const styles = StyleSheet.create({
       android: { elevation: 6 },
       default: {},
     }),
+  },
+  cardClip: {
+    overflow: "hidden",
+    borderRadius: 16,
   },
   cardTextOnly: {
     backgroundColor: "rgba(22, 20, 14, 0.72)",
@@ -445,25 +534,34 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 8,
   },
-  workoutChipWrap: {
+  mediaBleed: {
+    marginHorizontal: -16,
+  },
+  actionBarPad: {
     paddingHorizontal: 14,
-    paddingBottom: 4,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  workoutChipWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    paddingTop: 2,
   },
   workoutChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 5,
     alignSelf: "flex-start",
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.35)",
-    backgroundColor: "rgba(35, 32, 22, 0.65)",
+    borderColor: "rgba(212, 175, 55, 0.28)",
+    backgroundColor: "rgba(28, 26, 18, 0.75)",
   },
   workoutChipText: {
     color: AUTH.gold,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
   headerRow: {

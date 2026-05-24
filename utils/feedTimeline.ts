@@ -1,3 +1,4 @@
+import type { FeedContentFilter } from "../constants/feedContentFilter";
 import type { FeedScope } from "../constants/feed";
 import type { Post } from "../types/post";
 
@@ -8,6 +9,7 @@ export function filterFeedPosts(
     userId: string | undefined;
     followingIds: string[];
     mutedUserIds: Set<string>;
+    contentFilter?: FeedContentFilter;
   }
 ): Post[] {
   let list = posts.filter((p) => !opts.mutedUserIds.has(p.userId));
@@ -15,6 +17,13 @@ export function filterFeedPosts(
   if (scope === "following" && opts.userId) {
     const allowed = new Set([...opts.followingIds, opts.userId]);
     list = list.filter((p) => allowed.has(p.userId));
+  }
+
+  const cf = opts.contentFilter ?? "all";
+  if (cf === "photos") {
+    list = list.filter((p) => (p.media?.length ?? 0) > 0);
+  } else if (cf === "workout") {
+    list = list.filter((p) => p.workoutId != null && p.workoutId !== "");
   }
 
   return list;

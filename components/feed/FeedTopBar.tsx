@@ -4,6 +4,7 @@ import Animated, { interpolate, useAnimatedStyle, type SharedValue } from "react
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { SafeUser } from "../../types/auth";
+import { GoiGoldFadeLine } from "../ui/GoiGoldFadeLine";
 import { UserAvatar } from "../ui/UserAvatar";
 import { FeedNotificationsBell } from "./FeedNotificationsBell";
 
@@ -15,6 +16,8 @@ type FeedTopBarProps = {
   user: SafeUser | null;
   onBrandPress?: () => void;
   scrollY?: SharedValue<number>;
+  unreadCount?: number;
+  onNotificationsPress?: () => void;
 };
 
 const LOGO_SIZE = 28;
@@ -22,7 +25,13 @@ const LOGO_SIZE_COLLAPSED = 24;
 const HEADER_AVATAR_SIZE = 32;
 const ACTION_SIZE = 36;
 
-export function FeedTopBar({ user, onBrandPress, scrollY }: FeedTopBarProps) {
+export function FeedTopBar({
+  user,
+  onBrandPress,
+  scrollY,
+  unreadCount = 0,
+  onNotificationsPress,
+}: FeedTopBarProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -49,12 +58,21 @@ export function FeedTopBar({ user, onBrandPress, scrollY }: FeedTopBarProps) {
     };
   });
 
+  const backdropAnim = useAnimatedStyle(() => {
+    if (!scrollY) return { opacity: 0.94 };
+    return {
+      opacity: interpolate(scrollY.value, [0, 48], [0.72, 0.98], "clamp"),
+    };
+  });
+
   const goProfile = () => {
     router.push("/(tabs)/perfil");
   };
 
   return (
     <Animated.View style={[styles.bar, { paddingTop: Math.max(insets.top, 6) }, barAnim]}>
+      <GoiGoldFadeLine style={styles.topGoldLine} />
+      <Animated.View style={[styles.barBackdrop, backdropAnim]} pointerEvents="none" />
       <View style={styles.sideSpacer} />
 
       <Pressable
@@ -80,7 +98,11 @@ export function FeedTopBar({ user, onBrandPress, scrollY }: FeedTopBarProps) {
       </Pressable>
 
       <View style={styles.actionsWrap}>
-        <FeedNotificationsBell unreadCount={0} compact />
+        <FeedNotificationsBell
+          unreadCount={unreadCount}
+          compact
+          onPress={onNotificationsPress}
+        />
         {user?.username ? (
           <Pressable
             onPress={goProfile}
@@ -110,9 +132,23 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(64, 64, 64, 0.75)",
-    backgroundColor: "rgba(0, 0, 0, 0.94)",
+    borderBottomColor: "rgba(212, 175, 55, 0.12)",
+    backgroundColor: "transparent",
     zIndex: 10,
+    overflow: "hidden",
+  },
+  topGoldLine: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  barBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(6, 6, 8, 0.96)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(64, 64, 64, 0.5)",
   },
   sideSpacer: {
     flex: 1,

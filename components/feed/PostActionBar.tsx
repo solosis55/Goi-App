@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { TapSlopPressable } from "../ui/TapSlopPressable";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
@@ -18,6 +19,7 @@ type PostActionBarProps = {
   onPressCommentsCount?: () => void;
   saved?: boolean;
   onToggleSave?: () => void;
+  guardScrollPresses?: boolean;
 };
 
 function CommentIcon({ size = 24, color = AUTH.neutral100 }: { size?: number; color?: string }) {
@@ -75,7 +77,9 @@ export function PostActionBar({
   onPressCommentsCount,
   saved = false,
   onToggleSave,
+  guardScrollPresses = false,
 }: PostActionBarProps) {
+  const Touchable = guardScrollPresses ? TapSlopPressable : Pressable;
   const heartColor = liked ? AUTH.gold : AUTH.neutral100;
   const likeScale = useSharedValue(1);
   const saveScale = useSharedValue(1);
@@ -105,18 +109,33 @@ export function PostActionBar({
   return (
     <View style={styles.bar}>
       <View style={styles.icons}>
-        <AnimatedPressable
-          onPress={handleLike}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityState={{ selected: liked }}
-          accessibilityLabel={liked ? "Quitar me gusta" : "Dar me gusta"}
-          style={({ pressed }) => [styles.iconBtn, likeAnimStyle, pressed ? styles.pressed : null]}
-        >
-          <FeedHeartIcon filled={liked} color={heartColor} size={26} />
-        </AnimatedPressable>
+        {guardScrollPresses ? (
+          <Touchable
+            onPress={handleLike}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: liked }}
+            accessibilityLabel={liked ? "Quitar me gusta" : "Dar me gusta"}
+            style={styles.iconBtn}
+          >
+            <Animated.View style={likeAnimStyle}>
+              <FeedHeartIcon filled={liked} color={heartColor} size={26} />
+            </Animated.View>
+          </Touchable>
+        ) : (
+          <AnimatedPressable
+            onPress={handleLike}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: liked }}
+            accessibilityLabel={liked ? "Quitar me gusta" : "Dar me gusta"}
+            style={({ pressed }) => [styles.iconBtn, likeAnimStyle, pressed ? styles.pressed : null]}
+          >
+            <FeedHeartIcon filled={liked} color={heartColor} size={26} />
+          </AnimatedPressable>
+        )}
 
-        <Pressable
+        <Touchable
           onPress={onPressComment}
           hitSlop={8}
           accessibilityRole="button"
@@ -125,10 +144,10 @@ export function PostActionBar({
           style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
         >
           <CommentIcon />
-        </Pressable>
+        </Touchable>
 
         {onPressShare ? (
-          <Pressable
+          <Touchable
             onPress={onPressShare}
             hitSlop={8}
             accessibilityRole="button"
@@ -136,20 +155,35 @@ export function PostActionBar({
             style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
           >
             <ShareIcon />
-          </Pressable>
+          </Touchable>
         ) : null}
 
         {onToggleSave ? (
-          <AnimatedPressable
-            onPress={handleSave}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityState={{ selected: saved }}
-            accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
-            style={({ pressed }) => [styles.iconBtn, saveAnimStyle, pressed ? styles.pressed : null]}
-          >
-            <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
-          </AnimatedPressable>
+          guardScrollPresses ? (
+            <Touchable
+              onPress={handleSave}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: saved }}
+              accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
+              style={styles.iconBtn}
+            >
+              <Animated.View style={saveAnimStyle}>
+                <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
+              </Animated.View>
+            </Touchable>
+          ) : (
+            <AnimatedPressable
+              onPress={handleSave}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityState={{ selected: saved }}
+              accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
+              style={({ pressed }) => [styles.iconBtn, saveAnimStyle, pressed ? styles.pressed : null]}
+            >
+              <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
+            </AnimatedPressable>
+          )
         ) : null}
       </View>
 
@@ -157,11 +191,11 @@ export function PostActionBar({
         <View style={styles.statsRow}>
           {likesCount > 0 ? (
             onPressLikesCount ? (
-              <Pressable onPress={onPressLikesCount} hitSlop={6} accessibilityRole="button">
+              <Touchable onPress={onPressLikesCount} hitSlop={6} accessibilityRole="button">
                 <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   {likesLabel}
                 </Text>
-              </Pressable>
+              </Touchable>
             ) : (
               <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {likesLabel}
@@ -176,11 +210,11 @@ export function PostActionBar({
           ) : null}
           {commentsCount > 0 ? (
             onPressCommentsCount ? (
-              <Pressable onPress={onPressCommentsCount} hitSlop={6} accessibilityRole="button">
+              <Touchable onPress={onPressCommentsCount} hitSlop={6} accessibilityRole="button">
                 <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   {commentsLabel}
                 </Text>
-              </Pressable>
+              </Touchable>
             ) : (
               <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {commentsLabel}

@@ -4,6 +4,8 @@ import { useGoiAlert } from "../../context/GoiAlertContext";
 import type { ProfileBadge } from "../../utils/profileBadges";
 import { badgesWithCopy } from "../../utils/profileBadgeCopy";
 
+const MAX_VISIBLE = 4;
+
 type ProfileBadgesRowProps = {
   badges: ProfileBadge[];
 };
@@ -14,9 +16,12 @@ export function ProfileBadgesRow({ badges }: ProfileBadgesRowProps) {
 
   if (enriched.length === 0) return null;
 
+  const visible = enriched.slice(0, MAX_VISIBLE);
+  const extra = enriched.length - visible.length;
+
   return (
     <View style={styles.wrap} accessibilityRole="list" accessibilityLabel="Logros del perfil">
-      {enriched.map((b) => (
+      {visible.map((b) => (
         <Pressable
           key={b.id}
           onPress={() =>
@@ -35,6 +40,13 @@ export function ProfileBadgesRow({ badges }: ProfileBadgesRowProps) {
           </Text>
         </Pressable>
       ))}
+      {extra > 0 ? (
+        <View style={styles.chipMore}>
+          <Text style={styles.chipMoreText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            +{extra}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -51,11 +63,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.4)",
-    backgroundColor: "rgba(35, 32, 22, 0.75)",
+    borderColor: "rgba(212, 175, 55, 0.32)",
+    backgroundColor: "rgba(212, 175, 55, 0.08)",
   },
   chipText: {
     color: AUTH.gold,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  chipMore: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(82, 82, 82, 0.65)",
+    backgroundColor: "rgba(23, 23, 23, 0.6)",
+  },
+  chipMoreText: {
+    color: AUTH.muted,
     fontSize: 11,
     fontWeight: "600",
   },

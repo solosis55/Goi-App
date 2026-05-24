@@ -11,6 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { TapSlopPressable } from "../ui/TapSlopPressable";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { PostMediaItem } from "../../types/post";
@@ -26,6 +27,9 @@ function heroHeightForWidth(width: number): number {
 type PostMediaCarouselProps = {
   media: PostMediaItem[];
   onDoubleTapLike?: () => void;
+  /** Ancho del carrusel (p. ej. pantalla completa en feed). */
+  slideWidth?: number;
+  guardScrollPresses?: boolean;
 };
 
 function CarouselSlide({
@@ -33,11 +37,13 @@ function CarouselSlide({
   width,
   height,
   onPress,
+  guardScrollPresses,
 }: {
   uri: string;
   width: number;
   height: number;
   onPress: () => void;
+  guardScrollPresses?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const resolved = resolveMediaUrl(uri);
@@ -52,8 +58,10 @@ function CarouselSlide({
     );
   }
 
+  const Touchable = guardScrollPresses ? TapSlopPressable : Pressable;
+
   return (
-    <Pressable
+    <Touchable
       onPress={onPress}
       style={[styles.slide, { width, height }]}
       accessibilityRole="button"
@@ -66,7 +74,7 @@ function CarouselSlide({
         onError={() => setFailed(true)}
         accessibilityIgnoresInvertColors
       />
-    </Pressable>
+    </Touchable>
   );
 }
 
@@ -77,6 +85,7 @@ function TappableSlide({
   slideIndex,
   onOpenLightbox,
   onDoubleTap,
+  guardScrollPresses,
 }: {
   uri: string;
   width: number;
@@ -84,15 +93,29 @@ function TappableSlide({
   slideIndex: number;
   onOpenLightbox: (index: number) => void;
   onDoubleTap: () => void;
+  guardScrollPresses?: boolean;
 }) {
   const onPress = useSingleDoubleTap(() => onOpenLightbox(slideIndex), onDoubleTap);
 
-  return <CarouselSlide uri={uri} width={width} height={height} onPress={onPress} />;
+  return (
+    <CarouselSlide
+      uri={uri}
+      width={width}
+      height={height}
+      onPress={onPress}
+      guardScrollPresses={guardScrollPresses}
+    />
+  );
 }
 
-export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselProps) {
+export function PostMediaCarousel({
+  media,
+  onDoubleTapLike,
+  slideWidth: slideWidthProp,
+  guardScrollPresses,
+}: PostMediaCarouselProps) {
   const { width: windowWidth } = useWindowDimensions();
-  const slideWidth = Math.min(windowWidth, MAX_CONTENT_WIDTH);
+  const slideWidth = slideWidthProp ?? Math.min(windowWidth, MAX_CONTENT_WIDTH);
   const slideHeight = heroHeightForWidth(slideWidth);
   const images = media.filter((m) => m.type === "image" && m.url?.trim());
   const urls = useMemo(() => images.map((m) => m.url), [images]);
@@ -133,6 +156,7 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
             slideIndex={0}
             onOpenLightbox={openLightbox}
             onDoubleTap={handleDoubleTap}
+            guardScrollPresses={guardScrollPresses}
           />
         ) : (
           <>
@@ -154,6 +178,7 @@ export function PostMediaCarousel({ media, onDoubleTapLike }: PostMediaCarouselP
                   slideIndex={i}
                   onOpenLightbox={openLightbox}
                   onDoubleTap={handleDoubleTap}
+                  guardScrollPresses={guardScrollPresses}
                 />
               ))}
             </ScrollView>

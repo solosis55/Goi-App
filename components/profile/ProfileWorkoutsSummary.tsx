@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useWorkoutHubData } from "../../hooks/useWorkoutHubData";
 import { sessionsPerDayLast7 } from "../../utils/workoutWeekSparkline";
 import { TabDumbbellIcon } from "../navigation/TabBarIcons";
+import { ProfileGoalIcon } from "./ProfileLinkIcons";
 import { WorkoutWeekSparkline } from "../workouts/WorkoutWeekSparkline";
 
 type ProfileWorkoutsSummaryProps = {
@@ -80,12 +81,17 @@ export function ProfileWorkoutsSummary({ goal }: ProfileWorkoutsSummaryProps) {
 
       {goal?.trim() ? (
         <View style={styles.goalCard}>
-          <Text style={styles.goalLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Tu objetivo
-          </Text>
-          <Text style={styles.goalValue} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {goal.trim()}
-          </Text>
+          <View style={styles.goalIconRing}>
+            <ProfileGoalIcon color={AUTH.gold} size={17} />
+          </View>
+          <View style={styles.goalTextCol}>
+            <Text style={styles.goalLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Tu objetivo
+            </Text>
+            <Text style={styles.goalValue} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {goal.trim()}
+            </Text>
+          </View>
         </View>
       ) : null}
 
@@ -172,24 +178,43 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   goalCard: {
-    padding: 14,
-    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: AUTH.fieldBorder,
-    backgroundColor: "rgba(10, 10, 12, 0.6)",
-    gap: 4,
+    borderColor: "rgba(212, 175, 55, 0.32)",
+    backgroundColor: "rgba(35, 32, 22, 0.55)",
+  },
+  goalIconRing: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.4)",
+    backgroundColor: "rgba(212, 175, 55, 0.1)",
+  },
+  goalTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   goalLabel: {
-    color: AUTH.faint,
-    fontSize: 11,
+    color: AUTH.gold,
+    fontSize: 10,
     fontWeight: "700",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   goalValue: {
-    color: AUTH.steel,
-    fontSize: 15,
-    lineHeight: 21,
+    color: AUTH.neutral100,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
   },
   chipsWrap: {
     gap: 8,

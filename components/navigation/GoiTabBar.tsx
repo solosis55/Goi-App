@@ -2,8 +2,9 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { useSocialHub } from "../../context/SocialHubContext";
 import { useWorkoutTabBadge } from "../../hooks/useWorkoutTabBadge";
-import { TabDumbbellIcon, TabHomeIcon, TabProfileIcon, TabStatsIcon } from "./TabBarIcons";
+import { TabDumbbellIcon, TabHomeIcon, TabProfileIcon, TabSocialIcon } from "./TabBarIcons";
 
 const ACTIVE = AUTH.gold;
 const INACTIVE = AUTH.muted;
@@ -12,7 +13,7 @@ type GoiTabBarProps = BottomTabBarProps & {
   onCreatePress: () => void;
 };
 
-type TabRouteName = "index" | "entrenamientos" | "create" | "estadisticas" | "perfil";
+type TabRouteName = "index" | "entrenamientos" | "create" | "social" | "perfil";
 
 function routeLabel(name: TabRouteName): string {
   switch (name) {
@@ -20,8 +21,8 @@ function routeLabel(name: TabRouteName): string {
       return "Inicio";
     case "entrenamientos":
       return "Entrenar";
-    case "estadisticas":
-      return "Estad.";
+    case "social":
+      return "Social";
     case "perfil":
       return "Perfil";
     default:
@@ -32,6 +33,7 @@ function routeLabel(name: TabRouteName): string {
 export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) {
   const insets = useSafeAreaInsets();
   const workoutBadge = useWorkoutTabBadge();
+  const { socialBadgeCount } = useSocialHub();
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
@@ -95,8 +97,17 @@ export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) 
                   />
                 ) : null}
               </View>
-            ) : name === "estadisticas" ? (
-              <TabStatsIcon color={color} filled={focused} />
+            ) : name === "social" ? (
+              <View style={styles.iconBadgeWrap}>
+                <TabSocialIcon color={color} filled={focused} />
+                {socialBadgeCount > 0 ? (
+                  <View
+                    style={styles.tabBadge}
+                    accessibilityLabel={`${socialBadgeCount} solicitudes de seguimiento`}
+                    accessible
+                  />
+                ) : null}
+              </View>
             ) : (
               <TabProfileIcon color={color} filled={focused} />
             )}

@@ -1,4 +1,6 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { GuardedScrollView } from "../../context/ScrollInteractionGuard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiTheme } from "../../constants/theme";
@@ -20,6 +22,8 @@ type ProfilePostDetailModalProps = {
   commenting: boolean;
   commentError?: string | null;
   onClose: () => void;
+  /** Tras cerrar el modal (tras la animación); útil para liberar el post y refrescar miniaturas. */
+  onAfterClose?: () => void;
   saved?: boolean;
   onToggleSave?: () => void;
   pinnedPostId?: string | null;
@@ -41,6 +45,7 @@ export function ProfilePostDetailModal({
   commenting,
   commentError,
   onClose,
+  onAfterClose,
   saved,
   onToggleSave,
   pinnedPostId,
@@ -48,14 +53,62 @@ export function ProfilePostDetailModal({
 }: ProfilePostDetailModalProps) {
   const insets = useSafeAreaInsets();
   const { palette, typography } = useGoiTheme();
+  const [contentMounted, setContentMounted] = useState(false);
+  const wasVisibleRef = useRef(false);
+  const afterCloseFiredRef = useRef(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  if (!post) return null;
+  const notifyAfterClose = useCallback(() => {
+    if (afterCloseFiredRef.current) return;
+    afterCloseFiredRef.current = true;
+    onAfterClose?.();
+  }, [onAfterClose]);
+
+  useEffect(() => {
+    if (visible && post) {
+      setContentMounted(true);
+      afterCloseFiredRef.current = false;
+      wasVisibleRef.current = true;
+      return;
+    }
+    if (!visible) {
+      setContentMounted(false);
+    }
+    if (!wasVisibleRef.current) return;
+    wasVisibleRef.current = false;
+    const timer = setTimeout(notifyAfterClose, 400);
+    return () => clearTimeout(timer);
+  }, [visible, post, notifyAfterClose]);
+
+  const requestClose = useCallback(() => {
+    setContentMounted(false);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      onClose();
+    }, 120);
+  }, [onClose]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
+
+  if (!visible && !post) return null;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={requestClose}
+      onDismiss={notifyAfterClose}
+    >
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <View style={styles.header}>
-          <Pressable onPress={onClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
+          <Pressable onPress={requestClose} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
             <Text style={styles.closeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
               Cerrar
             </Text>
@@ -65,31 +118,34 @@ export function ProfilePostDetailModal({
           </Text>
           <View style={styles.headerSide} />
         </View>
-        <ScrollView
+        <GuardedScrollView
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ paddingBottom: insets.bottom + 24, paddingHorizontal: 16 }}
         >
-          <PostCard
-            post={post}
-            currentUserId={currentUserId}
-            sessionAvatarUrl={sessionAvatarUrl}
-            commentValue={commentValue}
-            onChangeComment={onChangeComment}
-            onSubmitComment={onSubmitComment}
-            onToggleLike={onToggleLike}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            deleting={deleting}
-            commenting={commenting}
-            commentError={commentError}
-            saved={saved}
-            onToggleSave={onToggleSave}
-            pinnedPostId={pinnedPostId}
-            onSetPinned={onSetPinned}
-            palette={palette}
-            typography={typography}
-          />
-        </ScrollView>
+          {post && contentMounted ? (
+            <PostCard
+              guardScrollPresses
+              post={post}
+              currentUserId={currentUserId}
+              sessionAvatarUrl={sessionAvatarUrl}
+              commentValue={commentValue}
+              onChangeComment={onChangeComment}
+              onSubmitComment={onSubmitComment}
+              onToggleLike={onToggleLike}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              deleting={deleting}
+              commenting={commenting}
+              commentError={commentError}
+              saved={saved}
+              onToggleSave={onToggleSave}
+              pinnedPostId={pinnedPostId}
+              onSetPinned={onSetPinned}
+              palette={palette}
+              typography={typography}
+            />
+          ) : null}
+        </GuardedScrollView>
       </View>
     </Modal>
   );

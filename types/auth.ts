@@ -1,3 +1,16 @@
+export type ProfileVisibilityMode = "public" | "followers" | "private" | "request";
+
+export type SectionVisibility = "public" | "followers" | "private";
+
+export type StatsSectionVisibility = "public" | "followers" | "hidden";
+
+export type ProfileSectionSettings = {
+  bio: SectionVisibility;
+  stats: StatsSectionVisibility;
+  sessions: SectionVisibility;
+  socialLists: StatsSectionVisibility;
+};
+
 export type SafeUser = {
   id: string;
   username: string;
@@ -11,7 +24,11 @@ export type SafeUser = {
   instagramUrl: string;
   stravaUrl: string;
   location: string;
-  profileVisibility: "public" | "followers";
+  profileVisibility: ProfileVisibilityMode;
+  profileSections: ProfileSectionSettings;
+  discoverable: boolean;
+  requireAuthToView: boolean;
+  defaultPostVisibility: "public" | "followers" | "private";
   pinnedPostId: string;
   createdAt: string;
   updatedAt: string;
@@ -20,6 +37,7 @@ export type SafeUser = {
 export type ProfileUser = Omit<SafeUser, "email"> & {
   email?: string;
   restrictedToFollowers?: boolean;
+  profileUnavailable?: boolean;
 };
 
 export type AuthResponse = {
@@ -60,10 +78,24 @@ export type UpdateProfileInput = Partial<{
   instagramUrl: string;
   stravaUrl: string;
   location: string;
-  profileVisibility: "public" | "followers";
+  profileVisibility: ProfileVisibilityMode;
+  profileSections: ProfileSectionSettings;
+  discoverable: boolean;
+  requireAuthToView: boolean;
+  defaultPostVisibility: "public" | "followers" | "private";
   pinnedPostId: string | null;
 }>;
 
+export type DiscoverMutualPreview = {
+  id: string;
+  username: string;
+  avatarUrl: string;
+};
+
 export type DiscoverUser = ProfileUser & {
   isFollowing: boolean;
+  mutualCount?: number;
+  mutualPreview?: DiscoverMutualPreview[];
+  reason?: string;
+  activeThisWeek?: boolean;
 };

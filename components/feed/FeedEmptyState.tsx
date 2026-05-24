@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
@@ -9,6 +10,7 @@ type FeedEmptyStateProps = {
   scope: FeedScope;
   onCreatePost?: () => void;
   onScrollToSuggestions?: () => void;
+  suggestionsSlot?: ReactNode;
 };
 
 function FeedEmptyIllustration() {
@@ -34,7 +36,12 @@ function FeedEmptyIllustration() {
   );
 }
 
-export function FeedEmptyState({ scope, onCreatePost, onScrollToSuggestions }: FeedEmptyStateProps) {
+export function FeedEmptyState({
+  scope,
+  onCreatePost,
+  onScrollToSuggestions,
+  suggestionsSlot,
+}: FeedEmptyStateProps) {
   const router = useRouter();
   const { title, body } = feedScopeEmptyMessage(scope);
 
@@ -47,6 +54,7 @@ export function FeedEmptyState({ scope, onCreatePost, onScrollToSuggestions }: F
       <Text style={styles.body} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
         {body}
       </Text>
+      {suggestionsSlot ? <View style={styles.suggestionsSlot}>{suggestionsSlot}</View> : null}
       {scope === "all" ? (
         <Pressable
           onPress={onCreatePost ?? (() => router.push("/nueva-publicacion"))}
@@ -89,6 +97,11 @@ const styles = StyleSheet.create({
   illusWrap: {
     marginBottom: 4,
     opacity: 0.9,
+  },
+  suggestionsSlot: {
+    width: "100%",
+    marginTop: 8,
+    marginBottom: 4,
   },
   title: {
     color: AUTH.neutral100,

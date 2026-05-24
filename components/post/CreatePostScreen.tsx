@@ -30,7 +30,11 @@ export function CreatePostScreen() {
   const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const form = useCreatePostForm();
+  const defaultPostVisibility =
+    user?.defaultPostVisibility === "followers" || user?.defaultPostVisibility === "private"
+      ? user.defaultPostVisibility
+      : "public";
+  const form = useCreatePostForm(defaultPostVisibility);
 
   const close = useCallback(() => {
     if (form.hasDraft && !form.submitting) {

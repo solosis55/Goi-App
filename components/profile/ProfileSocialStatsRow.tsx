@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { formatProfileStatCount } from "../../utils/profileStatsFormat";
 
@@ -50,7 +50,7 @@ function StatCell({
   );
 }
 
-/** Fila horizontal de métricas sociales (estilo Instagram). */
+/** Fila horizontal de métricas sociales. */
 export function ProfileSocialStatsRow({
   postsCount,
   followersCount,
@@ -63,13 +63,7 @@ export function ProfileSocialStatsRow({
   }
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.scroll}
-      accessibilityRole="adjustable"
-      accessibilityLabel="Estadísticas del perfil"
-    >
+    <View style={styles.row} accessibilityRole="summary" accessibilityLabel="Estadísticas del perfil">
       <StatCell
         value={formatProfileStatCount(postsCount)}
         label="publicaciones"
@@ -87,26 +81,27 @@ export function ProfileSocialStatsRow({
         label="siguiendo"
         onPress={onStatPress ? () => onStatPress("following") : undefined}
       />
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   loader: {
-    marginTop: 8,
+    marginTop: 4,
     alignSelf: "flex-start",
   },
-  scroll: {
+  row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 4,
-    gap: 4,
+    alignSelf: "stretch",
+    width: "100%",
+    paddingVertical: 10,
   },
   cell: {
-    minWidth: 72,
+    flex: 1,
     alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    justifyContent: "center",
+    paddingHorizontal: 4,
     gap: 2,
   },
   sep: {

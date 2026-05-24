@@ -1,16 +1,23 @@
-import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { TapSlopPressable } from "../ui/TapSlopPressable";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { Post } from "../../types/post";
 import { postThumbnailUrl } from "../../utils/postThumbnail";
+import { ProfileGridThumbnail } from "./ProfileGridThumbnail";
 
 const COLS = 3;
-const GAP = 1;
+const GAP = 3;
+const CELL_RADIUS = 5;
 
 type ProfilePostsGridProps = {
   posts: Post[];
   pinnedPostId?: string | null;
   selectedId?: string | null;
+  /** Incrementar al cerrar el detalle para evitar miniaturas en negro (reciclado de Image en Android). */
+  thumbRemountKey?: number;
+  /** Post cuyo detalle está abierto: no renderizar su miniatura hasta cerrar. */
+  openPostId?: string | null;
   workoutLabelByPostId?: Record<string, string>;
   onSelect: (postId: string) => void;
 };
@@ -19,15 +26,17 @@ export function ProfilePostsGrid({
   posts,
   pinnedPostId,
   selectedId,
+  thumbRemountKey = 0,
+  openPostId,
   workoutLabelByPostId,
   onSelect,
 }: ProfilePostsGridProps) {
   const { width } = useWindowDimensions();
-  const cellSize = (width - GAP * (COLS - 1)) / COLS;
+  const cellSize = (width - 32 - GAP * (COLS - 1)) / COLS;
   const pinTrim = pinnedPostId?.trim() ?? "";
 
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, { paddingHorizontal: 16 }]}>
       {posts.map((post) => {
         const thumb = postThumbnailUrl(post);
         const thumbUri = thumb ? resolveMediaUrl(thumb) : "";
@@ -42,26 +51,29 @@ export function ProfilePostsGrid({
             : "Publicación sin texto";
 
         return (
-          <Pressable
+          <TapSlopPressable
             key={post.id}
             onPress={() => onSelect(post.id)}
             accessibilityRole="button"
             accessibilityLabel={label}
             style={({ pressed }) => [
               styles.cell,
-              { width: cellSize, height: cellSize },
+              { width: cellSize, height: cellSize, borderRadius: CELL_RADIUS },
               selected ? styles.cellSelected : null,
               pressed ? styles.cellPressed : null,
             ]}
           >
             {thumbUri ? (
-              <Image source={{ uri: thumbUri }} style={styles.image} resizeMode="cover" />
+              <ProfileGridThumbnail
+                postId={post.id}
+                uri={thumbUri}
+                remountKey={thumbRemountKey}
+                hidden={openPostId === post.id}
+              />
             ) : (
               <View style={styles.textOnly}>
-                <Text style={styles.textOnlyLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  Solo texto
-                </Text>
-                <Text style={styles.textOnlyBody} numberOfLines={4} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                <View style={styles.textOnlyGlow} />
+                <Text style={styles.textOnlyBody} numberOfLines={5} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   {post.content.trim() || "—"}
                 </Text>
               </View>
@@ -87,7 +99,7 @@ export function ProfilePostsGrid({
                 </Text>
               </View>
             ) : null}
-          </Pressable>
+          </TapSlopPressable>
         );
       })}
     </View>
@@ -111,29 +123,22 @@ const styles = StyleSheet.create({
   cellPressed: {
     opacity: 0.9,
   },
-  image: {
-    width: "100%",
-    height: "100%",
-  },
   textOnly: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 6,
-    gap: 4,
+    justifyContent: "flex-end",
+    padding: 8,
+    backgroundColor: "rgba(22, 20, 14, 0.85)",
+    overflow: "hidden",
   },
-  textOnlyLabel: {
-    color: AUTH.faint,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
+  textOnlyGlow: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(212, 175, 55, 0.06)",
   },
   textOnlyBody: {
-    color: AUTH.muted,
+    color: AUTH.steel,
     fontSize: 10,
     lineHeight: 14,
-    textAlign: "center",
+    zIndex: 1,
   },
   badgeTopLeft: {
     position: "absolute",

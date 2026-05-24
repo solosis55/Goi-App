@@ -62,6 +62,67 @@ export function TabStatsIcon({ size = 26, color = AUTH.muted, filled }: IconProp
   );
 }
 
+/** Personas / red social (pestaña Social). */
+export function TabNotificationsIcon({ size = 26, color = AUTH.muted, filled }: IconProps) {
+  const stroke = filled ? 0 : 1.75;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z"
+        stroke={color}
+        strokeWidth={stroke || 1.75}
+        strokeLinejoin="round"
+        fill={filled ? color : "none"}
+      />
+      <Path
+        d="M10 20a2 2 0 0 0 4 0"
+        stroke={color}
+        strokeWidth={stroke || 1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+export function TabSocialIcon({ size = 26, color = AUTH.muted, filled }: IconProps) {
+  const stroke = filled ? 0 : 1.75;
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle
+        cx={9}
+        cy={9}
+        r={2.75}
+        stroke={color}
+        strokeWidth={stroke || 1.75}
+        fill={filled ? color : "none"}
+      />
+      <Circle
+        cx={16.5}
+        cy={10}
+        r={2.25}
+        stroke={color}
+        strokeWidth={stroke || 1.75}
+        fill={filled ? color : "none"}
+      />
+      <Path
+        d="M4.5 18.5c.9-2.4 2.7-3.75 4.5-3.75s3.6 1.35 4.5 3.75M13.5 17.75c.75-1.65 2.1-2.5 3.75-2.5 1.35 0 2.55.6 3.25 1.75"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {filled ? (
+        <Path
+          d="M3 19.5c1-2.8 3.2-4.25 6-4.25M13 18.5c.85-2 2.5-3 4.5-3s3.65 1 4.5 3"
+          stroke={color}
+          strokeWidth={1.5}
+          fill="none"
+        />
+      ) : null}
+    </Svg>
+  );
+}
+
 export function TabProfileIcon({ size = 26, color = AUTH.muted, filled }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

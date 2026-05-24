@@ -5,7 +5,6 @@ import { CreateContentSheet } from "../../components/navigation/CreateContentShe
 import { GoiTabBar } from "../../components/navigation/GoiTabBar";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
-
 export default function TabsLayout() {
   const { palette } = useGoiTheme();
   const { isHydrated, isAuthenticated } = useAuth();
@@ -44,7 +43,7 @@ export default function TabsLayout() {
             },
           }}
         />
-        <Tabs.Screen name="estadisticas" options={{ title: "Estadísticas" }} />
+        <Tabs.Screen name="social" options={{ title: "Social" }} />
         <Tabs.Screen name="perfil" options={{ title: "Perfil" }} />
       </Tabs>
       <CreateContentSheet visible={createOpen} onClose={() => setCreateOpen(false)} />

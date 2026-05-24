@@ -1,4 +1,10 @@
-import type { CreateCommentInput, CreatePostInput, Post, PostComment } from "../types/post";
+import type {
+  CreateCommentInput,
+  CreatePostInput,
+  NotificationsResponse,
+  Post,
+  PostComment,
+} from "../types/post";
 
 import { apiFetch } from "./client";
 
@@ -92,6 +98,17 @@ export function createComment(postId: string, input: CreateCommentInput) {
 
   });
 
+}
+
+export function getNotifications() {
+  return apiFetch<NotificationsResponse>("/posts/notifications");
+}
+
+export function markNotificationsRead(ids?: string[]) {
+  return apiFetch<{ ok: boolean }>("/posts/notifications/read", {
+    method: "POST",
+    body: JSON.stringify(ids?.length ? { ids } : {}),
+  });
 }
 
 

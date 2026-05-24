@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getFollowers, getFollowing, getProfile, toggleFollow } from "../api/auth";
+import { toggleFollow } from "../api/auth";
 import { getPostsByUserPage } from "../api/posts";
+import { getPublicProfileOverview } from "../api/publicProfile";
 import { PROFILE_POSTS_PAGE_SIZE } from "../constants/profilePosts";
 import type { ProfileUser } from "../types/auth";
 import type { Post } from "../types/post";
+import type {
+  ProfileSectionAccess,
+  PublicProfilePreviewPost,
+  PublicProfileSession,
+  ProfileRestrictionLevel,
+  SocialUserPreview,
+} from "../types/publicProfile";
+import { readPublicProfileCache, writePublicProfileCache } from "../utils/profileCache";
 import { getErrorMessage } from "../utils/errorMessages";
 
 type UsePublicProfileArgs = {
@@ -24,6 +33,10 @@ export function usePublicProfile({
   const [postsTotal, setPostsTotal] = useState(0);
   const [postsNextCursor, setPostsNextCursor] = useState<string | null>(null);
   const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+  const [sessions, setSessions] = useState<PublicProfileSession[]>([]);
+  const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>({});
+  const [mutualFollowers, setMutualFollowers] = useState<SocialUserPreview[]>([]);
+  const [followsYou, setFollowsYou] = useState(false);
   const [following, setFollowing] = useState(() =>
     Boolean(userId && initialFollowingIds.includes(userId))
   );
@@ -32,45 +45,67 @@ export function usePublicProfile({
   const [followBusy, setFollowBusy] = useState(false);
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
+  const [restricted, setRestricted] = useState(false);
+  const [restrictionLevel, setRestrictionLevel] = useState<ProfileRestrictionLevel>("none");
+  const [blocked, setBlocked] = useState(false);
+  const [followPending, setFollowPending] = useState(false);
+  const [previewPosts, setPreviewPosts] = useState<PublicProfilePreviewPost[]>([]);
+  const [postCountTotal, setPostCountTotal] = useState(0);
+  const [postsHiddenByVisibility, setPostsHiddenByVisibility] = useState(false);
+  const [sectionAccess, setSectionAccess] = useState<ProfileSectionAccess>({
+    bio: true,
+    stats: true,
+    sessions: true,
+    socialLists: true,
+  });
+
+  const applyOverview = useCallback((data: Awaited<ReturnType<typeof getPublicProfileOverview>>) => {
+    setProfile(data.user);
+    setPosts(data.posts.posts);
+    setPostsTotal(data.posts.total);
+    setPostsNextCursor(data.posts.nextCursor);
+    setFollowerCount(data.followerCount);
+    setFollowingCount(data.followingCount);
+    setFollowing(data.following);
+    setFollowsYou(data.followsYou);
+    setRestricted(data.restricted);
+    setRestrictionLevel(data.restrictionLevel ?? (data.restricted ? "partial" : "none"));
+    setBlocked(data.blocked ?? false);
+    setFollowPending(data.followPending ?? false);
+    setPreviewPosts(data.previewPosts ?? []);
+    setPostCountTotal(data.postCountTotal ?? data.posts.total);
+    setPostsHiddenByVisibility(data.postsHiddenByVisibility ?? false);
+    setSectionAccess(
+      data.sectionAccess ?? { bio: true, stats: true, sessions: true, socialLists: true }
+    );
+    setMutualFollowers(data.mutualFollowers ?? []);
+    setSessions(data.sessions ?? []);
+    setWorkoutTitles(data.workoutTitles ?? {});
+  }, []);
 
   const load = useCallback(async () => {
     if (!userId || userId === currentUserId) return;
     setLoading(true);
     setPostsLoadingMore(false);
     setError(null);
-    setFollowerCount(null);
-    setFollowingCount(null);
-    setPostsNextCursor(null);
     try {
-      const [profRes, pageRes] = await Promise.all([
-        getProfile(userId),
-        getPostsByUserPage(userId, { limit: PROFILE_POSTS_PAGE_SIZE }),
-      ]);
-      setProfile(profRes.user);
-      setPosts(pageRes.posts);
-      setPostsTotal(pageRes.total);
-      setPostsNextCursor(pageRes.nextCursor);
-      try {
-        const [folR, fingR] = await Promise.all([getFollowers(userId), getFollowing(userId)]);
-        setFollowerCount(folR.followerIds?.length ?? 0);
-        setFollowingCount(fingR.followingIds?.length ?? 0);
-      } catch {
-        setFollowerCount(null);
-        setFollowingCount(null);
-      }
+      const cached = await readPublicProfileCache(userId);
+      if (cached) applyOverview(cached);
+
+      const data = await getPublicProfileOverview(userId);
+      applyOverview(data);
+      void writePublicProfileCache(userId, data);
     } catch (e) {
       setError(getErrorMessage(e, "No se pudo cargar el perfil"));
-      setProfile(null);
-      setPosts([]);
-      setPostsTotal(0);
-      setPostsNextCursor(null);
     } finally {
       setLoading(false);
     }
-  }, [userId, currentUserId]);
+  }, [userId, currentUserId, applyOverview]);
 
   const loadMorePosts = useCallback(async () => {
-    if (!userId || userId === currentUserId || !postsNextCursor || postsLoadingMore || loading) return;
+    if (!userId || userId === currentUserId || !postsNextCursor || postsLoadingMore || loading || restricted) {
+      return;
+    }
     setPostsLoadingMore(true);
     try {
       const pageRes = await getPostsByUserPage(userId, {
@@ -95,7 +130,7 @@ export function usePublicProfile({
     } finally {
       setPostsLoadingMore(false);
     }
-  }, [userId, currentUserId, postsNextCursor, postsLoadingMore, loading]);
+  }, [userId, currentUserId, postsNextCursor, postsLoadingMore, loading, restricted]);
 
   useEffect(() => {
     if (!userId || userId === currentUserId) {
@@ -105,6 +140,8 @@ export function usePublicProfile({
       setPostsNextCursor(null);
       setFollowerCount(null);
       setFollowingCount(null);
+      setSessions([]);
+      setMutualFollowers([]);
       return;
     }
     void load();
@@ -125,7 +162,12 @@ export function usePublicProfile({
     });
   }, [posts, profile?.pinnedPostId]);
 
-  const showRestricted = Boolean(profile?.restrictedToFollowers && !following);
+  const showRestricted =
+    blocked ||
+    restrictionLevel !== "none" ||
+    restricted ||
+    Boolean(profile?.restrictedToFollowers && !following);
+  const profileUnavailable = Boolean(profile?.profileUnavailable) || restrictionLevel === "unavailable";
 
   const handleToggleFollow = useCallback(async () => {
     if (!userId || userId === currentUserId) return;
@@ -134,6 +176,7 @@ export function usePublicProfile({
     try {
       const res = await toggleFollow(userId);
       setFollowing(res.following);
+      setFollowPending(Boolean(res.pending));
       onFollowingChanged?.(userId, res.following);
       await load();
     } catch (e) {
@@ -149,11 +192,23 @@ export function usePublicProfile({
     postsNextCursor,
     postsLoadingMore,
     orderedPosts,
+    sessions,
+    workoutTitles,
+    mutualFollowers,
+    followsYou,
     loading,
     error,
     following,
     followBusy,
     showRestricted,
+    profileUnavailable,
+    restrictionLevel,
+    blocked,
+    followPending,
+    previewPosts,
+    postCountTotal,
+    postsHiddenByVisibility,
+    sectionAccess,
     followerCount,
     followingCount,
     handleToggleFollow,

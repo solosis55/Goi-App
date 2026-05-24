@@ -8,9 +8,11 @@ import {
   RefreshControl,
   StyleSheet,
   View,
+  type ViewToken,
 } from "react-native";
 import Animated, { runOnJS, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
-import { getFollowing, getUsers } from "../../api/auth";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getDiscover, getFollowing } from "../../api/auth";
 import { createComment, deletePost, getPosts, toggleLike } from "../../api/posts";
 import { getStories } from "../../api/stories";
 import { getWorkouts } from "../../api/workouts";
@@ -24,17 +26,28 @@ import { FeedPostCardSkeleton } from "../../components/feed/FeedPostCardSkeleton
 import { FeedStickyScopeHeader } from "../../components/feed/FeedStickyScopeHeader";
 import { FeedReportModal } from "../../components/feed/FeedReportModal";
 import { FeedScrollToTopFab } from "../../components/feed/FeedScrollToTopFab";
-import { FeedStoriesSection } from "../../components/feed/FeedStoriesSection";
-import { FeedSuggestionsRow } from "../../components/feed/FeedSuggestionsRow";
+import { FeedDiscoveryZone } from "../../components/feed/FeedDiscoveryZone";
+import {
+  FeedSuggestionsLoadingRow,
+  FeedSuggestionsRow,
+} from "../../components/feed/FeedSuggestionsRow";
+import { FeedNewPostsBanner } from "../../components/feed/FeedNewPostsBanner";
 import { FeedTopBar } from "../../components/feed/FeedTopBar";
 import { PostCard } from "../../components/feed/PostCard";
 import { StoryViewerModal } from "../../components/stories/StoryViewerModal";
 import { AUTH } from "../../constants/authUi";
 import { camaraHistoriaHref } from "../../constants/storyRoutes";
 import { FEED_PAGE_SIZE, type FeedScope } from "../../constants/feed";
+import { FEED_SUGGESTIONS_INSERT_AFTER_POSTS, FEED_SUGGESTIONS_SNOOZE_DAYS } from "../../constants/feedSuggestions";
+import type { FeedContentFilter } from "../../constants/feedContentFilter";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
+import { useSocialHub } from "../../context/SocialHubContext";
+import {
+  FeedGoldBeamProvider,
+  FeedGoldBeamScrollBridge,
+} from "../../context/FeedGoldBeamContext";
 import { goiToast } from "../../context/GoiToastContext";
 import type { DiscoverUser } from "../../types/auth";
 import { getErrorMessage } from "../../utils/errorMessages";
@@ -42,12 +55,17 @@ import {
   appendLocalReport,
   loadMutedUserIds,
   loadSavedPostIds,
-  loadSuggestionsDismissed,
+  loadSuggestionsDismiss,
   muteUser,
-  setSuggestionsDismissed as persistSuggestionsDismissed,
+  saveSuggestionsDismiss,
   toggleSavedPost,
+  type SuggestionsDismissState,
 } from "../../utils/feedLocalPrefs";
 import { buildFeedListItems, feedListIndexForPostId, type FeedListItem } from "../../utils/feedListItems";
+import {
+  feedSuggestionsPlacement,
+  shouldOfferFeedSuggestions,
+} from "../../utils/feedSuggestionsVisibility";
 import { filterFeedPosts } from "../../utils/feedTimeline";
 import { readStoredFeedScope, writeStoredFeedScope } from "../../utils/feedScopeStorage";
 import { sharePost } from "../../utils/sharePost";
@@ -92,13 +110,46 @@ export default function HomeFeedScreen() {
   const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
   const [showScrollFab, setShowScrollFab] = useState(false);
   const [reportTarget, setReportTarget] = useState<Post | null>(null);
-  const [suggestionsDismissed, setSuggestionsDismissed] = useState(false);
+  const [suggestionsDismiss, setSuggestionsDismiss] = useState<SuggestionsDismissState>({ mode: "none" });
   const [loadingMore, setLoadingMore] = useState(false);
+  const [contentFilter, setContentFilter] = useState<FeedContentFilter>("all");
+  const { unreadNotifications, refreshBadge } = useSocialHub();
+  const [pendingNewCount, setPendingNewCount] = useState(0);
   const feedFocusCountRef = useRef(0);
   const listRef = useRef<FlatListType<FeedListItem>>(null);
   const scrollY = useSharedValue(0);
+  const beamNotifyScrollRef = useRef<(y: number) => void>(() => {});
+  const [activeBeamPostId, setActiveBeamPostId] = useState<string | null>(null);
+  const beamViewabilityConfig = useRef({ itemVisiblePercentThreshold: 25, minimumViewTime: 0 }).current;
+  const onBeamViewableChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const posts = viewableItems.filter(
+      (t) => t.isViewable && t.item != null && (t.item as FeedListItem).kind === "post"
+    );
+    if (posts.length === 0) return;
+
+    const visiblePostIds = posts
+      .map((t) => (t.item as FeedListItem))
+      .filter((row): row is Extract<FeedListItem, { kind: "post" }> => row.kind === "post")
+      .map((row) => row.post.id);
+
+    setActiveBeamPostId((current) => {
+      if (current && visiblePostIds.includes(current)) {
+        return current;
+      }
+      const sorted = [...posts].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      const center = sorted[Math.floor(sorted.length / 2)];
+      const row = center.item as FeedListItem;
+      return row.kind === "post" ? row.post.id : current;
+    });
+  }).current;
+  const beamViewabilityPairs = useRef([
+    { viewabilityConfig: beamViewabilityConfig, onViewableItemsChanged: onBeamViewableChanged },
+  ]).current;
   const likeInFlightRef = useRef(new Set<string>());
   const focusHandledRef = useRef<string | null>(null);
+  const feedAnchorPostIdRef = useRef<string | null>(null);
+  const scrollAtTopRef = useRef(true);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     void readStoredFeedScope().then((scope) => {
@@ -113,9 +164,17 @@ export default function HomeFeedScreen() {
     setVisibleCount(FEED_PAGE_SIZE);
   }, []);
 
+  const setContentFilterPersisted = useCallback((filter: FeedContentFilter) => {
+    setContentFilter(filter);
+    setVisibleCount(FEED_PAGE_SIZE);
+  }, []);
+
   const scrollFeedToTop = useCallback(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
+    scrollAtTopRef.current = true;
+    feedAnchorPostIdRef.current = posts[0]?.id ?? null;
+    setPendingNewCount(0);
+  }, [posts]);
 
   const storyStripAuthors = useMemo((): FeedStoryAuthor[] => {
     if (!user) return [];
@@ -142,8 +201,9 @@ export default function HomeFeedScreen() {
         userId: user?.id,
         followingIds,
         mutedUserIds: mutedUserIdSet,
+        contentFilter,
       }),
-    [posts, feedScope, user?.id, followingIds, mutedUserIdSet]
+    [posts, feedScope, user?.id, followingIds, mutedUserIdSet, contentFilter]
   );
 
   const visiblePosts = useMemo(
@@ -151,7 +211,71 @@ export default function HomeFeedScreen() {
     [filteredPosts, visibleCount]
   );
 
-  const feedListItems = useMemo(() => buildFeedListItems(visiblePosts), [visiblePosts]);
+  const availableSuggestions = useMemo(
+    () => discoverUsers.filter((u) => u.id !== user?.id && !followingIds.includes(u.id)),
+    [discoverUsers, user?.id, followingIds]
+  );
+
+  const shouldOfferSuggestions = useMemo(
+    () =>
+      shouldOfferFeedSuggestions({
+        dismiss: suggestionsDismiss,
+        availableCount: availableSuggestions.length,
+        followingCount: followingIds.length,
+        accountCreatedAt: user?.createdAt,
+        feedScope,
+        filteredPostsCount: filteredPosts.length,
+      }),
+    [
+      suggestionsDismiss,
+      availableSuggestions.length,
+      followingIds.length,
+      user?.createdAt,
+      feedScope,
+      filteredPosts.length,
+    ]
+  );
+
+  const suggestionsPlacement = useMemo(
+    () =>
+      feedSuggestionsPlacement({
+        shouldOffer: shouldOfferSuggestions,
+        filteredPostsCount: filteredPosts.length,
+        feedScope,
+      }),
+    [shouldOfferSuggestions, filteredPosts.length, feedScope]
+  );
+
+  const insertSuggestionsInline = suggestionsPlacement === "inline";
+  const showSuggestionsInHeader = suggestionsPlacement === "header";
+  const showSuggestionsInEmpty = suggestionsPlacement === "empty";
+
+  const feedListItems = useMemo(
+    () =>
+      buildFeedListItems(visiblePosts, {
+        insertSuggestions: insertSuggestionsInline && availableSuggestions.length > 0,
+        suggestionsAfterPostCount: FEED_SUGGESTIONS_INSERT_AFTER_POSTS,
+      }),
+    [visiblePosts, insertSuggestionsInline, availableSuggestions.length]
+  );
+
+  useEffect(() => {
+    if (visiblePosts.length === 0) return;
+    setActiveBeamPostId((current) => {
+      if (current && visiblePosts.some((p) => p.id === current)) return current;
+      return visiblePosts[0]?.id ?? null;
+    });
+  }, [visiblePosts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (visiblePosts.length === 0) return;
+      setActiveBeamPostId((current) => {
+        if (current && visiblePosts.some((p) => p.id === current)) return current;
+        return visiblePosts[0]?.id ?? null;
+      });
+    }, [visiblePosts])
+  );
 
   const hasMoreToShow = visibleCount < filteredPosts.length;
 
@@ -182,16 +306,20 @@ export default function HomeFeedScreen() {
   }, [user?.id]);
 
   const refreshDiscover = useCallback(async () => {
+    if (!user?.id) {
+      setDiscoverUsers([]);
+      return;
+    }
     setDiscoverLoading(true);
     try {
-      const res = await getUsers();
+      const res = await getDiscover(24);
       setDiscoverUsers(res.users ?? []);
     } catch {
       setDiscoverUsers([]);
     } finally {
       setDiscoverLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   const refreshWorkoutTitles = useCallback(async () => {
     if (!user?.id) return;
@@ -297,7 +425,22 @@ export default function HomeFeedScreen() {
     setError(null);
     try {
       const data = await getPosts();
-      setPosts(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      const anchor = feedAnchorPostIdRef.current;
+
+      if (mode === "refresh" && anchor && !scrollAtTopRef.current) {
+        const anchorIdx = list.findIndex((p) => p.id === anchor);
+        if (anchorIdx > 0) {
+          setPendingNewCount(anchorIdx);
+        } else if (anchorIdx === -1 && list[0] && list[0].id !== anchor) {
+          setPendingNewCount(1);
+        }
+      } else if (mode === "refresh" || mode === "initial") {
+        feedAnchorPostIdRef.current = list[0]?.id ?? null;
+        if (scrollAtTopRef.current) setPendingNewCount(0);
+      }
+
+      setPosts(list);
       setVisibleCount(FEED_PAGE_SIZE);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -323,33 +466,85 @@ export default function HomeFeedScreen() {
     });
   }, [hasMoreToShow, filteredPosts.length, loadingMore]);
 
-  const refreshSuggestionsDismissed = useCallback(async () => {
+  const refreshSuggestionsDismiss = useCallback(async () => {
     if (!user?.id) {
-      setSuggestionsDismissed(false);
+      setSuggestionsDismiss({ mode: "none" });
       return;
     }
-    const dismissed = await loadSuggestionsDismissed(user.id);
-    setSuggestionsDismissed(dismissed);
+    const state = await loadSuggestionsDismiss(user.id);
+    setSuggestionsDismiss(state);
   }, [user?.id]);
 
-  const handleDismissSuggestions = useCallback(() => {
+  const handleSnoozeSuggestions = useCallback(() => {
     if (!user?.id) return;
-    setSuggestionsDismissed(true);
-    void persistSuggestionsDismissed(user.id, true);
+    const until = new Date();
+    until.setDate(until.getDate() + FEED_SUGGESTIONS_SNOOZE_DAYS);
+    const state: SuggestionsDismissState = { mode: "snooze", until: until.toISOString() };
+    setSuggestionsDismiss(state);
+    void saveSuggestionsDismiss(user.id, state);
+  }, [user?.id]);
+
+  const handleDismissSuggestionsPermanent = useCallback(() => {
+    if (!user?.id) return;
+    const state: SuggestionsDismissState = { mode: "permanent" };
+    setSuggestionsDismiss(state);
+    void saveSuggestionsDismiss(user.id, state);
   }, [user?.id]);
 
   const scrollToSuggestions = useCallback(() => {
+    const idx = feedListItems.findIndex((item) => item.kind === "suggestions");
+    if (idx >= 0) {
+      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.15 });
+      return;
+    }
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, []);
+  }, [feedListItems]);
+
+  const suggestionsRowProps = useMemo(
+    () => ({
+      users: discoverUsers,
+      followingIds,
+      currentUserId: user?.id,
+      feedScope,
+      loading: discoverLoading,
+      onSnooze: handleSnoozeSuggestions,
+      onDismissPermanent: handleDismissSuggestionsPermanent,
+      onFollowingChanged: (targetId: string, following: boolean) => {
+        setFollowingIds((prev) =>
+          following ? (prev.includes(targetId) ? prev : [...prev, targetId]) : prev.filter((id) => id !== targetId)
+        );
+      },
+    }),
+    [
+      discoverUsers,
+      followingIds,
+      user?.id,
+      feedScope,
+      discoverLoading,
+      handleSnoozeSuggestions,
+      handleDismissSuggestionsPermanent,
+    ]
+  );
 
   const updateScrollFab = useCallback((y: number) => {
+    scrollAtTopRef.current = y < 48;
+    if (scrollAtTopRef.current && posts[0]?.id) {
+      feedAnchorPostIdRef.current = posts[0].id;
+      setPendingNewCount(0);
+    }
     setShowScrollFab(y > SCROLL_TOP_FAB_THRESHOLD);
+  }, [posts]);
+
+  const notifyBeamScroll = useCallback((y: number) => {
+    beamNotifyScrollRef.current(y);
   }, []);
 
   const onListScroll = useAnimatedScrollHandler({
     onScroll: (e) => {
-      scrollY.value = e.contentOffset.y;
-      runOnJS(updateScrollFab)(e.contentOffset.y);
+      const y = e.contentOffset.y;
+      scrollY.value = y;
+      runOnJS(updateScrollFab)(y);
+      runOnJS(notifyBeamScroll)(y);
     },
   });
 
@@ -492,7 +687,8 @@ export default function HomeFeedScreen() {
       void refreshFollowing();
       void refreshDiscover();
       void refreshWorkoutTitles();
-      void refreshSuggestionsDismissed();
+      void refreshSuggestionsDismiss();
+      void refreshBadge();
     }, [
       isHydrated,
       isAuthenticated,
@@ -503,19 +699,33 @@ export default function HomeFeedScreen() {
       refreshFollowing,
       refreshDiscover,
       refreshWorkoutTitles,
-      refreshSuggestionsDismissed,
+      refreshSuggestionsDismiss,
+      refreshBadge,
     ])
   );
+
+  const handleNewPostsBanner = useCallback(() => {
+    scrollFeedToTop();
+    void fetchPosts("refresh");
+  }, [scrollFeedToTop, fetchPosts]);
+
+  const openNotifications = useCallback(() => {
+    router.push("/notificaciones");
+  }, [router]);
 
   const renderFeedItem = useCallback(
     ({ item }: { item: FeedListItem }) => {
       if (item.kind === "day") {
         return <FeedDaySeparator label={item.label} />;
       }
+      if (item.kind === "suggestions") {
+        return <FeedSuggestionsRow {...suggestionsRowProps} variant="inline" />;
+      }
       const post = item.post;
       return (
         <PostCard
           post={post}
+          isBeamActive={activeBeamPostId === post.id}
           palette={palette}
           typography={typography}
           currentUserId={user?.id}
@@ -567,6 +777,8 @@ export default function HomeFeedScreen() {
       handleToggleSave,
       handleMuteAuthor,
       handleOpenAuthor,
+      activeBeamPostId,
+      suggestionsRowProps,
     ]
   );
 
@@ -585,33 +797,30 @@ export default function HomeFeedScreen() {
   const listHeader = (
     <View style={styles.headerBlock}>
       {user ? (
-        <FeedStoriesSection
+        <FeedDiscoveryZone
           authors={storyStripAuthors}
           currentUserId={user.id}
           seenRevision={storySeenRevision}
           onSelectAuthor={handleStoryCellClick}
+          suggestionsPlacement={shouldOfferSuggestions ? suggestionsPlacement : "none"}
         />
       ) : null}
 
-      <FeedSuggestionsRow
-        users={discoverUsers}
-        followingIds={followingIds}
-        currentUserId={user?.id}
-        loading={discoverLoading}
-        dismissed={suggestionsDismissed}
-        onDismiss={handleDismissSuggestions}
-        onFollowingChanged={(targetId, following) => {
-          setFollowingIds((prev) =>
-            following ? (prev.includes(targetId) ? prev : [...prev, targetId]) : prev.filter((id) => id !== targetId)
-          );
-        }}
-      />
+      {shouldOfferSuggestions && discoverLoading && discoverUsers.length === 0 ? (
+        <FeedSuggestionsLoadingRow />
+      ) : null}
+
+      {showSuggestionsInHeader ? (
+        <FeedSuggestionsRow {...suggestionsRowProps} variant="header" />
+      ) : null}
 
       {feedScopeReady ? (
         <FeedStickyScopeHeader
           mode={feedScope}
           onChangeMode={setFeedScopePersisted}
           showFollowingHint={showFollowingHint}
+          contentFilter={contentFilter}
+          onChangeContentFilter={setContentFilterPersisted}
         />
       ) : null}
 
@@ -628,7 +837,15 @@ export default function HomeFeedScreen() {
   const listFooter = (
     <View>
       {!loading && !error && filteredPosts.length === 0 ? (
-        <FeedEmptyState scope={feedScope} onScrollToSuggestions={scrollToSuggestions} />
+        <FeedEmptyState
+          scope={feedScope}
+          onScrollToSuggestions={scrollToSuggestions}
+          suggestionsSlot={
+            showSuggestionsInEmpty ? (
+              <FeedSuggestionsRow {...suggestionsRowProps} variant="empty" />
+            ) : undefined
+          }
+        />
       ) : null}
       <FeedLoadMoreFooter
         hasMore={hasMoreToShow && visiblePosts.length > 0}
@@ -641,9 +858,20 @@ export default function HomeFeedScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <AppScreenShell>
+      <AppScreenShell variant="feed">
+        <FeedGoldBeamProvider scrollY={scrollY}>
+          <FeedGoldBeamScrollBridge notifyRef={beamNotifyScrollRef} />
         <View style={styles.screen}>
-          <FeedTopBar user={user} onBrandPress={scrollFeedToTop} scrollY={scrollY} />
+          <FeedTopBar
+            user={user}
+            onBrandPress={scrollFeedToTop}
+            scrollY={scrollY}
+            unreadCount={unreadNotifications}
+            onNotificationsPress={openNotifications}
+          />
+          <View style={[styles.newPostsBannerSlot, { top: Math.max(insets.top, 6) + 52 }]}>
+            <FeedNewPostsBanner count={pendingNewCount} onPress={handleNewPostsBanner} />
+          </View>
           <Animated.FlatList
             ref={listRef}
             style={styles.list}
@@ -654,8 +882,11 @@ export default function HomeFeedScreen() {
             windowSize={7}
             maxToRenderPerBatch={6}
             initialNumToRender={5}
+            viewabilityConfigCallbackPairs={beamViewabilityPairs}
             onScroll={onListScroll}
-            scrollEventThrottle={16}
+            onContentSizeChange={() => notifyBeamScroll(scrollY.value)}
+            onLayout={() => notifyBeamScroll(scrollY.value)}
+            scrollEventThrottle={8}
             onEndReached={loadMoreVisible}
             onEndReachedThreshold={0.4}
             onScrollToIndexFailed={(info) => {
@@ -671,7 +902,9 @@ export default function HomeFeedScreen() {
               deletingPostId,
               savedPostIdSet,
               highlightedPostId,
+              activeBeamPostId,
               feedScope,
+              contentFilter,
               showFollowingHint,
             }}
             ItemSeparatorComponent={FeedListSeparator}
@@ -686,6 +919,7 @@ export default function HomeFeedScreen() {
                   void fetchPosts("refresh");
                   void refreshStories();
                   void refreshFollowing();
+                  void refreshDiscover();
                 }}
                 tintColor={AUTH.gold}
                 colors={[AUTH.gold]}
@@ -695,6 +929,7 @@ export default function HomeFeedScreen() {
           />
           <FeedScrollToTopFab visible={showScrollFab} onPress={scrollFeedToTop} />
         </View>
+        </FeedGoldBeamProvider>
       </AppScreenShell>
 
       <StoryViewerModal
@@ -719,7 +954,14 @@ export default function HomeFeedScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "rgba(6, 6, 8, 1)",
+    backgroundColor: "transparent",
+  },
+  newPostsBannerSlot: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    zIndex: 11,
+    alignItems: "center",
   },
   list: {
     flex: 1,

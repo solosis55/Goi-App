@@ -80,10 +80,46 @@ export function getUsers() {
   return apiFetch<{ users: DiscoverUser[] }>("/auth/users");
 }
 
+export function getDiscover(limit = 24) {
+  return apiFetch<{ users: DiscoverUser[] }>(`/auth/discover?limit=${limit}`);
+}
+
+export type ToggleFollowResponse = {
+  following: boolean;
+  pending?: boolean;
+  status?: "none" | "pending" | "active";
+};
+
 export function toggleFollow(targetUserId: string) {
-  return apiFetch<{ following: boolean }>(`/auth/follow/${encodeURIComponent(targetUserId)}`, {
+  return apiFetch<ToggleFollowResponse>(`/auth/follow/${encodeURIComponent(targetUserId)}`, {
     method: "POST",
   });
+}
+
+export function respondFollowRequest(requesterId: string, action: "accept" | "reject") {
+  return apiFetch<{ ok: boolean; action: string }>(
+    `/auth/follow-requests/${encodeURIComponent(requesterId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }
+  );
+}
+
+export function getPendingFollowRequests() {
+  return apiFetch<{ requests: import("../types/publicProfile").FollowRequestPreview[] }>(
+    "/auth/follow-requests"
+  );
+}
+
+export function toggleBlockUser(targetUserId: string) {
+  return apiFetch<{ blocked: boolean }>(`/auth/block/${encodeURIComponent(targetUserId)}`, {
+    method: "POST",
+  });
+}
+
+export function getBlockedUserIds() {
+  return apiFetch<{ blockedIds: string[] }>("/auth/blocks");
 }
 
 export function uploadProfileBanner(userId: string, uri: string, mimeType = "image/jpeg") {

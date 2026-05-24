@@ -1,3 +1,4 @@
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { createComment, toggleLike } from "../../api/posts";
@@ -8,6 +9,11 @@ import { useAuth } from "../../context/AuthContext";
 import type { Post } from "../../types/post";
 import { applyProfilePostsFilter } from "../../utils/profilePostsDisplay";
 import { getErrorMessage } from "../../utils/errorMessages";
+import { useSyncProfilePostFromDetail } from "../../hooks/useSyncProfilePostFromDetail";
+import {
+  openProfilePostDetail,
+  usesProfilePostDetailScreen,
+} from "../../utils/openProfilePostDetail";
 import { ProfilePinnedPostPreview } from "./ProfilePinnedPostPreview";
 import { ProfilePostDetailModal } from "./ProfilePostDetailModal";
 import { ProfilePostsGrid } from "./ProfilePostsGrid";
@@ -21,6 +27,7 @@ type PublicProfilePostsSectionProps = {
   loadingMore: boolean;
   showRestricted: boolean;
   hasMore: boolean;
+  postsHiddenByVisibility?: boolean;
   onLoadMore: () => void;
   workoutLabelByPostId?: Record<string, string>;
 };
@@ -33,12 +40,17 @@ export function PublicProfilePostsSection({
   loadingMore,
   showRestricted,
   hasMore,
+  postsHiddenByVisibility,
   onLoadMore,
   workoutLabelByPostId,
 }: PublicProfilePostsSectionProps) {
+  const router = useRouter();
   const { user } = useAuth();
+  const useDetailScreen = usesProfilePostDetailScreen();
   const [filter, setFilter] = useState<ProfilePostsFilter>("all");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [modalPost, setModalPost] = useState<Post | null>(null);
+  const [gridThumbKey, setGridThumbKey] = useState(0);
   const [commentByPostId, setCommentByPostId] = useState<Record<string, string>>({});
   const [commentErrorsByPostId, setCommentErrorsByPostId] = useState<Record<string, string | null>>({});
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
@@ -58,6 +70,45 @@ export function PublicProfilePostsSection({
     if (!selectedPostId) return null;
     return localPosts.find((p) => p.id === selectedPostId) ?? null;
   }, [selectedPostId, localPosts]);
+
+  useEffect(() => {
+    if (selectedPost) setModalPost(selectedPost);
+  }, [selectedPost]);
+
+  const applyPostSync = useCallback((sync: { post: Post | null; deleted?: boolean }) => {
+      if (sync.deleted && sync.post) {
+        setLocalPosts((prev) => prev.filter((p) => p.id !== sync.post!.id));
+        return;
+      }
+      if (sync.post) {
+        setLocalPosts((prev) => prev.map((p) => (p.id === sync.post!.id ? sync.post! : p)));
+      }
+    },
+    []
+  );
+
+  useSyncProfilePostFromDetail(applyPostSync);
+
+  const openPost = useCallback(
+    (id: string) => {
+      const p = localPosts.find((x) => x.id === id);
+      if (!p) return;
+      openProfilePostDetail({
+        router,
+        post: p,
+        onOpenModal: () => {
+          setModalPost(p);
+          setSelectedPostId(id);
+        },
+      });
+    },
+    [localPosts, router]
+  );
+
+  const closePostDetail = useCallback(() => {
+    setGridThumbKey((k) => k + 1);
+    setSelectedPostId(null);
+  }, []);
 
   const pinnedPost = useMemo(() => {
     const pin = pinnedPostId?.trim();
@@ -88,31 +139,33 @@ export function PublicProfilePostsSection({
     }
   }, []);
 
+  const detailPost = modalPost ?? selectedPost;
+
   const handleSubmitComment = useCallback(async () => {
-    if (!selectedPost) return;
-    const raw = commentByPostId[selectedPost.id] ?? "";
+    if (!detailPost) return;
+    const raw = commentByPostId[detailPost.id] ?? "";
     const parsed = commentFormSchema.safeParse({ content: raw });
     if (!parsed.success) {
       setCommentErrorsByPostId((prev) => ({
         ...prev,
-        [selectedPost.id]: parsed.error.issues[0]?.message ?? "Comentario no válido",
+        [detailPost.id]: parsed.error.issues[0]?.message ?? "Comentario no válido",
       }));
       return;
     }
-    setCommentingPostId(selectedPost.id);
-    setCommentErrorsByPostId((prev) => ({ ...prev, [selectedPost.id]: null }));
+    setCommentingPostId(detailPost.id);
+    setCommentErrorsByPostId((prev) => ({ ...prev, [detailPost.id]: null }));
     try {
-      await createComment(selectedPost.id, { content: parsed.data.content });
-      setCommentByPostId((prev) => ({ ...prev, [selectedPost.id]: "" }));
+      await createComment(detailPost.id, { content: parsed.data.content });
+      setCommentByPostId((prev) => ({ ...prev, [detailPost.id]: "" }));
     } catch (e) {
       setCommentErrorsByPostId((prev) => ({
         ...prev,
-        [selectedPost.id]: getErrorMessage(e, "No se pudo publicar el comentario"),
+        [detailPost.id]: getErrorMessage(e, "No se pudo publicar el comentario"),
       }));
     } finally {
       setCommentingPostId(null);
     }
-  }, [selectedPost, commentByPostId]);
+  }, [detailPost, commentByPostId]);
 
   if (showRestricted) {
     return (
@@ -129,6 +182,11 @@ export function PublicProfilePostsSection({
 
   return (
     <View>
+      {postsHiddenByVisibility ? (
+        <Text style={styles.visHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Parte de las publicaciones son solo para seguidores.
+        </Text>
+      ) : null}
       <View style={styles.toolbar}>
         <Text style={styles.count} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
           {postsTotal} publicaciones
@@ -161,7 +219,7 @@ export function PublicProfilePostsSection({
       </View>
 
       {pinnedPost ? (
-        <ProfilePinnedPostPreview post={pinnedPost} onPress={() => setSelectedPostId(pinnedPost.id)} />
+        <ProfilePinnedPostPreview post={pinnedPost} onPress={() => openPost(pinnedPost.id)} />
       ) : null}
 
       {loading && posts.length === 0 ? <ProfilePostsGridSkeleton /> : null}
@@ -175,8 +233,10 @@ export function PublicProfilePostsSection({
           posts={displayedPosts}
           pinnedPostId={pinnedPostId}
           selectedId={selectedPostId}
+          thumbRemountKey={gridThumbKey}
+          openPostId={useDetailScreen ? null : selectedPostId}
           workoutLabelByPostId={workoutLabelByPostId}
-          onSelect={setSelectedPostId}
+          onSelect={openPost}
         />
       )}
 
@@ -199,40 +259,54 @@ export function PublicProfilePostsSection({
         </View>
       ) : null}
 
-      <ProfilePostDetailModal
-        visible={selectedPost != null}
-        post={selectedPost}
-        currentUserId={user?.id}
-        sessionAvatarUrl={user?.avatarUrl}
-        commentValue={selectedPost ? commentByPostId[selectedPost.id] ?? "" : ""}
-        onChangeComment={(v) => {
-          if (!selectedPost) return;
-          setCommentByPostId((prev) => ({ ...prev, [selectedPost.id]: v }));
-        }}
-        onSubmitComment={() => void handleSubmitComment()}
-        onToggleLike={() => {
-          if (selectedPost) void handleToggleLike(selectedPost);
-        }}
-        commenting={selectedPost != null && commentingPostId === selectedPost.id}
-        commentError={selectedPost ? commentErrorsByPostId[selectedPost.id] : null}
-        onClose={() => setSelectedPostId(null)}
-      />
+      {!useDetailScreen ? (
+        <ProfilePostDetailModal
+          visible={selectedPostId != null}
+          post={detailPost}
+          currentUserId={user?.id}
+          sessionAvatarUrl={user?.avatarUrl}
+          commentValue={detailPost ? commentByPostId[detailPost.id] ?? "" : ""}
+          onChangeComment={(v) => {
+            if (!detailPost) return;
+            setCommentByPostId((prev) => ({ ...prev, [detailPost.id]: v }));
+          }}
+          onSubmitComment={() => void handleSubmitComment()}
+          onToggleLike={() => {
+            if (detailPost) void handleToggleLike(detailPost);
+          }}
+          commenting={detailPost != null && commentingPostId === detailPost.id}
+          commentError={detailPost ? commentErrorsByPostId[detailPost.id] : null}
+          onClose={closePostDetail}
+          onAfterClose={() => setModalPost(null)}
+        />
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  visHint: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    color: AUTH.muted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   toolbar: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 10,
   },
   count: {
-    color: AUTH.muted,
-    fontSize: 13,
+    color: AUTH.faint,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
   },
   filters: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
   },
   filterChip: {
@@ -240,15 +314,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(64, 64, 64, 0.9)",
+    borderColor: "rgba(212, 175, 55, 0.18)",
+    backgroundColor: "rgba(23, 23, 23, 0.5)",
   },
   filterChipActive: {
-    borderColor: "rgba(212, 175, 55, 0.55)",
+    borderColor: "rgba(212, 175, 55, 0.45)",
     backgroundColor: "rgba(212, 175, 55, 0.1)",
   },
   filterText: {
     color: AUTH.muted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
   },
   filterTextActive: {

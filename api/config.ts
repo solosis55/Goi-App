@@ -6,24 +6,47 @@ const API_PORT = 4000;
 
 const DEV_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/** Hosts de túnel Expo/ngrok: no usar :4000 derivado del bundler. */
+function isDevTunnelHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h.includes("ngrok") ||
+    h.endsWith(".loca.lt") ||
+    h.endsWith(".exp.direct") ||
+    h.includes("expo.dev")
+  );
+}
+
 /**
  * En Expo Go (dev), Metro expone `hostUri` (ej. `192.168.1.31:8081`). Usamos la misma IP para la API
  * en el móvil físico, sin depender de un `.env` manual.
  */
+function expoDevHostUri(): string | null {
+  const fromConfig = Constants.expoConfig?.hostUri?.trim();
+  if (fromConfig) return fromConfig;
+
+  const debuggerHost = Constants.expoGoConfig?.debuggerHost?.trim();
+  if (debuggerHost) return debuggerHost;
+
+  return null;
+}
+
 function apiBaseFromExpoDevHost(): string | null {
   if (!__DEV__) return null;
 
-  const hostUri = Constants.expoConfig?.hostUri?.trim();
+  const hostUri = expoDevHostUri();
   if (!hostUri) return null;
 
   try {
     const withScheme = hostUri.includes("://") ? hostUri : `http://${hostUri}`;
     const { hostname } = new URL(withScheme);
     if (!hostname || DEV_LOOPBACK_HOSTS.has(hostname.toLowerCase())) return null;
+    if (isDevTunnelHost(hostname)) return null;
     return `http://${hostname}:${API_PORT}/api`;
   } catch {
     const hostname = hostUri.split(":")[0]?.trim();
     if (!hostname || DEV_LOOPBACK_HOSTS.has(hostname.toLowerCase())) return null;
+    if (isDevTunnelHost(hostname)) return null;
     return `http://${hostname}:${API_PORT}/api`;
   }
 }
@@ -48,6 +71,10 @@ function resolveDevApiBase(): string {
 }
 
 export const API_BASE_URL = resolveDevApiBase();
+
+if (__DEV__) {
+  console.log(`[Goi] API_BASE_URL → ${API_BASE_URL}`);
+}
 
 /** Origen del servidor sin `/api` (p. ej. `http://127.0.0.1:4000`) para rutas estáticas `/uploads/...`. */
 export function getApiOrigin(): string {

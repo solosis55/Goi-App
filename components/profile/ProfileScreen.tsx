@@ -26,12 +26,12 @@ import { StoryViewerModal } from "../stories/StoryViewerModal";
 import { useProfileEditor } from "../../hooks/useProfileEditor";
 import { useProfileStats } from "../../hooks/useProfileStats";
 import { ProfileAccountSwitcherSheet } from "./ProfileAccountSwitcherSheet";
+import { socialListHref } from "../../constants/socialListRoutes";
 import { ProfileDirtyBanner } from "./ProfileDirtyBanner";
 import { ProfileEditSection } from "./ProfileEditSection";
 import { ProfileHero } from "./ProfileHero";
 import { ProfilePostsSection } from "./ProfilePostsSection";
 import { ProfilePublicInfo } from "./ProfilePublicInfo";
-import { ProfilePublicWorkoutSummary } from "./ProfilePublicWorkoutSummary";
 import { ProfileSectionSurface } from "./ProfileSectionSurface";
 import { ProfileSkeleton } from "./ProfileSkeleton";
 import { ProfileStoriesHighlights } from "./ProfileStoriesHighlights";
@@ -98,16 +98,6 @@ export function ProfileScreen() {
     [postsTotal, stats.followersCount, stats.followingCount, stats.loading]
   );
 
-  const workoutStats = useMemo(
-    () => ({
-      totalSessions: stats.totalSessions,
-      sessionsThisWeek: stats.sessionsThisWeek,
-      routinesCount: stats.routinesCount,
-      loading: stats.loading && stats.totalSessions === null,
-    }),
-    [stats.totalSessions, stats.sessionsThisWeek, stats.routinesCount, stats.loading]
-  );
-
   const profileBadges = useMemo(
     () =>
       computeProfileBadges({
@@ -130,14 +120,11 @@ export function ProfileScreen() {
         setActiveTab("posts");
         return;
       }
-      const label = kind === "followers" ? "seguidores" : "siguiendo";
-      showAlert({
-        title: "Próximamente",
-        message: `La lista de ${label} estará disponible en una próxima actualización.`,
-        buttons: [{ text: "Entendido", style: "default" }],
-      });
+      const uid = editor.user?.id;
+      if (!uid) return;
+      router.push(socialListHref(uid, kind, editor.form?.username ?? editor.profile?.username));
     },
-    [showAlert]
+    [editor.user?.id, editor.form?.username, editor.profile?.username, router]
   );
 
   const handleSetPinned = useCallback(
@@ -269,6 +256,7 @@ export function ProfileScreen() {
       >
         <ScrollView
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           showsVerticalScrollIndicator={false}
           stickyHeaderIndices={[stickyTabIndex]}
@@ -299,7 +287,7 @@ export function ProfileScreen() {
             onSocialStatPress={handleSocialStatPress}
           />
 
-          <ProfileSectionSurface>
+          <ProfileSectionSurface flush>
             <ProfilePublicInfo
               bio={form.bio}
               goal={form.goal}
@@ -311,17 +299,7 @@ export function ProfileScreen() {
               showEditHint
               onEditProfile={() => setActiveTab("profile")}
               badges={profileBadges}
-              workoutStats={workoutStats}
               activityLine={activityLine}
-              workoutSummary={
-                <ProfilePublicWorkoutSummary
-                  loading={stats.loading && stats.totalSessions === null}
-                  lastSession={stats.lastSession}
-                  recentRoutineTitles={stats.recentRoutineTitles}
-                  streakWeeks={stats.streakWeeks}
-                  sparklineCounts={stats.sparklineCounts}
-                />
-              }
             />
           </ProfileSectionSurface>
 
@@ -395,6 +373,7 @@ export function ProfileScreen() {
         onSelectAccount={(id) => void handleSelectAccount(id)}
         onAddAccount={handleAddAccount}
       />
+
     </View>
   );
 }

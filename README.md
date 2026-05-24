@@ -19,7 +19,8 @@ Si la URL es incorrecta verás errores de red o **404** en el feed; el mensaje i
 
 ## Scripts
 
-- `npm run start` / `npm run start:qr` — Metro en modo **LAN** (QR con `exp://192.168.x.x:8081` para el móvil)
+- `npm start` — Metro en **LAN** (QR `exp://192.168.x.x:8081` + API en la misma IP)
+- `npm run start:clear` — igual con caché limpia
 - `npm run start:localhost` — igual, pero pensado para **emulador Android** (redirige el puerto 8081 al PC; evita quedarse en la pantalla blanca de Expo Go)
 - `npm run android:localhost` — arranca Metro en modo localhost y abre el emulador
 - `npm run android` / `npm run ios` / `npm run web`

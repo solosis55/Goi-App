@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,27 +11,35 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getFollowers, getFollowing } from "../../api/auth";
+import { getFollowing, toggleBlockUser } from "../../api/auth";
 import { getStories } from "../../api/stories";
-import { getWorkouts } from "../../api/workouts";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import type { PublicProfileTab } from "../../constants/publicProfileTabs";
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
-import { useProfileStats } from "../../hooks/useProfileStats";
 import { usePublicProfile } from "../../hooks/usePublicProfile";
 import type { FeedStoryAuthor } from "../../types/story";
+import { blockUser } from "../../utils/profileBlocks";
 import { computeProfileBadges } from "../../utils/profileBadges";
+import { computeProfileStatsFromSessions } from "../../utils/profileStatsFromSessions";
 import { formatMemberSince } from "../../utils/profileMemberSince";
 import { buildProfileActivityLine } from "../../utils/profileRecentActivity";
 import { shareProfile } from "../../utils/shareProfile";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { StoryViewerModal } from "../stories/StoryViewerModal";
+import { ExternalProfileSkeleton } from "./ExternalProfileSkeleton";
+import { socialListHref } from "../../constants/socialListRoutes";
+import { ProfileMutualFollowersRow } from "./ProfileMutualFollowersRow";
 import { ProfilePublicInfo } from "./ProfilePublicInfo";
-import { ProfilePublicWorkoutSummary } from "./ProfilePublicWorkoutSummary";
+import { ProfilePublicSessionsSection } from "./ProfilePublicSessionsSection";
+import { ProfileRestrictedCTA } from "./ProfileRestrictedCTA";
+import { ProfileSectionRestrictedHint } from "./ProfileSectionRestrictedHint";
 import { ProfileSectionSurface } from "./ProfileSectionSurface";
 import { ProfileStoriesHighlights } from "./ProfileStoriesHighlights";
 import { PublicProfileHero } from "./PublicProfileHero";
 import { PublicProfilePostsSection } from "./PublicProfilePostsSection";
+import { PublicProfileStickyHeader } from "./PublicProfileStickyHeader";
+import { PublicProfileTabBar } from "./PublicProfileTabBar";
 
 type ExternalProfileScreenProps = {
   userId: string;
@@ -44,12 +53,12 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [followingIdsReady, setFollowingIdsReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [profileTab, setProfileTab] = useState<PublicProfileTab>("posts");
+  const [stickyVisible, setStickyVisible] = useState(false);
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyAuthor, setStoryAuthor] = useState<FeedStoryAuthor | null>(null);
   const [dailyAuthor, setDailyAuthor] = useState<FeedStoryAuthor | null>(null);
   const [unseenDaily, setUnseenDaily] = useState(false);
-  const [targetFollowerIds, setTargetFollowerIds] = useState<string[]>([]);
-  const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -76,20 +85,6 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void getFollowers(userId)
-      .then((res) => {
-        if (!cancelled) setTargetFollowerIds(res.followerIds ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setTargetFollowerIds([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    let cancelled = false;
     void (async () => {
       try {
         const [data, seen] = await Promise.all([getStories(), loadStorySeenMap()]);
@@ -111,25 +106,6 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     };
   }, [userId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void getWorkouts()
-      .then((all) => {
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        for (const w of all) {
-          if (w.userId === userId) map[w.id] = w.title;
-        }
-        setWorkoutTitles(map);
-      })
-      .catch(() => {
-        if (!cancelled) setWorkoutTitles({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
-
   const profile = usePublicProfile({
     userId: followingIdsReady ? userId : null,
     currentUserId: user?.id,
@@ -142,60 +118,39 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     },
   });
 
-  const stats = useProfileStats(userId);
+  const sessionStats = useMemo(() => {
+    const routinesCount = Object.keys(profile.workoutTitles).length;
+    return computeProfileStatsFromSessions(profile.sessions, profile.workoutTitles, routinesCount);
+  }, [profile.sessions, profile.workoutTitles]);
 
   const socialStats = useMemo(
     () => ({
       postsCount: profile.postsTotal,
-      followersCount: profile.followerCount,
-      followingCount: profile.followingCount,
-      loading:
-        (profile.loading && profile.followerCount === null) ||
-        (stats.loading && stats.followersCount === null),
+      followersCount: profile.sectionAccess.socialLists ? profile.followerCount : null,
+      followingCount: profile.sectionAccess.socialLists ? profile.followingCount : null,
+      loading: profile.loading && profile.followerCount === null,
     }),
     [
       profile.postsTotal,
       profile.followerCount,
       profile.followingCount,
       profile.loading,
-      stats.loading,
-      stats.followersCount,
+      profile.sectionAccess.socialLists,
     ]
-  );
-
-  const workoutStats = useMemo(
-    () => ({
-      totalSessions: stats.totalSessions,
-      sessionsThisWeek: stats.sessionsThisWeek,
-      routinesCount: stats.routinesCount,
-      loading: stats.loading && stats.totalSessions === null,
-    }),
-    [stats.totalSessions, stats.sessionsThisWeek, stats.routinesCount, stats.loading]
   );
 
   const profileBadges = useMemo(
     () =>
-      computeProfileBadges({
-        sessionsThisWeek: stats.sessionsThisWeek ?? 0,
-        totalSessions: stats.totalSessions ?? 0,
-        routinesCount: stats.routinesCount ?? 0,
-        postsCount: profile.postsTotal ?? 0,
-      }),
-    [stats.sessionsThisWeek, stats.totalSessions, stats.routinesCount, profile.postsTotal]
+      profile.sectionAccess.stats
+        ? computeProfileBadges({
+            sessionsThisWeek: sessionStats.sessionsThisWeek,
+            totalSessions: sessionStats.totalSessions,
+            routinesCount: sessionStats.routinesCount,
+            postsCount: profile.postsTotal ?? 0,
+          })
+        : [],
+    [sessionStats, profile.postsTotal, profile.sectionAccess.stats]
   );
-
-  const storyViewerAuthors = useMemo(
-    () => (storyAuthor && storyAuthor.slides.length > 0 ? [storyAuthor] : []),
-    [storyAuthor]
-  );
-
-  const followsYou = Boolean(user?.id && targetFollowerIds.includes(user.id));
-
-  const mutualCount = useMemo(() => {
-    if (!user?.id) return 0;
-    const theirs = new Set(targetFollowerIds);
-    return followingIds.filter((id) => id !== userId && theirs.has(id)).length;
-  }, [followingIds, targetFollowerIds, user?.id, userId]);
 
   const memberSinceLabel = formatMemberSince(profile.profile?.createdAt);
 
@@ -203,27 +158,38 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     () =>
       buildProfileActivityLine(
         profile.orderedPosts[0]?.createdAt,
-        stats.lastSession?.performedAt
+        sessionStats.lastSession?.performedAt
       ),
-    [profile.orderedPosts, stats.lastSession?.performedAt]
+    [profile.orderedPosts, sessionStats.lastSession?.performedAt]
   );
 
   const postWorkoutLabels = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of profile.orderedPosts) {
-      if (p.workoutId && workoutTitles[p.workoutId]) map[p.id] = workoutTitles[p.workoutId];
+      if (p.workoutId && profile.workoutTitles[p.workoutId]) {
+        map[p.id] = profile.workoutTitles[p.workoutId];
+      }
     }
     return map;
-  }, [profile.orderedPosts, workoutTitles]);
+  }, [profile.orderedPosts, profile.workoutTitles]);
+
+  const storyViewerAuthors = useMemo(
+    () => (storyAuthor && storyAuthor.slides.length > 0 ? [storyAuthor] : []),
+    [storyAuthor]
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await Promise.all([profile.load(), stats.refresh()]);
+      await profile.load();
     } finally {
       setRefreshing(false);
     }
-  }, [profile, stats]);
+  }, [profile]);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setStickyVisible(e.nativeEvent.contentOffset.y > 220);
+  }, []);
 
   const handleViewStory = useCallback((author: FeedStoryAuthor) => {
     setStoryAuthor(author);
@@ -242,15 +208,59 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
 
   const handleSocialStatPress = useCallback(
     (kind: "posts" | "followers" | "following") => {
-      const label = kind === "posts" ? "publicaciones" : kind === "followers" ? "seguidores" : "siguiendo";
-      showAlert({
-        title: "Próximamente",
-        message: `La lista de ${label} estará disponible en una próxima actualización.`,
-        buttons: [{ text: "Entendido", style: "default" }],
-      });
+      if (kind === "posts") {
+        setProfileTab("posts");
+        return;
+      }
+      if (!profile.sectionAccess.socialLists) {
+        showAlert({
+          title: "Lista no disponible",
+          message: "Este usuario ha restringido quién puede ver sus seguidores y seguidos.",
+          buttons: [{ text: "Entendido", style: "default" }],
+        });
+        return;
+      }
+      router.push(socialListHref(userId, kind, profile.profile?.username));
     },
-    [showAlert]
+    [profile.sectionAccess.socialLists, profile.profile?.username, router, showAlert, userId]
   );
+
+  const handleMoreMenu = useCallback(() => {
+    const username = profile.profile?.username?.trim() || "usuario";
+    showAlert({
+      title: `@${username}`,
+      message: "Opciones de perfil",
+      buttons: [
+        {
+          text: "Bloquear usuario",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              await toggleBlockUser(userId);
+              await blockUser(userId);
+              showAlert({
+                title: "Usuario bloqueado",
+                message: "No verás su contenido en el feed.",
+                buttons: [{ text: "Entendido", style: "default" }],
+              });
+              router.back();
+            })();
+          },
+        },
+        {
+          text: "Reportar perfil",
+          onPress: () => {
+            showAlert({
+              title: "Reporte registrado",
+              message: "Gracias. Revisaremos este perfil.",
+              buttons: [{ text: "Entendido", style: "default" }],
+            });
+          },
+        },
+        { text: "Cancelar", style: "cancel" },
+      ],
+    });
+  }, [profile.profile?.username, userId, showAlert, router]);
 
   if (user?.id === userId) {
     router.replace("/(tabs)/perfil");
@@ -259,15 +269,30 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
 
   if (!followingIdsReady || (profile.loading && !profile.profile)) {
     return (
-      <View style={[styles.centered, { paddingTop: insets.top }]}>
-        <ActivityIndicator color={AUTH.gold} size="large" />
+      <View style={{ paddingTop: insets.top, flex: 1, backgroundColor: AUTH.bg }}>
+        <ExternalProfileSkeleton />
       </View>
     );
   }
 
+  const username = profile.profile?.username?.trim() ?? "";
+
   return (
     <View style={styles.root}>
+      <PublicProfileStickyHeader
+        visible={stickyVisible}
+        username={username}
+        avatarUrl={profile.profile?.avatarUrl}
+        following={profile.following}
+        followBusy={profile.followBusy}
+        onBack={() => router.back()}
+        onToggleFollow={() => void profile.handleToggleFollow()}
+      />
+
       <ScrollView
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        removeClippedSubviews={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={AUTH.gold} />
@@ -292,67 +317,91 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
           restricted={profile.showRestricted}
           following={profile.following}
           followBusy={profile.followBusy}
-          followsYou={followsYou}
-          mutualCount={mutualCount}
+          followsYou={profile.followsYou}
           memberSinceLabel={memberSinceLabel}
+          activityLine={activityLine}
           unseenDaily={unseenDaily}
           onBack={() => router.back()}
           onToggleFollow={() => void profile.handleToggleFollow()}
           onShare={handleShareProfile}
+          onMore={handleMoreMenu}
           onAvatarPress={dailyAuthor?.slides.length ? handleAvatarDaily : undefined}
           socialStats={socialStats}
           onSocialStatPress={handleSocialStatPress}
         />
 
-        <ProfileSectionSurface>
-          <ProfilePublicInfo
-            bio={profile.profile?.bio}
-            goal={profile.profile?.goal}
-            location={profile.profile?.location}
-            websiteUrl={profile.profile?.websiteUrl}
-            instagramUrl={profile.profile?.instagramUrl}
-            stravaUrl={profile.profile?.stravaUrl}
-            restricted={profile.showRestricted}
-            restrictedMessage="Perfil limitado hasta que sigas a esta cuenta."
-            badges={profile.showRestricted ? [] : profileBadges}
-            workoutStats={profile.showRestricted ? undefined : workoutStats}
-            activityLine={profile.showRestricted ? null : activityLine}
-            workoutSummary={
-              profile.showRestricted ? null : (
-                <ProfilePublicWorkoutSummary
-                  loading={stats.loading && stats.totalSessions === null}
-                  lastSession={stats.lastSession}
-                  recentRoutineTitles={stats.recentRoutineTitles}
-                  streakWeeks={stats.streakWeeks}
-                  sparklineCounts={stats.sparklineCounts}
-                />
-              )
-            }
-          />
-        </ProfileSectionSurface>
+        {profile.mutualFollowers.length > 0 && profile.showRestricted ? (
+          <View style={styles.mutualsWrap}>
+            <ProfileMutualFollowersRow mutuals={profile.mutualFollowers} />
+          </View>
+        ) : null}
 
-        {!profile.showRestricted ? (
+        {profile.showRestricted ? (
+          <ProfileRestrictedCTA
+            username={username}
+            following={profile.following}
+            followPending={profile.followPending}
+            followBusy={profile.followBusy}
+            postCountTotal={profile.postCountTotal}
+            previewPosts={profile.previewPosts}
+            unavailable={profile.profileUnavailable}
+            onFollow={() => void profile.handleToggleFollow()}
+          />
+        ) : (
           <>
+            {profile.sectionAccess.bio ? (
+              <ProfileSectionSurface>
+                <ProfilePublicInfo
+                  bio={profile.profile?.bio}
+                  goal={profile.profile?.goal}
+                  location={profile.profile?.location}
+                  websiteUrl={profile.profile?.websiteUrl}
+                  instagramUrl={profile.profile?.instagramUrl}
+                  stravaUrl={profile.profile?.stravaUrl}
+                  restricted={false}
+                  badges={profileBadges}
+                />
+              </ProfileSectionSurface>
+            ) : (
+              <ProfileSectionRestrictedHint
+                title="Información restringida"
+                body="Bio y enlaces visibles solo para quien el propietario autoriza."
+              />
+            )}
+
             <ProfileStoriesHighlights
               userId={userId}
-              username={profile.profile?.username ?? ""}
+              username={username}
               avatarUrl={profile.profile?.avatarUrl}
               isSelf={false}
               onViewStory={handleViewStory}
             />
-            <PublicProfilePostsSection
-              posts={profile.orderedPosts}
-              postsTotal={profile.postsTotal}
-              pinnedPostId={profile.profile?.pinnedPostId}
-              loading={profile.loading}
-              loadingMore={profile.postsLoadingMore}
-              showRestricted={profile.showRestricted}
-              hasMore={Boolean(profile.postsNextCursor)}
-              onLoadMore={() => void profile.loadMorePosts()}
-              workoutLabelByPostId={postWorkoutLabels}
-            />
+
+            <PublicProfileTabBar active={profileTab} onChange={setProfileTab} />
+
+            {profileTab === "posts" ? (
+              <PublicProfilePostsSection
+                posts={profile.orderedPosts}
+                postsTotal={profile.postsTotal}
+                pinnedPostId={profile.profile?.pinnedPostId}
+                loading={profile.loading}
+                loadingMore={profile.postsLoadingMore}
+                showRestricted={false}
+                postsHiddenByVisibility={profile.postsHiddenByVisibility}
+                hasMore={Boolean(profile.postsNextCursor)}
+                onLoadMore={() => void profile.loadMorePosts()}
+                workoutLabelByPostId={postWorkoutLabels}
+              />
+            ) : profile.sectionAccess.sessions ? (
+              <ProfilePublicSessionsSection sessions={profile.sessions} loading={profile.loading} />
+            ) : (
+              <ProfileSectionRestrictedHint
+                title="Sesiones privadas"
+                body="Las sesiones de entrenamiento solo están disponibles para seguidores autorizados."
+              />
+            )}
           </>
-        ) : null}
+        )}
       </ScrollView>
 
       <StoryViewerModal
@@ -372,12 +421,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AUTH.bg,
   },
-  centered: {
-    flex: 1,
-    backgroundColor: AUTH.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   errorWrap: {
     padding: 16,
     alignItems: "center",
@@ -395,5 +438,9 @@ const styles = StyleSheet.create({
   retryText: {
     color: AUTH.gold,
     fontWeight: "600",
+  },
+  mutualsWrap: {
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
 });

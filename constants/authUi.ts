@@ -31,6 +31,24 @@ export const APP_STACK_SCREEN_OPTIONS = {
   headerTitleStyle: { color: AUTH.neutral100, fontWeight: "600" as const, fontSize: 17 },
 } as const;
 
+/** Fondo de pantallas en el Stack nativo (evita flash blanco al volver atrás en Android). */
+export const APP_STACK_CONTENT_STYLE = { backgroundColor: AUTH.bg } as const;
+
+export const APP_CARD_STACK_OPTIONS = {
+  animation: "slide_from_right" as const,
+  presentation: "card" as const,
+  contentStyle: APP_STACK_CONTENT_STYLE,
+};
+
+/** Detalle de publicación desde perfil: slide suave y gesto atrás. */
+export const APP_PROFILE_POST_STACK_OPTIONS = {
+  ...APP_CARD_STACK_OPTIONS,
+  animation: "slide_from_right" as const,
+  animationDuration: 320,
+  gestureEnabled: true,
+  fullScreenGestureEnabled: true,
+};
+
 export function collectFieldErrors(
   issues: ReadonlyArray<{ readonly path: readonly PropertyKey[]; message: string }>
 ) {

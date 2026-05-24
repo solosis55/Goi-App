@@ -3,6 +3,11 @@ import { useCallback, useMemo, useState } from "react";
 import { getProfile, updateProfile, uploadProfileAvatar, uploadProfileBanner } from "../api/auth";
 import { ApiError } from "../api/client";
 import { profileFormSchema, type ProfileForm } from "../constants/profileSchema";
+import {
+  DEFAULT_PROFILE_SECTIONS,
+  normalizeProfileSections,
+  normalizeProfileVisibility,
+} from "../constants/profileVisibility";
 import { useAuth } from "../context/AuthContext";
 import { useGoiAlert } from "../context/GoiAlertContext";
 import type { ProfileUser, SafeUser } from "../types/auth";
@@ -18,7 +23,14 @@ export function profileToForm(user: ProfileUser): ProfileForm {
     websiteUrl: user.websiteUrl ?? "",
     instagramUrl: user.instagramUrl ?? "",
     stravaUrl: user.stravaUrl ?? "",
-    profileVisibility: user.profileVisibility === "followers" ? "followers" : "public",
+    profileVisibility: normalizeProfileVisibility(user.profileVisibility),
+    profileSections: normalizeProfileSections(user.profileSections),
+    discoverable: user.discoverable !== false,
+    requireAuthToView: user.requireAuthToView === true,
+    defaultPostVisibility:
+      user.defaultPostVisibility === "followers" || user.defaultPostVisibility === "private"
+        ? user.defaultPostVisibility
+        : "public",
     bannerShowInFeed: user.bannerShowInFeed !== false,
   };
 }
@@ -33,9 +45,18 @@ function formsEqual(a: ProfileForm, b: ProfileForm): boolean {
     a.instagramUrl === b.instagramUrl &&
     a.stravaUrl === b.stravaUrl &&
     a.profileVisibility === b.profileVisibility &&
+    a.profileSections.bio === b.profileSections.bio &&
+    a.profileSections.stats === b.profileSections.stats &&
+    a.profileSections.sessions === b.profileSections.sessions &&
+    a.profileSections.socialLists === b.profileSections.socialLists &&
+    a.discoverable === b.discoverable &&
+    a.requireAuthToView === b.requireAuthToView &&
+    a.defaultPostVisibility === b.defaultPostVisibility &&
     a.bannerShowInFeed === b.bannerShowInFeed
   );
 }
+
+export { DEFAULT_PROFILE_SECTIONS };
 
 export function useProfileEditor() {
   const { user, updateSessionUser } = useAuth();
@@ -135,6 +156,10 @@ export function useProfileEditor() {
         instagramUrl: parsed.data.instagramUrl,
         stravaUrl: parsed.data.stravaUrl,
         profileVisibility: parsed.data.profileVisibility,
+        profileSections: parsed.data.profileSections,
+        discoverable: parsed.data.discoverable,
+        requireAuthToView: parsed.data.requireAuthToView,
+        defaultPostVisibility: parsed.data.defaultPostVisibility,
         bannerShowInFeed: parsed.data.bannerShowInFeed,
       });
       await applyProfile(res.user);

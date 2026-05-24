@@ -28,13 +28,13 @@ const styles = StyleSheet.create({
   line: {
     flex: 1,
     height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(82, 82, 82, 0.65)",
+    backgroundColor: "rgba(212, 175, 55, 0.22)",
   },
   label: {
-    color: AUTH.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.4,
+    color: "rgba(163, 163, 163, 0.95)",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.5,
     textTransform: "uppercase",
   },
 });

@@ -35,5 +35,26 @@ foreach ($r in $rules) {
   Write-Host "OK: $($r.Name) puerto $($r.Port)" -ForegroundColor Green
 }
 
+# Reglas por programa: Windows a veces bloquea node.exe aunque el puerto esté abierto.
+$nodeFromPath = (Get-Command node -ErrorAction SilentlyContinue).Source
+$nodePaths = @(
+  $nodeFromPath,
+  "$env:ProgramFiles\nodejs\node.exe",
+  "${env:ProgramFiles(x86)}\nodejs\node.exe"
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+foreach ($nodeExe in $nodePaths) {
+  $ruleName = "Goi Node.js ($(Split-Path $nodeExe -Leaf))"
+  $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+  if ($existing) {
+    Set-NetFirewallRule -DisplayName $ruleName -Profile Any -Enabled True | Out-Null
+    Write-Host "Actualizado: $ruleName" -ForegroundColor Yellow
+    continue
+  }
+  New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow `
+    -Program $nodeExe -Profile Any | Out-Null
+  Write-Host "OK: $ruleName -> $nodeExe" -ForegroundColor Green
+}
+
 Write-Host ""
-Write-Host "Listo. Ejecuta en Goi App:  npm run start:qr" -ForegroundColor Cyan
+Write-Host "Listo. En Goi App:  npm start" -ForegroundColor Cyan

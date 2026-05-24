@@ -6,6 +6,12 @@ const savedKey = (userId: string) => `goi:feedSaved:${userId}`;
 const mutedKey = (userId: string) => `goi:feedMuted:${userId}`;
 const reportsKey = (userId: string) => `goi:feedReports:${userId}`;
 const suggestionsDismissedKey = (userId: string) => `goi:feedSuggestionsDismissed:${userId}`;
+const suggestionsDismissV2Key = (userId: string) => `goi:feedSuggestionsDismiss:v2:${userId}`;
+
+export type SuggestionsDismissState =
+  | { mode: "none" }
+  | { mode: "snooze"; until: string }
+  | { mode: "permanent" };
 
 export type LocalFeedReport = {
   postId: string;
@@ -86,12 +92,47 @@ export async function unmuteUser(userId: string, targetUserId: string): Promise<
   await saveMutedUserIds(userId, ids);
 }
 
-export async function loadSuggestionsDismissed(userId: string): Promise<boolean> {
-  return readJson<boolean>(suggestionsDismissedKey(userId), false);
+export function isSuggestionsDismissed(state: SuggestionsDismissState): boolean {
+  if (state.mode === "none") return false;
+  if (state.mode === "permanent") return true;
+  return new Date(state.until).getTime() > Date.now();
 }
 
+export async function loadSuggestionsDismiss(userId: string): Promise<SuggestionsDismissState> {
+  const v2 = await readJson<SuggestionsDismissState | null>(suggestionsDismissV2Key(userId), null);
+  if (v2 && v2.mode !== "none") {
+    if (v2.mode === "snooze" && new Date(v2.until).getTime() <= Date.now()) {
+      return { mode: "none" };
+    }
+    return v2;
+  }
+
+  const legacy = await readJson<boolean>(suggestionsDismissedKey(userId), false);
+  if (legacy) return { mode: "permanent" };
+  return { mode: "none" };
+}
+
+/** @deprecated Usar loadSuggestionsDismiss */
+export async function loadSuggestionsDismissed(userId: string): Promise<boolean> {
+  const state = await loadSuggestionsDismiss(userId);
+  return isSuggestionsDismissed(state);
+}
+
+export async function saveSuggestionsDismiss(
+  userId: string,
+  state: SuggestionsDismissState
+): Promise<void> {
+  await writeJson(suggestionsDismissV2Key(userId), state);
+  if (state.mode === "permanent") {
+    await writeJson(suggestionsDismissedKey(userId), true);
+  } else if (state.mode === "none") {
+    await writeJson(suggestionsDismissedKey(userId), false);
+  }
+}
+
+/** @deprecated Usar saveSuggestionsDismiss */
 export async function setSuggestionsDismissed(userId: string, dismissed: boolean): Promise<void> {
-  await writeJson(suggestionsDismissedKey(userId), dismissed);
+  await saveSuggestionsDismiss(userId, dismissed ? { mode: "permanent" } : { mode: "none" });
 }
 
 export async function appendLocalReport(

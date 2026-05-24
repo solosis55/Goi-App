@@ -7,6 +7,13 @@ import type { useProfileEditor } from "../../hooks/useProfileEditor";
 import { ProfileAccountSection } from "./ProfileAccountSection";
 import { ProfileAccountSecuritySection } from "./ProfileAccountSecuritySection";
 import { ProfileEditSubTabBar } from "./ProfileEditSubTabBar";
+import {
+  DEFAULT_POST_VISIBILITY_OPTIONS,
+  PROFILE_VISIBILITY_OPTIONS,
+  SECTION_VISIBILITY_OPTIONS,
+  STATS_VISIBILITY_OPTIONS,
+} from "../../constants/profileVisibility";
+import { ProfileFollowRequestsSection } from "./ProfileFollowRequestsSection";
 import { ProfileMutedSection } from "./ProfileMutedSection";
 
 const PAD = 16;
@@ -291,23 +298,104 @@ function ProfileEditPrivateFields({
         Quién puede ver tu perfil y cómo gestionas tu cuenta en este dispositivo.
       </Text>
 
-      <SectionTitle>Visibilidad</SectionTitle>
-
-      <FieldLabel>Perfil visible para</FieldLabel>
-      <View style={styles.chipRow}>
-        {(["public", "followers"] as const).map((v) => {
-          const selected = form.profileVisibility === v;
-          return (
-            <PressableChip
-              key={v}
-              label={v === "public" ? "Todos" : "Seguidores"}
-              selected={selected}
-              disabled={fieldsDisabled}
-              onPress={() => patch({ profileVisibility: v })}
-            />
-          );
-        })}
+      <SectionTitle>Visibilidad del perfil</SectionTitle>
+      <View style={styles.chipRowWrap}>
+        {PROFILE_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={opt.value}
+            label={opt.label}
+            selected={form.profileVisibility === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() =>
+              patch({
+                profileVisibility: opt.value,
+                discoverable: opt.value === "private" ? false : form.discoverable,
+              })
+            }
+          />
+        ))}
       </View>
+      <Text style={styles.hint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        {PROFILE_VISIBILITY_OPTIONS.find((o) => o.value === form.profileVisibility)?.hint}
+      </Text>
+
+      <SectionTitle>Secciones</SectionTitle>
+      <FieldLabel>Bio, objetivo y enlaces</FieldLabel>
+      <View style={styles.chipRow}>
+        {SECTION_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={`bio-${opt.value}`}
+            label={opt.label}
+            selected={form.profileSections.bio === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() => patch({ profileSections: { ...form.profileSections, bio: opt.value } })}
+          />
+        ))}
+      </View>
+      <FieldLabel>Estadísticas</FieldLabel>
+      <View style={styles.chipRow}>
+        {STATS_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={`stats-${opt.value}`}
+            label={opt.label}
+            selected={form.profileSections.stats === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() => patch({ profileSections: { ...form.profileSections, stats: opt.value } })}
+          />
+        ))}
+      </View>
+      <FieldLabel>Sesiones de entreno</FieldLabel>
+      <View style={styles.chipRow}>
+        {SECTION_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={`sessions-${opt.value}`}
+            label={opt.label}
+            selected={form.profileSections.sessions === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() => patch({ profileSections: { ...form.profileSections, sessions: opt.value } })}
+          />
+        ))}
+      </View>
+      <FieldLabel>Seguidores y siguiendo</FieldLabel>
+      <View style={styles.chipRow}>
+        {STATS_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={`social-${opt.value}`}
+            label={opt.label}
+            selected={form.profileSections.socialLists === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() => patch({ profileSections: { ...form.profileSections, socialLists: opt.value } })}
+          />
+        ))}
+      </View>
+
+      <SectionTitle>Descubrimiento y publicaciones</SectionTitle>
+      <View style={styles.switchRow}>
+        <Text style={styles.switchLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Aparecer en sugerencias
+        </Text>
+        <Switch
+          value={form.discoverable}
+          onValueChange={(discoverable) => patch({ discoverable })}
+          disabled={fieldsDisabled || form.profileVisibility === "private"}
+          trackColor={{ false: AUTH.fieldBorder, true: AUTH.gold }}
+          thumbColor={Platform.OS === "android" ? AUTH.neutral100 : undefined}
+        />
+      </View>
+      <FieldLabel>Visibilidad por defecto (nuevas publicaciones)</FieldLabel>
+      <View style={styles.chipRow}>
+        {DEFAULT_POST_VISIBILITY_OPTIONS.map((opt) => (
+          <PressableChip
+            key={opt.value}
+            label={opt.label}
+            selected={form.defaultPostVisibility === opt.value}
+            disabled={fieldsDisabled}
+            onPress={() => patch({ defaultPostVisibility: opt.value })}
+          />
+        ))}
+      </View>
+
+      <ProfileFollowRequestsSection active={privateTabActive} />
 
       <View style={styles.switchRow}>
         <Text
@@ -436,7 +524,14 @@ const styles = StyleSheet.create({
   },
   chipRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
+    marginBottom: 4,
+  },
+  chipRowWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     marginBottom: 4,
   },
   chip: {
