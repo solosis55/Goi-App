@@ -1,5 +1,5 @@
 import type { CreateWorkoutInput, UpdateWorkoutInput, Workout } from "../types/workout";
-import { apiFetch } from "./client";
+import { legacyApiFetch as apiFetch } from "./client";
 
 export function getWorkouts() {
   return apiFetch<Workout[]>("/workouts");

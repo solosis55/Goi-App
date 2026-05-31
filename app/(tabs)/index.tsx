@@ -646,8 +646,9 @@ export default function HomeFeedScreen() {
 
       void (async () => {
         if (!feedScopeReady) {
-          const following = await refreshFollowing();
-          const scope = await initScope(following.length);
+          // No bloquear el feed si el hub social (:4001) tarda o no responde
+          void refreshFollowing();
+          const scope = await initScope(followingIds.length);
           void fetchFeed(mode, scope, afterPublish ? { force: true } : undefined);
           return;
         }

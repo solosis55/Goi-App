@@ -2,6 +2,7 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+const authEnvUrl = process.env.EXPO_PUBLIC_AUTH_API_URL?.trim();
 const API_PORT = 4000;
 
 const DEV_LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
@@ -70,10 +71,26 @@ function resolveDevApiBase(): string {
   return `http://127.0.0.1:${API_PORT}/api`;
 }
 
+/** Auth, workouts, social… siguen en Goi Web hasta migrarlos. */
+function resolveDevAuthApiBase(): string {
+  if (authEnvUrl && authEnvUrl.length > 0) return authEnvUrl.replace(/\/$/, "");
+
+  const main = resolveDevApiBase();
+  // Migración Fase 7: posts en Goi Server :4000, resto en Express :4001
+  if (main.includes(`:${API_PORT}/`)) {
+    return main.replace(`:${API_PORT}/`, ":4001/");
+  }
+  return main;
+}
+
 export const API_BASE_URL = resolveDevApiBase();
+export const AUTH_API_BASE_URL = resolveDevAuthApiBase();
 
 if (__DEV__) {
   console.log(`[Goi] API_BASE_URL → ${API_BASE_URL}`);
+  if (AUTH_API_BASE_URL !== API_BASE_URL) {
+    console.log(`[Goi] AUTH_API_BASE_URL → ${AUTH_API_BASE_URL}`);
+  }
 }
 
 /** Origen del servidor sin `/api` (p. ej. `http://127.0.0.1:4000`) para rutas estáticas `/uploads/...`. */

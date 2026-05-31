@@ -138,7 +138,7 @@ function PostCardInner({
   const [menuOpen, setMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sessionInlineOpen, setSessionInlineOpen] = useState(false);
-  const commentsCount = post.comments.length;
+  const commentsCount = post.comments?.length ?? 0;
   const isOwner = currentUserId != null && post.userId === currentUserId;
   const visibility = post.visibility ?? "public";
   const visStyle = visibilityBadgeStyle(visibility);

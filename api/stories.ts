@@ -1,5 +1,5 @@
 import type { CreatedStoryPayload, FeedStoriesPayload } from "../types/story";
-import { apiFetch } from "./client";
+import { legacyApiFetch as apiFetch } from "./client";
 
 export function getStories() {
   return apiFetch<FeedStoriesPayload>("/stories");

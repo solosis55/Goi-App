@@ -9,7 +9,7 @@ import type {
   SafeUser,
   UpdateProfileInput,
 } from "../types/auth";
-import { apiFetch } from "./client";
+import { legacyApiFetch as apiFetch } from "./client";
 
 export function register(input: RegisterInput) {
   return apiFetch<AuthResponse>("/auth/register", {

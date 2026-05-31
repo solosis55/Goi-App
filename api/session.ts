@@ -162,6 +162,12 @@ export async function clearStoredAuth(): Promise<{
   return { token: null, user: null };
 }
 
+/** Usuario de la sesión activa (null si no hay login). */
+export async function getStoredUser(): Promise<SafeUser | null> {
+  const auth = await loadStoredAuth();
+  return auth.user;
+}
+
 export async function switchStoredAuth(userId: string): Promise<{
   token: string;
   user: SafeUser;

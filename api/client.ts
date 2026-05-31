@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL, AUTH_API_BASE_URL } from "./config";
 import { emitAuthExpired } from "./authEvents";
 import { clearStoredAuth, getAuthToken } from "./session";
 
@@ -30,7 +30,7 @@ function shouldExpireSession(status: number, code: string) {
 
 function fallbackMessageForFailedRequest(status: number): string {
   if (status === 404) {
-    return "No se encontró la API en esta dirección (404). Revisa EXPO_PUBLIC_API_URL y que el servidor Goi Web esté en marcha.";
+    return "No se encontró la API en esta dirección (404). Revisa EXPO_PUBLIC_API_URL y que Goi Server esté en marcha (npm run dev en :4000).";
   }
   if (status >= 500) {
     return `Error en el servidor (${status}). Inténtalo más tarde o revisa los logs del backend.`;
@@ -42,7 +42,7 @@ function fallbackMessageForFailedRequest(status: number): string {
     return "No tienes permiso para esta acción (403).";
   }
   if (status === 0) {
-    return `No se pudo conectar con la API (${API_BASE_URL}). Comprueba que el servidor Goi Web esté en marcha y, en móvil físico, EXPO_PUBLIC_API_URL o npm start con la IP del PC.`;
+    return `No se pudo conectar con la API (${API_BASE_URL}). Comprueba que Goi Server esté en marcha (npm run dev) y, en móvil físico, EXPO_PUBLIC_API_URL o npm start con la IP del PC.`;
   }
   return `La API respondió con un error (${status}).`;
 }
@@ -78,21 +78,55 @@ async function handleSessionExpired(code?: string) {
   emitAuthExpired({ code });
 }
 
+export type ApiFetchOptions = RequestInit & {
+  /** Override de la URL base (p. ej. auth en Goi Web mientras posts van a Goi Server). */
+  baseUrl?: string;
+};
+
+/** Rutas aún servidas por Goi Web (`server/` Express). */
+export function legacyApiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  return apiFetch<T>(path, { ...options, baseUrl: AUTH_API_BASE_URL });
+}
+
+const API_TIMEOUT_MS = 12_000;
+
+function mergeAbortSignal(
+  userSignal: AbortSignal | null | undefined,
+  timeoutMs: number
+): { signal: AbortSignal; cleanup: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const onAbort = () => controller.abort();
+  if (userSignal) {
+    if (userSignal.aborted) controller.abort();
+    else userSignal.addEventListener("abort", onAbort);
+  }
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      if (userSignal) userSignal.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
 /**
- * GET/POST JSON contra la misma API que consume Goi Web (`/api/...`).
+ * GET/POST JSON contra la API (`/api/...`).
  * Añade `Authorization: Bearer` si hay token guardado.
  */
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
+  const { baseUrl, ...fetchOptions } = options ?? {};
   const token = await getAuthToken();
-  const url = `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+  const root = baseUrl ?? API_BASE_URL;
+  const url = `${root}${path.startsWith("/") ? path : `/${path}`}`;
 
   const headers: Record<string, string> = {
     Accept: "application/json",
-    ...(options?.headers as Record<string, string> | undefined),
+    ...(fetchOptions?.headers as Record<string, string> | undefined),
   };
 
   const isFormData =
-    typeof FormData !== "undefined" && options?.body instanceof FormData;
+    typeof FormData !== "undefined" && fetchOptions?.body instanceof FormData;
 
   if (!isFormData && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
@@ -103,17 +137,23 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
   }
 
   let response: Response;
+  const { signal, cleanup } = mergeAbortSignal(fetchOptions?.signal, API_TIMEOUT_MS);
   try {
     response = await fetch(url, {
-      ...options,
+      ...fetchOptions,
       headers,
+      signal,
     });
   } catch (err) {
-    const hint =
-      err instanceof TypeError
+    const aborted = err instanceof Error && err.name === "AbortError";
+    const hint = aborted
+      ? "La API tardó demasiado en responder (timeout). Comprueba Goi Server (:4000) y Goi Web server (:4001)."
+      : err instanceof TypeError
         ? "No se pudo conectar con la API (red, URL o servidor apagado)."
         : "No se pudo conectar con la API.";
     throw new ApiError(hint, 0, "API_NETWORK_ERROR");
+  } finally {
+    cleanup();
   }
 
   const rawText = await response.text();
@@ -139,8 +179,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     throw apiError;
   }
 
+  if (response.status === 204 || !rawText) {
+    return {} as T;
+  }
+
   if (parsed === undefined) {
-    if (!rawText) return {} as T;
     throw new ApiError(
       "El servidor devolvió algo que no es JSON.",
       response.status,
