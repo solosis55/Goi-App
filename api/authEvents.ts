@@ -1,6 +1,10 @@
 /** Sustituto móvil de `window.dispatchEvent(AUTH_EXPIRED_EVENT)` en Goi Web. */
 
-type Listener = () => void;
+export type AuthExpiredDetail = {
+  code?: string;
+};
+
+type Listener = (detail?: AuthExpiredDetail) => void;
 
 const listeners = new Set<Listener>();
 
@@ -9,6 +13,6 @@ export function onAuthExpired(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
-export function emitAuthExpired() {
-  for (const listener of listeners) listener();
+export function emitAuthExpired(detail?: AuthExpiredDetail) {
+  for (const listener of listeners) listener(detail);
 }

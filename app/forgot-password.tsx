@@ -38,7 +38,7 @@ export default function ForgotPasswordScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<{ message: string; detail?: string } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [devHint, setDevHint] = useState<string | null>(null);
+  const [devResetToken, setDevResetToken] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
 
@@ -65,7 +65,7 @@ export default function ForgotPasswordScreen() {
     setFieldErrors({});
     setSubmitError(null);
     setSuccessMessage(null);
-    setDevHint(null);
+    setDevResetToken(null);
     const parsed = forgotPasswordFormSchema.safeParse({ email });
     if (!parsed.success) {
       setFieldErrors(collectFieldErrors(parsed.error.issues));
@@ -76,9 +76,7 @@ export default function ForgotPasswordScreen() {
       const res = await requestPasswordReset(parsed.data.email.trim());
       setSuccessMessage(res.message);
       if (__DEV__ && res.devResetToken) {
-        setDevHint(
-          `Token dev (AUTH_RESET_RETURN_TOKEN): ${res.devResetToken}\n\nEn web añade ?reset=${encodeURIComponent(res.devResetToken)} a la URL de auth.`
-        );
+        setDevResetToken(res.devResetToken);
       }
     } catch (e) {
       if (e instanceof ApiError && e.code === "AUTH_RATE_LIMITED") {
@@ -178,7 +176,7 @@ export default function ForgotPasswordScreen() {
                       setEmail(t);
                       setSubmitError(null);
                       setSuccessMessage(null);
-                      setDevHint(null);
+                      setDevResetToken(null);
                     }}
                     placeholder="tu@email.com"
                     placeholderTextColor={AUTH.faint}
@@ -224,10 +222,26 @@ export default function ForgotPasswordScreen() {
                     <Text style={authScreenStyles.successText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                       {successMessage}
                     </Text>
-                    {devHint ? (
-                      <Text style={authScreenStyles.monoHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                        {devHint}
-                      </Text>
+                    {devResetToken ? (
+                      <View style={{ gap: 8 }}>
+                        <Text style={authScreenStyles.monoHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                          Token dev: {devResetToken}
+                        </Text>
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={() =>
+                            router.push({
+                              pathname: "/reset-password",
+                              params: { token: devResetToken },
+                            })
+                          }
+                          style={({ pressed }) => [authScreenStyles.linkWrapTight, pressed ? authScreenStyles.linkPressed : null]}
+                        >
+                          <Text style={authScreenStyles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                            Restablecer contraseña en la app
+                          </Text>
+                        </Pressable>
+                      </View>
                     ) : null}
                   </View>
                 ) : null}

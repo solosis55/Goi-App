@@ -6,6 +6,7 @@ import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { workoutScreenStyles } from "../../constants/workoutScreenUi";
 import type { Exercise } from "../../types/exercise";
 import { EQUIPMENT_LABEL, MUSCLE_LABEL } from "../../utils/catalogExerciseDisplay";
+import { loadExerciseUsageStats, type ExerciseUsageStats } from "../../utils/exerciseStatsFromSessions";
 import { ExerciseImageSlot } from "./ExerciseImageSlot";
 
 type ExerciseDetailSheetProps = {
@@ -40,24 +41,71 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function StatsPlaceholder() {
+function formatVolumeLabel(entry: ExerciseUsageStats["lastPerformance"]): string {
+  if (!entry) return "—";
+  const reps = parseFloat(entry.reps.replace(",", "."));
+  const weight = parseFloat((entry.weight || "0").replace(",", "."));
+  if (!Number.isFinite(reps)) return "—";
+  const w = Number.isFinite(weight) ? weight : 0;
+  return w > 0 ? `${Math.round(reps * w)} kg` : `${reps} reps`;
+}
+
+function ExerciseStatsPanel({ exerciseId }: { exerciseId: string }) {
+  const [stats, setStats] = useState<ExerciseUsageStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    void loadExerciseUsageStats(exerciseId)
+      .then((s) => {
+        if (!cancelled) setStats(s);
+      })
+      .finally(() => {
+        if (!cancelled) setStatsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [exerciseId]);
+
+  if (statsLoading) {
+    return <ActivityIndicator color={AUTH.gold} style={styles.loader} />;
+  }
+
   return (
     <View style={styles.statsBox}>
-      <Text style={styles.statsIntro} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Próximamente: récords personales, volumen y frecuencia con este movimiento.
-      </Text>
       <View style={styles.statsGrid}>
-        {(["PR", "Volumen", "Sesiones"] as const).map((label) => (
-          <View key={label} style={styles.statCell}>
-            <Text style={styles.statLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {label}
-            </Text>
-            <Text style={styles.statValue} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              —
-            </Text>
-          </View>
-        ))}
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            PR
+          </Text>
+          <Text style={[styles.statValue, stats?.lastPerformance ? styles.statValueActive : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {stats?.prLabel ?? "—"}
+          </Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Volumen
+          </Text>
+          <Text style={[styles.statValue, stats?.lastPerformance ? styles.statValueActive : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {formatVolumeLabel(stats?.lastPerformance ?? null)}
+          </Text>
+        </View>
+        <View style={styles.statCell}>
+          <Text style={styles.statLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Sesiones
+          </Text>
+          <Text style={[styles.statValue, (stats?.sessionsCount ?? 0) > 0 ? styles.statValueActive : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {stats?.sessionsCount ?? 0}
+          </Text>
+        </View>
       </View>
+      {(stats?.sessionsCount ?? 0) === 0 ? (
+        <Text style={styles.statsIntro} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Completa una sesión con este ejercicio para ver récords y volumen.
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -165,7 +213,7 @@ export function ExerciseDetailSheet({ visible, exercise, onClose }: ExerciseDeta
           ) : null}
 
           <Section title="Estadísticas">
-            <StatsPlaceholder />
+            <ExerciseStatsPanel exerciseId={ex.id} />
           </Section>
         </ScrollView>
         <Pressable onPress={onClose} style={({ pressed }) => [styles.closeBtn, pressed ? styles.pressed : null]}>
@@ -306,6 +354,9 @@ const styles = StyleSheet.create({
     color: AUTH.muted,
     fontSize: 18,
     fontWeight: "600",
+  },
+  statValueActive: {
+    color: AUTH.neutral100,
   },
   closeBtn: {
     marginTop: 8,

@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -17,7 +17,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiAlert } from "../../context/GoiAlertContext";
+import { useMentionCandidates } from "../../hooks/useMentionCandidates";
 import type { Post } from "../../types/post";
+import { MentionHighlightedText } from "../post/MentionHighlightedText";
 import { PostCardCommentComposer, PostCardCommentsBody } from "./PostCardComments";
 import { postCardPropsAreEqual } from "../../utils/postCardAreEqual";
 import { formatPostRelative } from "../../utils/feedPostDate";
@@ -26,6 +28,7 @@ import { useFeedGoldBeam } from "../../context/FeedGoldBeamContext";
 import { PostCardGoldBeam } from "./PostCardGoldBeam";
 import { UserAvatar } from "../ui/UserAvatar";
 import { PostActionBar } from "./PostActionBar";
+import { PostLikesSheet } from "./PostLikesSheet";
 import { useOptionalPressGuard } from "../../hooks/usePressGuard";
 import { ScrollAwarePressable } from "../ui/ScrollAwarePressable";
 import { PostMediaCarousel } from "./PostMediaCarousel";
@@ -120,6 +123,10 @@ function PostCardInner({
   const trainingFeedMediaHeight = trainingFeedInsetHeight(trainingFeedMediaWidth);
   const { showAlert } = useGoiAlert();
   const [commentsSectionOpen, setCommentsSectionOpen] = useState(initialCommentsOpen);
+  const [likesSheetOpen, setLikesSheetOpen] = useState(false);
+  const mentionPosts = useMemo(() => [post], [post]);
+  const { candidates: mentionCandidates, mentionDirectory, recordMentionPick } =
+    useMentionCandidates({ posts: mentionPosts });
 
   useEffect(() => {
     if (initialCommentsOpen) setCommentsSectionOpen(true);
@@ -215,13 +222,19 @@ function PostCardInner({
     borderWidth: 1 + highlightOpacity.value,
   }));
 
-  const showLikesModal = useCallback(() => {
-    showAlert({
-      title: "Próximamente",
-      message: "La lista de me gusta estará disponible pronto.",
-      buttons: [{ text: "Entendido", style: "default" }],
-    });
-  }, [showAlert]);
+  const openLikesSheet = useCallback(() => {
+    if (post.likesCount <= 0) return;
+    setLikesSheetOpen(true);
+  }, [post.likesCount]);
+
+  const openMentionProfile = useCallback(
+    (userId: string) => {
+      if (!onOpenAuthor) return;
+      const match = mentionCandidates.find((c) => c.id === userId);
+      onOpenAuthor(userId, match?.username ?? "usuario");
+    },
+    [mentionCandidates, onOpenAuthor]
+  );
 
   return (
     <View
@@ -336,7 +349,7 @@ function PostCardInner({
           onToggleLike={press(onToggleLike)}
           onPressComment={press(onPressComment)}
           commentsExpanded={commentsExpanded}
-          onPressLikesCount={press(showLikesModal)}
+          onPressLikesCount={press(openLikesSheet)}
           onPressCommentsCount={press(onPressComment)}
           saved={saved}
           onToggleSave={onToggleSave ? press(onToggleSave) : undefined}
@@ -356,6 +369,8 @@ function PostCardInner({
         onFocusComposer={() => setCommentsSectionOpen(true)}
         guardScrollPresses={guardScrollPresses}
         wrapPress={press}
+        mentionCandidates={mentionCandidates}
+        onMentionPick={recordMentionPick}
       />
 
       <View style={[styles.bodyPad, !hasMedia ? styles.bodyPadCompact : null]}>
@@ -365,12 +380,12 @@ function PostCardInner({
             onPressViewSession={post.sessionId && onPressSession ? press(onPressSession) : undefined}
           />
         ) : post.content ? (
-          <Text
+          <MentionHighlightedText
+            text={post.content}
+            userDirectory={mentionDirectory}
+            onOpenProfile={canOpenAuthor ? openMentionProfile : undefined}
             style={[styles.content, !hasMedia ? styles.contentTextOnly : null]}
-            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-          >
-            {post.content}
-          </Text>
+          />
         ) : null}
 
         {isTrainingPost && (post.sessionId || post.sessionWorkoutTitle) ? (
@@ -414,6 +429,7 @@ function PostCardInner({
           canOpenAuthor={canOpenAuthor}
           onOpenAuthor={onOpenAuthor}
           onToggleComments={onPressComment}
+          mentionDirectory={mentionDirectory}
         />
 
       </View>
@@ -444,6 +460,13 @@ function PostCardInner({
       {isBeamActive && feedBeam?.enabled && cardSize.w > 0 && cardSize.h > 0 ? (
         <PostCardGoldBeam width={cardSize.w} height={cardSize.h} />
       ) : null}
+
+      <PostLikesSheet
+        visible={likesSheetOpen}
+        postId={post.id}
+        likesCount={post.likesCount}
+        onClose={() => setLikesSheetOpen(false)}
+      />
     </View>
   );
 }

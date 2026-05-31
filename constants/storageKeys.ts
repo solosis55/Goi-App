@@ -58,5 +58,8 @@ export const POST_CREATE_DRAFT_KEY = "goi:postCreateDraft:v1";
 /** Publicación que no pudo subirse (reintento manual). */
 export const POST_PUBLISH_QUEUE_KEY = "goi:postPublishQueue:v1";
 
+/** IDs de usuarios mencionados recientemente (misma clave que Goi Web). */
+export const MENTION_RECENTS_KEY_PREFIX = "goi:mentionRecents:v1";
+
 /** "1" = brillo dorado en feed; "0" = desactivado (ahorro batería / dispositivos lentos). */
 export const FEED_GOLD_BEAM_ENABLED_KEY = "goi:feedGoldBeamEnabled:v1";

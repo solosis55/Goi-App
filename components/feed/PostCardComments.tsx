@@ -4,12 +4,14 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { POST_CARD_COMPOSER_THEME } from "../../constants/postCardComposerTheme";
 import type { PostComment } from "../../types/post";
+import type { MentionPickUser } from "../../utils/mentionAutocomplete";
+import { MentionableTextInput } from "../post/MentionableTextInput";
+import { MentionHighlightedText } from "../post/MentionHighlightedText";
 import { UserAvatar } from "../ui/UserAvatar";
 import { ScrollAwarePressable } from "../ui/ScrollAwarePressable";
 
@@ -17,10 +19,12 @@ function CommentRowInner({
   comment,
   currentUserId,
   onOpenAuthor,
+  mentionDirectory,
 }: {
   comment: PostComment;
   currentUserId: string | undefined;
   onOpenAuthor?: (userId: string) => void;
+  mentionDirectory: Map<string, string>;
 }) {
   const isOwn = currentUserId != null && comment.userId === currentUserId;
   const canOpen = !isOwn && !!onOpenAuthor;
@@ -45,7 +49,12 @@ function CommentRowInner({
           {isOwn ? <Text style={styles.commentOwn}> (tú)</Text> : null}
         </Text>
         <Text style={styles.commentMuted}> · </Text>
-        {comment.content}
+        <MentionHighlightedText
+          text={comment.content}
+          userDirectory={mentionDirectory}
+          onOpenProfile={canOpen ? onOpenAuthor : undefined}
+          style={styles.commentContent}
+        />
       </Text>
     </View>
   );
@@ -63,6 +72,8 @@ export type PostCardCommentComposerProps = {
   onFocusComposer?: () => void;
   guardScrollPresses: boolean;
   wrapPress: (fn: () => void) => () => void;
+  mentionCandidates?: MentionPickUser[];
+  onMentionPick?: (picked: MentionPickUser) => void;
 };
 
 function PostCardCommentComposerInner({
@@ -75,6 +86,8 @@ function PostCardCommentComposerInner({
   onFocusComposer,
   guardScrollPresses,
   wrapPress,
+  mentionCandidates = [],
+  onMentionPick,
 }: PostCardCommentComposerProps) {
   const theme = POST_CARD_COMPOSER_THEME;
   const canSubmit = commentValue.trim().length > 0 && !commenting;
@@ -84,9 +97,12 @@ function PostCardCommentComposerInner({
   return (
     <View style={styles.composerPad}>
       <View style={styles.composer}>
-        <TextInput
+        <MentionableTextInput
           value={commentValue}
           onChangeText={onChangeComment}
+          candidates={mentionCandidates}
+          onMentionPick={onMentionPick}
+          listPlacement="above"
           placeholder="Escribe un comentario…"
           placeholderTextColor={theme.textMuted}
           multiline
@@ -153,6 +169,7 @@ export type PostCardCommentsBodyProps = {
   canOpenAuthor: boolean;
   onOpenAuthor?: (authorUserId: string, authorUsername: string) => void;
   onToggleComments: () => void;
+  mentionDirectory: Map<string, string>;
 };
 
 function PostCardCommentsBodyInner({
@@ -164,6 +181,7 @@ function PostCardCommentsBodyInner({
   canOpenAuthor,
   onOpenAuthor,
   onToggleComments,
+  mentionDirectory,
 }: PostCardCommentsBodyProps) {
   const commentPreview = comments.slice(-2);
 
@@ -187,6 +205,7 @@ function PostCardCommentsBodyInner({
               comment={c}
               currentUserId={currentUserId}
               onOpenAuthor={openAuthorFor(c)}
+              mentionDirectory={mentionDirectory}
             />
           ))}
         </View>
@@ -214,6 +233,7 @@ function PostCardCommentsBodyInner({
               comment={c}
               currentUserId={currentUserId}
               onOpenAuthor={openAuthorFor(c)}
+              mentionDirectory={mentionDirectory}
             />
           ))}
         </View>
@@ -320,5 +340,10 @@ const styles = StyleSheet.create({
   },
   commentMuted: {
     color: AUTH.faint,
+  },
+  commentContent: {
+    color: AUTH.muted,
+    fontSize: 13,
+    lineHeight: 19,
   },
 });

@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { GuardedScrollView } from "../../context/ScrollInteractionGuard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { createComment, deletePost, toggleLike } from "../../api/posts";
+import { createComment, deletePost, getPostById, toggleLike } from "../../api/posts";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useAuth } from "../../context/AuthContext";
@@ -19,16 +19,30 @@ import { PostCard } from "../feed/PostCard";
 type ProfilePostDetailScreenProps = {
   postId: string;
   ownProfile?: boolean;
+  initialCommentsOpen?: boolean;
 };
 
-export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetailScreenProps) {
+export function ProfilePostDetailScreen({
+  postId,
+  ownProfile,
+  initialCommentsOpen = false,
+}: ProfilePostDetailScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const likeInFlightRef = useRef(new Set<string>());
 
   const [openingMeta] = useState(() => consumeOpeningProfileMeta());
-  const [post, setPost] = useState<Post | null>(() => consumeOpeningProfilePost(postId));
+  const initialPostRef = useRef<Post | null | undefined>(undefined);
+  if (initialPostRef.current === undefined) {
+    initialPostRef.current = consumeOpeningProfilePost(postId);
+  }
+  const initialPost = initialPostRef.current;
+
+  const [post, setPost] = useState<Post | null>(initialPost);
+  const [loadState, setLoadState] = useState<"idle" | "loading" | "missing" | "error">(() =>
+    initialPost ? "idle" : "loading"
+  );
   const [commentValue, setCommentValue] = useState("");
   const [commentError, setCommentError] = useState<string | null>(null);
   const [commenting, setCommenting] = useState(false);
@@ -51,8 +65,26 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
   );
 
   useEffect(() => {
-    if (!post) goBack(null);
-  }, [post, goBack]);
+    if (post) return;
+    let cancelled = false;
+    setLoadState("loading");
+    void getPostById(postId)
+      .then((found) => {
+        if (cancelled) return;
+        if (found) {
+          setPost(found);
+          setLoadState("idle");
+        } else {
+          setLoadState("missing");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [postId, post]);
 
   const handleToggleLike = useCallback(async () => {
     if (!post || likeInFlightRef.current.has(post.id)) return;
@@ -132,7 +164,40 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
     [router, post]
   );
 
-  if (!post) return null;
+  if (loadState === "loading") {
+    return (
+      <View style={[styles.root, styles.centered, { paddingTop: insets.top }]}>
+        <ActivityIndicator color={AUTH.gold} size="large" />
+      </View>
+    );
+  }
+
+  if (!post) {
+    const message =
+      loadState === "missing"
+        ? "Esta publicación ya no está disponible."
+        : "No se pudo cargar la publicación.";
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => goBack(null)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Cerrar">
+            <Text style={styles.closeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Cerrar
+            </Text>
+          </Pressable>
+          <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Publicación
+          </Text>
+          <View style={styles.headerSide} />
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.missingText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {message}
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -180,6 +245,7 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
           deleting={deleting}
           commenting={commenting}
           commentError={commentError}
+          initialCommentsOpen={initialCommentsOpen}
           pinnedPostId={ownProfile ? pinnedPostId : undefined}
           onSetPinned={ownProfile ? onSetPinned : undefined}
         />
@@ -215,5 +281,17 @@ const styles = StyleSheet.create({
     color: AUTH.gold,
     fontSize: 16,
     fontWeight: "600",
+  },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  missingText: {
+    color: AUTH.muted,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 22,
   },
 });

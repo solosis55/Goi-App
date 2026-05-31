@@ -575,9 +575,15 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
           if (sessionId) {
             router.replace({
               pathname: "/nueva-publicacion",
-              params: { sessionId },
+              params: {
+                sessionId,
+                format: "training",
+                source: "workout-finish",
+              },
             });
+            return;
           }
+          router.replace("/(tabs)/entrenamientos");
         }}
       />
     </View>

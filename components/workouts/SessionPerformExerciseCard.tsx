@@ -3,6 +3,7 @@ import { LayoutAnimation, Platform, Pressable, StyleSheet, Text, UIManager, View
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiAlert } from "../../context/GoiAlertContext";
+import { goiToast } from "../../context/GoiToastContext";
 import { WORKOUT_UI, workoutScreenStyles } from "../../constants/workoutScreenUi";
 import { WORKOUT_SETS_MAX_PER_EXERCISE } from "../../constants/workoutFormLimits";
 import type { Exercise } from "../../types/exercise";
@@ -17,6 +18,8 @@ import { performBlockHeadMetaLine, performBlockSetsDoneRatio } from "../../utils
 import { formatRestDuration } from "../../constants/workoutRest";
 import { blockRestSec } from "../../utils/performBlockRest";
 import { buildVsLastSummary } from "../../utils/workoutVsLastSummary";
+import { setBeatsLastPerformance } from "../../utils/exercisePersonalRecord";
+import { workoutHapticSuccess } from "../../utils/workoutHaptics";
 import { WorkoutVsLastChip } from "./WorkoutVsLastChip";
 import { ExerciseDetailSheet } from "./ExerciseDetailSheet";
 import { ExerciseBlockCardShell } from "./ExerciseBlockCardShell";
@@ -126,10 +129,19 @@ export function SessionPerformExerciseCard({
     const anterior = lastDoneInSession(block.sets, setIndex);
     const fillReps = anterior?.reps && anterior.reps !== "—" ? anterior.reps : row.planned.reps;
     const fillWeight = anterior?.weight && anterior.weight !== "—" ? anterior.weight : row.planned.weight;
+    const actualReps = nextDone && !row.actualReps.trim() ? fillReps : row.actualReps;
+    const actualWeight = nextDone && !row.actualWeight.trim() ? fillWeight : row.actualWeight;
+    if (nextDone && lastPerformance) {
+      const candidate = { ...row, done: true, actualReps, actualWeight };
+      if (setBeatsLastPerformance(candidate, lastPerformance)) {
+        workoutHapticSuccess();
+        goiToast("¡Nuevo récord personal!");
+      }
+    }
     onPatchSet(setIndex, {
       done: nextDone,
-      actualReps: nextDone && !row.actualReps.trim() ? fillReps : row.actualReps,
-      actualWeight: nextDone && !row.actualWeight.trim() ? fillWeight : row.actualWeight,
+      actualReps,
+      actualWeight,
     });
   };
 

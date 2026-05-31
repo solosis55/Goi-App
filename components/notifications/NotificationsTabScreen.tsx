@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppScreenShell } from "../AppScreenShell";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useSocialHub } from "../../context/SocialHubContext";
+import { navigateToPostDetail } from "../../utils/notificationNavigation";
 import { NotificationsList } from "./NotificationsList";
 
 type NotificationsTabScreenProps = {
@@ -33,12 +34,7 @@ export function NotificationsTabScreen({ showBack = false, embedded = false }: N
 
   const onOpenPost = useCallback(
     (postId: string, commentId?: string) => {
-      router.push({
-        pathname: "/(tabs)",
-        params: commentId
-          ? { focusPostId: postId, focusCommentId: commentId }
-          : { focusPostId: postId },
-      });
+      navigateToPostDetail(router, postId, commentId);
     },
     [router]
   );

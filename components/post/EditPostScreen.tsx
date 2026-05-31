@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,9 +18,11 @@ import { ApiError } from "../../api/client";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { POST_BODY_MAX, POST_VISIBILITY_OPTIONS, type PostVisibility } from "../../constants/createPost";
+import { useMentionCandidates } from "../../hooks/useMentionCandidates";
 import type { Post } from "../../types/post";
 import { validateCreatePost } from "../../utils/createPostValidation";
 import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
+import { MentionableTextInput } from "./MentionableTextInput";
 
 type EditPostScreenProps = {
   postId: string;
@@ -38,6 +39,8 @@ export function EditPostScreen({ postId }: EditPostScreenProps) {
   const [visibility, setVisibility] = useState<PostVisibility>("public");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mentionPosts = useMemo(() => (post ? [post] : []), [post]);
+  const { candidates: mentionCandidates, recordMentionPick } = useMentionCandidates({ posts: mentionPosts });
 
   useEffect(() => {
     let cancelled = false;
@@ -149,9 +152,12 @@ export function EditPostScreen({ postId }: EditPostScreenProps) {
             </View>
           ) : null}
 
-          <TextInput
+          <MentionableTextInput
             value={content}
             onChangeText={setContent}
+            candidates={mentionCandidates}
+            onMentionPick={recordMentionPick}
+            listPlacement="below"
             multiline
             textAlignVertical="top"
             style={styles.input}

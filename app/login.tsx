@@ -46,8 +46,18 @@ function hapticLoginErrorLight() {
 export default function LoginScreen() {
   const { showAlert } = useGoiAlert();
   const router = useRouter();
-  const { addAccount } = useLocalSearchParams<{ addAccount?: string }>();
+  const { addAccount, sessionExpired, stale } = useLocalSearchParams<{
+    addAccount?: string;
+    sessionExpired?: string;
+    stale?: string;
+  }>();
   const isAddAccount = addAccount === "1";
+  const sessionExpiredMessage =
+    sessionExpired === "1"
+      ? stale === "1"
+        ? "Tu sesión ya no coincide con el servidor. Inicia sesión otra vez."
+        : "Tu sesión ha caducado. Inicia sesión de nuevo."
+      : null;
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { isHydrated, isAuthenticated, signIn, notifyBiometricUnlockOptIn } = useAuth();
@@ -141,12 +151,15 @@ export default function LoginScreen() {
       }
       if (e instanceof ApiError) {
         const networkish = e.code === "API_NETWORK_ERROR" || e.status === 0;
+        const invalidCreds = e.code === "AUTH_INVALID_CREDENTIALS";
         setSubmitError({
           message: getErrorMessage(e, "No se pudo autenticar"),
           detail: __DEV__ ? `Código ${e.code} · HTTP ${e.status}` : undefined,
           hint: networkish
             ? "Comprueba la conexión Wi‑Fi o datos móviles, y que el servidor Goi Web esté en marcha."
-            : undefined,
+            : invalidCreds
+              ? "Revisa email y contraseña, o usa «¿Olvidaste tu contraseña?»."
+              : undefined,
         });
       } else {
         setSubmitError({ message: "No se pudo autenticar." });
@@ -233,6 +246,14 @@ export default function LoginScreen() {
                 <Text style={authScreenStyles.cardSubtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   Introduce tus credenciales para continuar.
                 </Text>
+
+                {sessionExpiredMessage ? (
+                  <View style={authScreenStyles.successBox}>
+                    <Text style={authScreenStyles.successText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      {sessionExpiredMessage}
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={authScreenStyles.fieldBlock}>
                   <Text style={authScreenStyles.label} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>

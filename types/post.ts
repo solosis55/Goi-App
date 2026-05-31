@@ -19,6 +19,18 @@ export type PostComment = {
   updatedAt: string;
 };
 
+export type PostLikeEntry = {
+  id: string;
+  username: string;
+  avatarUrl: string;
+  likedAt: string;
+};
+
+export type PostLikesResponse = {
+  likes: PostLikeEntry[];
+  total: number;
+};
+
 export type Post = {
   id: string;
   userId: string;

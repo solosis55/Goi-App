@@ -12,8 +12,12 @@ export function AuthNavigationSync() {
 
   useEffect(() => {
     if (!navigationState?.key) return;
-    return onAuthExpired(() => {
-      router.replace("/login");
+    return onAuthExpired((detail) => {
+      const stale = detail?.code === "AUTH_SESSION_STALE";
+      router.replace({
+        pathname: "/login",
+        params: stale ? { sessionExpired: "1", stale: "1" } : { sessionExpired: "1" },
+      });
     });
   }, [navigationState?.key, router]);
 

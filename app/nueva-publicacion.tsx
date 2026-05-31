@@ -23,14 +23,17 @@ export default function NuevaPublicacionScreen() {
     sessionId: sessionIdParam,
     workoutId: workoutIdParam,
     format: formatParam,
+    source: sourceParam,
   } = useLocalSearchParams<{
     sessionId?: string;
     workoutId?: string;
     format?: string;
+    source?: string;
   }>();
 
   const initialSessionId =
     typeof sessionIdParam === "string" && sessionIdParam.trim() ? sessionIdParam.trim() : null;
+  const fromWorkoutFinish = sourceParam === "workout-finish";
   const legacyWorkoutId =
     !initialSessionId && typeof workoutIdParam === "string" && workoutIdParam.trim()
       ? workoutIdParam.trim()
@@ -72,6 +75,7 @@ export default function NuevaPublicacionScreen() {
           format={parsePostFormat(format)}
           initialSessionId={initialSessionId}
           legacyWorkoutId={legacyWorkoutId}
+          fromWorkoutFinish={fromWorkoutFinish}
           onChangeFormat={setFormat}
         />
       )}

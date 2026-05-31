@@ -20,6 +20,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { goiToast } from "../../context/GoiToastContext";
 import { useCreatePostForm } from "../../hooks/useCreatePostForm";
+import { useMentionCandidates } from "../../hooks/useMentionCandidates";
 import { usePostSessionPicker } from "../../hooks/usePostSessionPicker";
 import { hapticLight, hapticSuccess } from "../../utils/appHaptics";
 import { CreatePostSessionPickerSheet } from "./CreatePostSessionPickerSheet";
@@ -28,6 +29,8 @@ import {
   type CreatePostEditPanelKind,
 } from "./editor/CreatePostEditPanel";
 import { CreatePostDraftRecoveredBanner } from "./editor/CreatePostDraftRecoveredBanner";
+import { CreatePostPendingPublishBanner } from "./editor/CreatePostPendingPublishBanner";
+import { CreatePostWorkoutShareBanner } from "./editor/CreatePostWorkoutShareBanner";
 import { CreatePostFormatSegment } from "./editor/CreatePostFormatSegment";
 import { CreatePostInlineCaption } from "./editor/CreatePostInlineCaption";
 import { CreatePostRequirementChips } from "./editor/CreatePostRequirementChips";
@@ -47,6 +50,7 @@ type CreatePostScreenProps = {
   format: PostFormat;
   initialSessionId?: string | null;
   legacyWorkoutId?: string | null;
+  fromWorkoutFinish?: boolean;
   onChangeFormat?: (format: PostFormat) => void;
 };
 
@@ -54,6 +58,7 @@ export function CreatePostScreen({
   format,
   initialSessionId = null,
   legacyWorkoutId = null,
+  fromWorkoutFinish = false,
   onChangeFormat,
 }: CreatePostScreenProps) {
   const router = useRouter();
@@ -78,6 +83,7 @@ export function CreatePostScreen({
     legacyWorkoutId
   );
   const sessionPicker = usePostSessionPicker(user?.id);
+  const { candidates: mentionCandidates, recordMentionPick } = useMentionCandidates();
   const formBusy = form.submitting || form.restoringDraft;
   const previewScrollRef = useRef<ScrollView>(null);
 
@@ -210,6 +216,25 @@ export function CreatePostScreen({
       });
     }
   }, [form, router, format]);
+
+  const onRetryPendingPublish = useCallback(() => {
+    void onPublish();
+  }, [onPublish]);
+
+  const onDismissPendingPublish = useCallback(() => {
+    showAlert({
+      title: "Descartar publicación pendiente",
+      message: "Se borrará el intento guardado sin conexión.",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Descartar",
+          style: "destructive",
+          onPress: () => void form.dismissPendingPublish(),
+        },
+      ],
+    });
+  }, [form, showAlert]);
 
   const onAddFromLibrary = useCallback(async () => {
     const result = await form.pickImages();
@@ -389,9 +414,22 @@ export function CreatePostScreen({
       />
 
       <CreatePostDraftRecoveredBanner
-        active={form.draftBanner && !form.restoringDraft}
+        active={form.draftBanner && !form.restoringDraft && !fromWorkoutFinish}
         onDismiss={form.dismissDraftBanner}
       />
+
+      {fromWorkoutFinish && !form.restoringDraft && !form.pendingPublish ? (
+        <CreatePostWorkoutShareBanner workoutTitle={form.sessionWorkoutTitle} />
+      ) : null}
+
+      {form.pendingPublish && !form.restoringDraft ? (
+        <CreatePostPendingPublishBanner
+          message={form.pendingPublish.errorMessage}
+          retrying={form.submitting}
+          onRetry={onRetryPendingPublish}
+          onDismiss={onDismissPendingPublish}
+        />
+      ) : null}
 
       {form.restoringDraft ? (
         <ActivityIndicator color={AUTH.gold} style={{ marginTop: 24 }} />
@@ -444,6 +482,8 @@ export function CreatePostScreen({
           value={form.content}
           onChange={form.setContent}
           charCount={form.validation.charCount}
+          mentionCandidates={mentionCandidates}
+          onMentionPick={recordMentionPick}
         />
       ) : null}
 
@@ -483,6 +523,8 @@ export function CreatePostScreen({
         onClearDraft={handleClearDraft}
         clearDraftDisabled={form.submitting || form.restoringDraft}
         format={format}
+        mentionCandidates={mentionCandidates}
+        onMentionPick={recordMentionPick}
       />
 
       <CreatePostSessionPickerSheet

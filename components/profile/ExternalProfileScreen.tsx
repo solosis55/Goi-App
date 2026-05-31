@@ -27,11 +27,14 @@ import { formatMemberSince } from "../../utils/profileMemberSince";
 import { buildProfileActivityLine } from "../../utils/profileRecentActivity";
 import { recordRecentProfileVisit } from "../../utils/profileRecentVisits";
 import { shareProfile } from "../../utils/shareProfile";
-import { confirmBlock, confirmUnfollow } from "../../utils/socialConfirmActions";
+import { confirmBlock, confirmMuteAuthor, confirmUnfollow } from "../../utils/socialConfirmActions";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { StoryViewerModal } from "../stories/StoryViewerModal";
+import { FeedReportModal } from "../feed/FeedReportModal";
 import { ExternalProfileSkeleton } from "./ExternalProfileSkeleton";
 import { socialListHref } from "../../constants/socialListRoutes";
+import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
+import { goiToast } from "../../context/GoiToastContext";
 import { ProfileMutualFollowersRow } from "./ProfileMutualFollowersRow";
 import { ProfilePublicInfo } from "./ProfilePublicInfo";
 import { ProfilePublicSessionsSection } from "./ProfilePublicSessionsSection";
@@ -53,6 +56,9 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
   const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const muteAuthor = useFeedPrefsStore((s) => s.muteAuthor);
+  const hydrateFeedLocalPrefs = useFeedPrefsStore((s) => s.hydrateFeedLocalPrefs);
+  const mutedUserIds = useFeedPrefsStore((s) => s.mutedUserIds);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
   const [followingIdsReady, setFollowingIdsReady] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -62,6 +68,11 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
   const [storyAuthor, setStoryAuthor] = useState<FeedStoryAuthor | null>(null);
   const [dailyAuthor, setDailyAuthor] = useState<FeedStoryAuthor | null>(null);
   const [unseenDaily, setUnseenDaily] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) void hydrateFeedLocalPrefs(user.id);
+  }, [user?.id, hydrateFeedLocalPrefs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -244,13 +255,31 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
 
   const handleMoreMenu = useCallback(() => {
     const username = profile.profile?.username?.trim() || "usuario";
+    const alreadyMuted = mutedUserIds.includes(userId);
     showAlert({
       title: `@${username}`,
       message: "Opciones de perfil",
       buttons: [
+        ...(alreadyMuted
+          ? []
+          : [
+              {
+                text: "Silenciar publicaciones",
+                onPress: () => {
+                  confirmMuteAuthor(showAlert, username, () => {
+                    void (async () => {
+                      if (!user?.id) return;
+                      await muteAuthor(user.id, userId);
+                      goiToast(`@${username} silenciado`);
+                      router.back();
+                    })();
+                  });
+                },
+              },
+            ]),
         {
           text: "Bloquear usuario",
-          style: "destructive",
+          style: "destructive" as const,
           onPress: () => {
             confirmBlock(showAlert, username, () => {
               void (async () => {
@@ -268,18 +297,21 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
         },
         {
           text: "Reportar perfil",
-          onPress: () => {
-            showAlert({
-              title: "Reporte registrado",
-              message: "Gracias. Revisaremos este perfil.",
-              buttons: [{ text: "Entendido", style: "default" }],
-            });
-          },
+          onPress: () => setReportOpen(true),
         },
         { text: "Cancelar", style: "cancel" },
       ],
     });
-  }, [profile.profile?.username, userId, showAlert, router]);
+  }, [
+    profile.profile?.username,
+    userId,
+    mutedUserIds,
+    showAlert,
+    router,
+    user?.id,
+    muteAuthor,
+    goiToast,
+  ]);
 
   useEffect(() => {
     if (!user?.id || user.id === userId || !profile.profile?.username) return;
@@ -439,6 +471,14 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
         startSlideIdx={0}
         onClose={() => setStoryViewerOpen(false)}
         onStoriesUiRefresh={() => {}}
+      />
+      <FeedReportModal
+        visible={reportOpen}
+        authorUsername={username}
+        title="Reportar perfil"
+        subtitle={`Perfil de @${username}. El informe se guarda en este dispositivo.`}
+        onClose={() => setReportOpen(false)}
+        onSubmit={() => goiToast("Informe registrado en este dispositivo")}
       />
     </View>
   );

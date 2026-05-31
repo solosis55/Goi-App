@@ -4,6 +4,7 @@ import type {
   NotificationsResponse,
   Post,
   PostComment,
+  PostLikesResponse,
 } from "../types/post";
 
 import { apiFetch } from "./client";
@@ -14,6 +15,11 @@ import { apiFetch } from "./client";
 
 export function getPosts() {
   return apiFetch<Post[]>("/posts");
+}
+
+export async function getPostById(postId: string): Promise<Post | null> {
+  const posts = await getPosts();
+  return posts.find((p) => p.id === postId) ?? null;
 }
 
 export function getFeedPage(scope: "all" | "following", limit = 20, cursor?: string | null) {
@@ -90,6 +96,10 @@ export function toggleLike(postId: string) {
 
   });
 
+}
+
+export function getPostLikes(postId: string) {
+  return apiFetch<PostLikesResponse>(`/posts/${postId}/likes`);
 }
 
 

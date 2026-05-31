@@ -69,6 +69,13 @@ function ThemedRoot() {
                 animationDuration: 420,
               }}
             />
+            <Stack.Screen
+              name="reset-password"
+              options={{
+                animation: "fade_from_bottom",
+                animationDuration: 420,
+              }}
+            />
             <Stack.Screen name="perfil" options={{ animation: "none" }} />
             <Stack.Screen name="usuario/[id]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="rutina/nueva" options={APP_CARD_STACK_OPTIONS} />

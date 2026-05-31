@@ -73,9 +73,9 @@ function resolveErrorMessage(status: number, code: string, serverMessage: string
   return fallbackMessageForFailedRequest(status);
 }
 
-async function handleSessionExpired() {
+async function handleSessionExpired(code?: string) {
   await clearStoredAuth();
-  emitAuthExpired();
+  emitAuthExpired({ code });
 }
 
 /**
@@ -134,7 +134,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     const message = resolveErrorMessage(response.status, code, data.message);
     const apiError = new ApiError(message, response.status, code);
     if (shouldExpireSession(apiError.status, apiError.code)) {
-      await handleSessionExpired();
+      await handleSessionExpired(apiError.code);
     }
     throw apiError;
   }

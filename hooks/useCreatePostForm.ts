@@ -196,28 +196,44 @@ export function useCreatePostForm(
 
         if (cancelled) return;
 
-        if (pending) {
-          setPendingPublish(pending);
-          setContent(pending.content);
-          setVisibility(pending.visibility);
-          setSessionId(pending.sessionId);
-          setSessionWorkoutTitle(pending.sessionWorkoutTitle);
-          if (pending.imageDataUrls.length > 0) {
-            const restored = pending.imageDataUrls.slice(0, POST_IMAGE_MAX_FILES).map((dataUrl, i) => ({
-              id: `pending-${i}`,
-              uri: dataUrl,
-              dataUrl,
-              sourceUri: dataUrl,
-              cropSquare: true,
-            }));
-            setImages(restored);
+        const preferLinkedSession = Boolean(resolvedInitialSessionId);
+        let restoredFromPending = false;
+        let restoredFromDraft = false;
+
+        if (pending && pending.format === postFormat) {
+          const pendingMatchesSession =
+            !preferLinkedSession || pending.sessionId === resolvedInitialSessionId;
+          if (pendingMatchesSession) {
+            restoredFromPending = true;
+            setPendingPublish(pending);
+            setContent(pending.content);
+            setVisibility(pending.visibility);
+            setSessionId(pending.sessionId);
+            setSessionWorkoutTitle(pending.sessionWorkoutTitle);
+            if (pending.imageDataUrls.length > 0) {
+              const restored = pending.imageDataUrls.slice(0, POST_IMAGE_MAX_FILES).map((dataUrl, i) => ({
+                id: `pending-${i}`,
+                uri: dataUrl,
+                dataUrl,
+                sourceUri: dataUrl,
+                cropSquare: true,
+              }));
+              setImages(restored);
+            }
+          } else if (userId) {
+            await clearPendingPostPublish(userId);
           }
-        } else if (draft && draft.format === postFormat) {
+        }
+
+        if (!restoredFromPending && draft && draft.format === postFormat) {
+          const draftMatchesSession =
+            !preferLinkedSession || draft.sessionId === resolvedInitialSessionId;
           const hasSomething =
             draft.content.trim().length > 0 ||
             draft.imageUris.length > 0 ||
             draft.sessionId != null;
-          if (hasSomething) {
+          if (draftMatchesSession && hasSomething) {
+            restoredFromDraft = true;
             setContent(draft.content);
             setVisibility(draft.visibility);
             setSessionId(draft.sessionId);
@@ -233,8 +249,8 @@ export function useCreatePostForm(
           }
         }
 
-        if (!cancelled && !pending) {
-          const applyLatest = (
+        if (!cancelled) {
+          const applyLinkedSession = (
             id: string,
             title: string | null,
             performedAt: string | null,
@@ -257,21 +273,30 @@ export function useCreatePostForm(
               setSessionCompletedExercises(applied.sessionCompletedExercises);
               setSessionTotalExercises(applied.sessionTotalExercises);
               setSessionSnapshot(snapshot);
+              if (postFormat === "training" && title) {
+                setContent((prev) => (prev.trim() ? prev : sessionPostTemplate(title)));
+              }
             }
           };
 
-          if (resolvedInitialSessionId) {
-            applyLatest(
+          if (resolvedInitialSessionId && !restoredFromPending) {
+            applyLinkedSession(
               resolvedInitialSessionId,
               latest.workoutTitle,
               latest.performedAt,
               latest.notes ?? null,
               latest.snapshot ?? null
             );
-          } else if (latest.sessionId && postFormat === "training") {
+          } else if (
+            !restoredFromPending &&
+            !preferLinkedSession &&
+            latest.sessionId &&
+            postFormat === "training" &&
+            !restoredFromDraft
+          ) {
             setSuggestedSessionId(latest.sessionId);
             if (!draft?.sessionId) {
-              applyLatest(
+              applyLinkedSession(
                 latest.sessionId,
                 latest.workoutTitle,
                 latest.performedAt,

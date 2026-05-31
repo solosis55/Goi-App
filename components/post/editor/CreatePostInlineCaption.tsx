@@ -1,22 +1,36 @@
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../../constants/authUi";
 import { POST_BODY_MAX } from "../../../constants/createPost";
 import { CAPTION_PROMPTS_STANDARD } from "../../../constants/createPostPrompts";
+import type { MentionPickUser } from "../../../utils/mentionAutocomplete";
+import { MentionableTextInput } from "../MentionableTextInput";
 
 type CreatePostInlineCaptionProps = {
   value: string;
   onChange: (text: string) => void;
   charCount: number;
   onFocus?: () => void;
+  mentionCandidates?: MentionPickUser[];
+  onMentionPick?: (picked: MentionPickUser) => void;
 };
 
-export function CreatePostInlineCaption({ value, onChange, charCount, onFocus }: CreatePostInlineCaptionProps) {
+export function CreatePostInlineCaption({
+  value,
+  onChange,
+  charCount,
+  onFocus,
+  mentionCandidates = [],
+  onMentionPick,
+}: CreatePostInlineCaptionProps) {
   return (
     <View style={styles.wrap}>
-      <TextInput
+      <MentionableTextInput
         value={value}
         onChangeText={onChange}
         onFocus={onFocus}
+        candidates={mentionCandidates}
+        onMentionPick={onMentionPick}
+        listPlacement="above"
         placeholder="Escribe el pie de foto…"
         placeholderTextColor={AUTH.faint}
         multiline

@@ -13,11 +13,20 @@ const REASONS = [
 type FeedReportModalProps = {
   visible: boolean;
   authorUsername: string;
+  title?: string;
+  subtitle?: string;
   onClose: () => void;
   onSubmit: (reason: string) => void;
 };
 
-export function FeedReportModal({ visible, authorUsername, onClose, onSubmit }: FeedReportModalProps) {
+export function FeedReportModal({
+  visible,
+  authorUsername,
+  title = "Reportar publicación",
+  subtitle,
+  onClose,
+  onSubmit,
+}: FeedReportModalProps) {
   const insets = useSafeAreaInsets();
   const [reasonId, setReasonId] = useState<(typeof REASONS)[number]["id"]>("spam");
   const [detail, setDetail] = useState("");
@@ -36,10 +45,10 @@ export function FeedReportModal({ visible, authorUsername, onClose, onSubmit }: 
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar" />
       <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Reportar publicación
+          {title}
         </Text>
         <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Usuario: @{authorUsername}. El informe se guarda en este dispositivo.
+          {subtitle ?? `Usuario: @${authorUsername}. El informe se guarda en este dispositivo.`}
         </Text>
         <Text style={styles.label} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
           Motivo

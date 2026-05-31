@@ -32,6 +32,21 @@ export function confirmBlock(
   });
 }
 
+export function confirmMuteAuthor(
+  showAlert: ShowAlertFn,
+  username: string,
+  onConfirm: () => void
+): void {
+  showAlert({
+    title: "Silenciar publicaciones",
+    message: `¿Silenciar a @${username}? Dejarás de ver sus posts en el feed.`,
+    buttons: [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Silenciar", style: "destructive", onPress: onConfirm },
+    ],
+  });
+}
+
 export function confirmUnblock(
   showAlert: ShowAlertFn,
   username: string,

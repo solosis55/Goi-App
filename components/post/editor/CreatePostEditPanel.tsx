@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,6 +23,8 @@ import {
   CAPTION_PROMPTS_TRAINING,
 } from "../../../constants/createPostPrompts";
 import type { PendingPostImage } from "../../../hooks/useCreatePostForm";
+import type { MentionPickUser } from "../../../utils/mentionAutocomplete";
+import { MentionableTextInput } from "../MentionableTextInput";
 import { SocialChipRow } from "../../social/SocialChipRow";
 import { SocialSectionHeader } from "../../social/SocialSectionHeader";
 
@@ -49,6 +50,8 @@ type CreatePostEditPanelProps = {
   onClearDraft?: () => void;
   clearDraftDisabled?: boolean;
   format?: PostFormat;
+  mentionCandidates?: MentionPickUser[];
+  onMentionPick?: (picked: MentionPickUser) => void;
 };
 
 export function CreatePostEditPanel({
@@ -71,6 +74,8 @@ export function CreatePostEditPanel({
   onClearDraft,
   clearDraftDisabled = false,
   format = "standard",
+  mentionCandidates = [],
+  onMentionPick,
 }: CreatePostEditPanelProps) {
   const insets = useSafeAreaInsets();
   if (!kind) return null;
@@ -100,9 +105,12 @@ export function CreatePostEditPanel({
 
         {kind === "text" ? (
           <View style={styles.panelBody}>
-            <TextInput
+            <MentionableTextInput
               value={content}
               onChangeText={onChangeContent}
+              candidates={mentionCandidates}
+              onMentionPick={onMentionPick}
+              listPlacement="below"
               placeholder={textPlaceholder}
               placeholderTextColor={AUTH.faint}
               multiline
