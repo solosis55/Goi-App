@@ -31,6 +31,8 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
   const [error, setError] = useState<string | null>(null);
   const focusCountRef = useRef(0);
   const loadingMoreRef = useRef(false);
+  const lastProfileFocusAtRef = useRef(0);
+  const PROFILE_FOCUS_STALE_MS = 30_000;
 
   const refreshSavedLocal = useCallback(() => {
     setSavedRevision((n) => n + 1);
@@ -128,8 +130,12 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
     useCallback(() => {
       if (!userId) return;
       focusCountRef.current += 1;
-      const mode = focusCountRef.current === 1 ? "initial" : "refresh";
-      void fetchMinePage(mode);
+      const now = Date.now();
+      const first = focusCountRef.current === 1;
+      const stale = now - lastProfileFocusAtRef.current > PROFILE_FOCUS_STALE_MS;
+      if (!first && !stale) return;
+      lastProfileFocusAtRef.current = now;
+      void fetchMinePage(first ? "initial" : "refresh");
       void loadTimeline();
     }, [userId, fetchMinePage, loadTimeline])
   );

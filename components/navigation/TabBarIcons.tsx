@@ -84,6 +84,27 @@ export function TabNotificationsIcon({ size = 26, color = AUTH.muted, filled }: 
   );
 }
 
+export function TabSearchIcon({ size = 26, color = AUTH.muted, filled }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle
+        cx={10.5}
+        cy={10.5}
+        r={5.75}
+        stroke={color}
+        strokeWidth={filled ? 0 : 1.75}
+        fill={filled ? color : "none"}
+      />
+      <Path
+        d="M15 15 20 20"
+        stroke={color}
+        strokeWidth={filled ? 2.25 : 1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 export function TabSocialIcon({ size = 26, color = AUTH.muted, filled }: IconProps) {
   const stroke = filled ? 0 : 1.75;
   return (

@@ -1,40 +1,32 @@
 import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { FEED_CONTENT_FILTERS, type FeedContentFilter } from "../../constants/feedContentFilter";
 
-type FeedContentFiltersProps = {
-  value: FeedContentFilter;
-  onChange: (value: FeedContentFilter) => void;
+type ChipOption<T extends string> = { id: T; label: string };
+
+type SocialChipRowProps<T extends string> = {
+  options: readonly ChipOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
 };
 
-export function FeedContentFilters({ value, onChange }: FeedContentFiltersProps) {
+export function SocialChipRow<T extends string>({ options, value, onChange }: SocialChipRowProps<T>) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.row}
-      accessibilityRole="tablist"
-    >
-      {FEED_CONTENT_FILTERS.map((chip) => {
-        const active = chip.id === value;
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      {options.map((opt) => {
+        const active = opt.id === value;
         return (
           <Pressable
-            key={chip.id}
-            onPress={() => onChange(chip.id)}
+            key={opt.id}
+            onPress={() => onChange(opt.id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={chip.label}
-            style={({ pressed }) => [
-              styles.chip,
-              active ? styles.chipActive : null,
-              pressed ? styles.chipPressed : null,
-            ]}
+            style={({ pressed }) => [styles.chip, active ? styles.chipActive : null, pressed ? styles.pressed : null]}
           >
             <Text
               style={[styles.chipText, active ? styles.chipTextActive : null]}
               maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
             >
-              {chip.label}
+              {opt.label}
             </Text>
           </Pressable>
         );
@@ -47,7 +39,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     gap: 8,
-    paddingBottom: 4,
+    paddingVertical: 4,
   },
   chip: {
     paddingVertical: 6,
@@ -61,9 +53,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212, 175, 55, 0.55)",
     backgroundColor: "rgba(35, 32, 22, 0.9)",
   },
-  chipPressed: {
-    opacity: 0.88,
-  },
   chipText: {
     color: AUTH.muted,
     fontSize: 12,
@@ -71,5 +60,8 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: AUTH.gold,
+  },
+  pressed: {
+    opacity: 0.88,
   },
 });

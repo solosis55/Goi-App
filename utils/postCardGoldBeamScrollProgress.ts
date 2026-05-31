@@ -1,14 +1,14 @@
 /**
- * Scroll necesario para completar el recorrido.
- * Escala con la altura de la card para que el gesto se sienta similar en todas.
+ * Scroll necesario para completar el recorrido del brillo.
+ * Valores más bajos = el beam avanza más por píxel de scroll (más ligado al dedo).
  */
 export function postCardGoldBeamTravelPx(winHeight: number, cardHeight: number): number {
-  const byCard = cardHeight * 0.78;
-  const byScreen = winHeight * 0.42;
-  return Math.max(byScreen, byCard);
+  const byCard = cardHeight * 0.55;
+  const byScreen = winHeight * 0.28;
+  return Math.max(byScreen, byCard, 220);
 }
 
-/** Progreso 0→1 a partir del desplazamiento del feed (fiable en Android). */
+/** Progreso 0→1 a partir del desplazamiento del feed. */
 export function postCardGoldBeamProgressFromScroll(
   contentOffsetY: number,
   anchorScrollY: number,

@@ -1,435 +1,561 @@
 import { useRouter } from "expo-router";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
+  InteractionManager,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AuthTopGlow } from "../AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import {
-  POST_BODY_MAX,
-  POST_IMAGE_MAX_FILES,
-  POST_VISIBILITY_OPTIONS,
-} from "../../constants/createPost";
+import { POST_IMAGE_MAX_FILES } from "../../constants/createPost";
+import type { PostFormat } from "../../constants/postFormat";
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
+import { goiToast } from "../../context/GoiToastContext";
 import { useCreatePostForm } from "../../hooks/useCreatePostForm";
-import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
-import { UserAvatar } from "../ui/UserAvatar";
+import { usePostSessionPicker } from "../../hooks/usePostSessionPicker";
+import { hapticLight, hapticSuccess } from "../../utils/appHaptics";
+import { CreatePostSessionPickerSheet } from "./CreatePostSessionPickerSheet";
+import {
+  CreatePostEditPanel,
+  type CreatePostEditPanelKind,
+} from "./editor/CreatePostEditPanel";
+import { CreatePostDraftRecoveredBanner } from "./editor/CreatePostDraftRecoveredBanner";
+import { CreatePostFormatSegment } from "./editor/CreatePostFormatSegment";
+import { CreatePostInlineCaption } from "./editor/CreatePostInlineCaption";
+import { CreatePostRequirementChips } from "./editor/CreatePostRequirementChips";
+import {
+  CreatePostToolbar,
+  type CreatePostToolbarAction,
+} from "./editor/CreatePostToolbar";
+import { PostFeedPreviewStandard } from "./preview/PostFeedPreviewStandard";
+import { PostFeedPreviewTraining } from "./preview/PostFeedPreviewTraining";
+import {
+  resolveSessionExercisePreviews,
+  resolveSessionMoreExercisesCount,
+} from "../../utils/sessionExercisePreview";
+import type { PostPreviewDraft } from "./preview/postPreviewTypes";
 
-export function CreatePostScreen() {
+type CreatePostScreenProps = {
+  format: PostFormat;
+  initialSessionId?: string | null;
+  legacyWorkoutId?: string | null;
+  onChangeFormat?: (format: PostFormat) => void;
+};
+
+export function CreatePostScreen({
+  format,
+  initialSessionId = null,
+  legacyWorkoutId = null,
+  onChangeFormat,
+}: CreatePostScreenProps) {
   const router = useRouter();
   const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const { user } = useAuth();
+  const [editPanel, setEditPanel] = useState<CreatePostEditPanelKind>(null);
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false);
+  const [sessionInlineOpen, setSessionInlineOpen] = useState(false);
+
   const defaultPostVisibility =
     user?.defaultPostVisibility === "followers" || user?.defaultPostVisibility === "private"
       ? user.defaultPostVisibility
       : "public";
-  const form = useCreatePostForm(defaultPostVisibility);
+
+  const form = useCreatePostForm(
+    user?.id,
+    format,
+    defaultPostVisibility,
+    initialSessionId,
+    legacyWorkoutId
+  );
+  const sessionPicker = usePostSessionPicker(user?.id);
+  const formBusy = form.submitting || form.restoringDraft;
+  const previewScrollRef = useRef<ScrollView>(null);
+
+  const sessionExercisePreviews = useMemo(
+    () =>
+      resolveSessionExercisePreviews({
+        snapshot: form.sessionSnapshot,
+        notes: form.sessionNotes,
+      }),
+    [form.sessionSnapshot, form.sessionNotes]
+  );
+
+  const previewDraft: PostPreviewDraft = useMemo(
+    () => ({
+      format,
+      username: user?.username ?? "usuario",
+      avatarUrl: user?.avatarUrl,
+      content: form.content,
+      visibility: form.visibility,
+      imageUris: form.images.map((i) => i.uri),
+      workoutTitle: form.sessionWorkoutTitle,
+      sessionId: form.sessionId,
+      sessionPerformedAt: form.sessionPerformedAt,
+      sessionNotes: form.sessionNotes,
+      sessionCompletedSets: form.sessionCompletedSets,
+      sessionTotalSets: form.sessionTotalSets,
+      sessionCompletedExercises: form.sessionCompletedExercises,
+      sessionTotalExercises: form.sessionTotalExercises,
+      sessionSnapshot: form.sessionSnapshot,
+      sessionExercisePreviews,
+      sessionMoreExercisesCount: resolveSessionMoreExercisesCount({
+        snapshot: form.sessionSnapshot,
+        notes: form.sessionNotes,
+        shown: sessionExercisePreviews.length,
+      }),
+    }),
+    [
+      format,
+      user?.username,
+      user?.avatarUrl,
+      form.content,
+      form.visibility,
+      form.images,
+      form.sessionWorkoutTitle,
+      form.sessionId,
+      form.sessionPerformedAt,
+      form.sessionNotes,
+      form.sessionCompletedSets,
+      form.sessionTotalSets,
+      form.sessionCompletedExercises,
+      form.sessionTotalExercises,
+      form.sessionSnapshot,
+      sessionExercisePreviews,
+    ]
+  );
+
+  useEffect(() => {
+    if (!form.sessionId) setSessionInlineOpen(false);
+  }, [form.sessionId]);
+
+  useEffect(() => {
+    if (!form.sessionId) return;
+    const t = setTimeout(() => {
+      previewScrollRef.current?.scrollToEnd({ animated: true });
+    }, 200);
+    return () => clearTimeout(t);
+  }, [form.sessionId, form.sessionWorkoutTitle, form.sessionSnapshot, sessionExercisePreviews.length]);
+
+  const openLinkedSessionDetail = useCallback(() => {
+    if (!form.sessionId) return;
+    hapticLight();
+    router.push({ pathname: "/sesion/[id]", params: { id: form.sessionId } });
+  }, [form.sessionId, router]);
+
+  const handleClearDraft = useCallback(() => {
+    if (!form.hasDraft || form.submitting || form.restoringDraft) return;
+    hapticLight();
+    showAlert({
+      title: "Empezar de cero",
+      message:
+        "Se borrará el borrador guardado: texto, fotos y sesión vinculada. Podrás crear una publicación nueva desde cero.",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Borrar borrador",
+          style: "destructive",
+          onPress: () => {
+            void form.discardDraft().then(() => {
+              hapticLight();
+              goiToast("Borrador eliminado");
+              setEditPanel(null);
+              setSessionPickerOpen(false);
+            });
+          },
+        },
+      ],
+    });
+  }, [form, showAlert]);
 
   const close = useCallback(() => {
     if (form.hasDraft && !form.submitting) {
       showAlert({
         title: "Descartar borrador",
-        message: "Perderás el texto y las fotos.",
+        message: "Perderás los cambios no publicados.",
         buttons: [
-          { text: "Seguir editando", style: "cancel" },
-          { text: "Descartar", style: "destructive", onPress: () => router.back() },
+          { text: "Seguir", style: "cancel" },
+          {
+            text: "Descartar",
+            style: "destructive",
+            onPress: () => {
+              void form.discardDraft();
+              router.back();
+            },
+          },
         ],
       });
       return;
     }
     router.back();
-  }, [form.hasDraft, form.submitting, router, showAlert]);
-
-  const onPublish = useCallback(async () => {
-    const result = await form.submit();
-    if (result.ok) {
-      router.replace("/(tabs)");
-      showAlert({
-        title: "Goi",
-        message: "Publicación creada.",
-        buttons: [{ text: "Entendido", style: "cancel" }],
-      });
-    }
   }, [form, router, showAlert]);
 
-  const canPublish = form.validation.canSubmit && !form.submitting && !form.mediaBusy;
-  const slotsLeft = POST_IMAGE_MAX_FILES - form.images.length;
+  const onPublish = useCallback(async () => {
+    Keyboard.dismiss();
+    const result = await form.submit();
+    if (result.ok) {
+      hapticSuccess();
+      goiToast(format === "training" ? "Training publicado" : "Publicación creada");
+      InteractionManager.runAfterInteractions(() => {
+        router.replace({ pathname: "/(tabs)", params: { feedRefresh: "1" } });
+      });
+    }
+  }, [form, router, format]);
+
+  const onAddFromLibrary = useCallback(async () => {
+    const result = await form.pickImages();
+    if (result.ok) void form.appendUris(result.uris, true);
+    else if (!result.ok && "error" in result) form.setSubmitError(result.error);
+  }, [form]);
+
+  const onAddFromCamera = useCallback(async () => {
+    const result = await form.pickCamera();
+    if (result.ok) void form.appendUris(result.uris, true);
+    else if (!result.ok && "error" in result) form.setSubmitError(result.error);
+  }, [form]);
+
+  const onAddMedia = useCallback(() => {
+    hapticLight();
+    if (form.mediaBusy || form.submitting) return;
+    showAlert({
+      title: "Añadir foto",
+      message: "Recorte cuadrado por defecto",
+      buttons: [
+        { text: "Cancelar", style: "cancel" },
+        { text: "Galería", onPress: () => void onAddFromLibrary() },
+        { text: "Cámara", onPress: () => void onAddFromCamera() },
+      ],
+    });
+  }, [form, onAddFromCamera, onAddFromLibrary, showAlert]);
+
+  const canAddMorePhotos = form.images.length < POST_IMAGE_MAX_FILES;
+
+  const openAddMedia = useCallback(() => {
+    if (form.mediaBusy || form.submitting || !canAddMorePhotos) return;
+    void onAddMedia();
+  }, [canAddMorePhotos, form.mediaBusy, form.submitting, onAddMedia]);
+
+  const openEditMedia = useCallback(() => {
+    if (form.mediaBusy || form.submitting) return;
+    if (form.images.length === 0) {
+      void onAddMedia();
+      return;
+    }
+    setEditPanel("media");
+  }, [form.images.length, form.mediaBusy, form.submitting, onAddMedia]);
+
+  const focusStandardCaption = useCallback(() => {
+    previewScrollRef.current?.scrollToEnd({ animated: true });
+  }, []);
+
+  const canPublish =
+    form.validation.canSubmit && !form.submitting && !form.mediaBusy && !form.restoringDraft;
+
+  const headerSub =
+    format === "training"
+      ? "Vincula tu sesión · foto opcional"
+      : "Foto obligatoria · pie de foto";
+
+  const openToolbarAction = useCallback(
+    (action: CreatePostToolbarAction) => {
+      hapticLight();
+      if (form.submitting || form.restoringDraft) return;
+      if (action === "session") {
+        setSessionPickerOpen(true);
+        return;
+      }
+      if (action === "media") {
+        if (canAddMorePhotos && form.images.length === 0) openAddMedia();
+        else openEditMedia();
+        return;
+      }
+      if (action === "text" && format === "standard") {
+        focusStandardCaption();
+        return;
+      }
+      setEditPanel(action);
+    },
+    [
+      canAddMorePhotos,
+      form.images.length,
+      form.restoringDraft,
+      form.submitting,
+      format,
+      openAddMedia,
+      openEditMedia,
+      focusStandardCaption,
+    ]
+  );
+
+  const requestFormatChange = useCallback(
+    (next: PostFormat) => {
+      if (next === format || !onChangeFormat) return;
+      const apply = () => onChangeFormat(next);
+      if (!form.hasDraft) {
+        apply();
+        return;
+      }
+      showAlert({
+        title: "Cambiar formato",
+        message:
+          "Tienes un borrador en curso. Al cambiar de formato se cargará el borrador de ese tipo si existe.",
+        buttons: [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Cambiar", onPress: apply },
+        ],
+      });
+    },
+    [format, form.hasDraft, onChangeFormat, showAlert]
+  );
+
+  const sessionAvailable = useMemo(() => {
+    if (!form.sessionId) return sessionPicker.available;
+    const current = sessionPicker.getSession(form.sessionId);
+    if (!current) return sessionPicker.available;
+    if (sessionPicker.available.some((s) => s.id === current.id)) return sessionPicker.available;
+    return [current, ...sessionPicker.available];
+  }, [form.sessionId, sessionPicker]);
+
+  const toolbarPanel: CreatePostToolbarAction | null =
+    editPanel === "text" || editPanel === "media" || editPanel === "options" ? editPanel : null;
 
   return (
     <View style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <Pressable onPress={close} hitSlop={10} style={styles.headerSide} accessibilityRole="button" accessibilityLabel="Cancelar">
+      <AuthTopGlow width={screenWidth} windowHeight={screenHeight} />
+
+      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+        <Pressable onPress={close} hitSlop={10} style={styles.headerSide}>
           <Text style={styles.cancelText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             Cancelar
           </Text>
         </Pressable>
-        <Text style={styles.headerTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Nueva publicación
-        </Text>
-        <Pressable
-          onPress={() => void onPublish()}
-          disabled={!canPublish}
-          hitSlop={10}
-          style={styles.headerSide}
-          accessibilityRole="button"
-          accessibilityLabel="Publicar"
-        >
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {headerSub}
+          </Text>
+        </View>
+        <View style={[styles.headerSide, styles.headerSideEnd]}>
           {form.submitting ? (
             <ActivityIndicator size="small" color={AUTH.gold} />
           ) : (
-            <Text
-              style={[styles.publishText, !canPublish ? styles.publishDisabled : null]}
-              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+            <Pressable
+              onPress={() => void onPublish()}
+              disabled={!canPublish}
+              style={({ pressed }) => [
+                styles.publishPill,
+                canPublish ? styles.publishPillReady : styles.publishPillDisabled,
+                pressed && canPublish ? styles.publishPillPressed : null,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Publicar"
             >
-              Publicar
-            </Text>
+              <Text
+                style={[styles.publishPillText, !canPublish ? styles.publishPillTextDisabled : null]}
+                maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+              >
+                Publicar
+              </Text>
+            </Pressable>
           )}
-        </Pressable>
+        </View>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={insets.top + 48}
-      >
+      {onChangeFormat ? (
+        <CreatePostFormatSegment value={format} onChange={requestFormatChange} compact />
+      ) : null}
+
+      <CreatePostRequirementChips
+        format={format}
+        imageCount={form.images.length}
+        charCount={form.validation.charCount}
+        hasSession={Boolean(form.sessionId)}
+        visibility={form.visibility}
+        onPressPhoto={openEditMedia}
+        onPressText={() => {
+          if (format === "standard") focusStandardCaption();
+          else setEditPanel("text");
+        }}
+        onPressSession={() => setSessionPickerOpen(true)}
+        onPressVisibility={() => setEditPanel("options")}
+      />
+
+      <CreatePostDraftRecoveredBanner
+        active={form.draftBanner && !form.restoringDraft}
+        onDismiss={form.dismissDraftBanner}
+      />
+
+      {form.restoringDraft ? (
+        <ActivityIndicator color={AUTH.gold} style={{ marginTop: 24 }} />
+      ) : (
         <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
+          ref={previewScrollRef}
+          style={styles.previewScroll}
+          contentContainerStyle={styles.previewScrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.authorRow}>
-            <UserAvatar src={user?.avatarUrl} username={user?.username ?? "?"} size={44} />
-            <View style={styles.authorMeta}>
-              <Text style={styles.username} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                @{user?.username ?? "usuario"}
-              </Text>
-              <Text style={styles.authorHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                Visible en el feed según la privacidad elegida
-              </Text>
-            </View>
-          </View>
-
-          <TextInput
-            value={form.content}
-            onChangeText={(t) => {
-              form.setContent(t);
-              if (form.submitError) form.setSubmitError(null);
-            }}
-            placeholder="¿Qué tal el entreno?"
-            placeholderTextColor={AUTH.faint}
-            multiline
-            textAlignVertical="top"
-            style={styles.input}
-            maxLength={POST_BODY_MAX + 80}
-            editable={!form.submitting}
-            selectionColor={AUTH.gold}
-            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-          />
-
-          <View style={styles.mediaSection}>
-            <Text style={styles.sectionLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Fotos
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaStrip}>
-              {form.images.map((img) => (
-                <View key={img.id} style={styles.thumbWrap}>
-                  <Image source={{ uri: img.uri }} style={styles.thumb} resizeMode="cover" accessibilityIgnoresInvertColors />
-                  <Pressable
-                    onPress={() => form.removeImage(img.id)}
-                    style={styles.thumbRemove}
-                    accessibilityRole="button"
-                    accessibilityLabel="Quitar foto"
-                  >
-                    <Text style={styles.thumbRemoveText}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-              {slotsLeft > 0 ? (
-                <Pressable
-                  onPress={() => void form.addImages()}
-                  disabled={form.mediaBusy || form.submitting}
-                  style={({ pressed }) => [styles.addTile, pressed ? styles.addTilePressed : null, form.mediaBusy ? styles.addTileBusy : null]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Añadir fotos"
-                >
-                  {form.mediaBusy ? (
-                    <ActivityIndicator color={AUTH.gold} />
-                  ) : (
-                    <>
-                      <Text style={styles.addIcon}>+</Text>
-                      <Text style={styles.addLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                        {form.images.length === 0 ? "Añadir" : `+${slotsLeft}`}
-                      </Text>
-                    </>
-                  )}
-                </Pressable>
-              ) : null}
-            </ScrollView>
-            <Text style={styles.mediaHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Hasta {POST_IMAGE_MAX_FILES} fotos · En el feed se verán en carrusel
-            </Text>
-          </View>
-
-          <View style={styles.visibilitySection}>
-            <Text style={styles.sectionLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Quién puede verlo
-            </Text>
-            <View style={styles.visRow}>
-              {POST_VISIBILITY_OPTIONS.map((opt) => {
-                const selected = form.visibility === opt.value;
-                const badge = visibilityBadgeStyle(opt.value);
-                return (
-                  <Pressable
-                    key={opt.value}
-                    onPress={() => form.setVisibility(opt.value)}
-                    disabled={form.submitting}
-                    style={[
-                      styles.visChip,
-                      {
-                        borderColor: selected ? badge.borderColor : "rgba(82, 82, 82, 0.85)",
-                        backgroundColor: selected ? badge.backgroundColor : "rgba(20, 20, 22, 0.9)",
-                      },
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                  >
-                    <Text
-                      style={[styles.visChipText, { color: selected ? badge.color : AUTH.muted }]}
-                      maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-                    >
-                      {visibilityLabel(opt.value)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.footerMeta}>
-            <Text
-              style={[
-                styles.charCount,
-                form.validation.charCount > POST_BODY_MAX ? styles.charCountOver : null,
-              ]}
-              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-            >
-              {form.validation.charCount}/{POST_BODY_MAX}
-            </Text>
-            {form.validation.hint ? (
-              <Text style={styles.hint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                {form.validation.hint}
-              </Text>
-            ) : null}
-            {form.submitError ? (
-              <Text style={styles.error} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                {form.submitError}
-              </Text>
-            ) : null}
-          </View>
+          {format === "training" ? (
+            <PostFeedPreviewTraining
+              draft={previewDraft}
+              fullBleed
+              previewMode
+              editorMode
+              onPressEditMedia={openEditMedia}
+              onPressAddMedia={canAddMorePhotos ? openAddMedia : undefined}
+              onPressEditCaption={() => setEditPanel("text")}
+              onPressLinkSession={() => setSessionPickerOpen(true)}
+              onPressViewSession={form.sessionId ? openLinkedSessionDetail : undefined}
+            />
+          ) : (
+            <PostFeedPreviewStandard
+              draft={previewDraft}
+              fullBleed
+              previewMode
+              editorMode
+              onPressEditMedia={openEditMedia}
+              onPressAddMedia={canAddMorePhotos ? openAddMedia : undefined}
+              onPressEditCaption={focusStandardCaption}
+              showSessionInline={sessionInlineOpen}
+              sessionPreviewActive={sessionInlineOpen}
+              onPressSessionPreview={
+                form.sessionId
+                  ? () => {
+                      hapticLight();
+                      setSessionInlineOpen((v) => !v);
+                    }
+                  : undefined
+              }
+              onPressViewSession={form.sessionId ? openLinkedSessionDetail : undefined}
+            />
+          )}
         </ScrollView>
-      </KeyboardAvoidingView>
+      )}
+
+      {format === "standard" && !form.restoringDraft ? (
+        <CreatePostInlineCaption
+          value={form.content}
+          onChange={form.setContent}
+          charCount={form.validation.charCount}
+        />
+      ) : null}
+
+      <View style={[styles.toolbarDock, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+        <CreatePostToolbar
+          format={format}
+          hasSession={Boolean(form.sessionId)}
+          imageCount={form.images.length}
+          activePanel={toolbarPanel}
+          onPress={openToolbarAction}
+        />
+      </View>
+
+      {form.submitError ? (
+        <Text style={styles.error} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          {form.submitError}
+        </Text>
+      ) : null}
+
+      <CreatePostEditPanel
+        kind={editPanel}
+        onClose={() => setEditPanel(null)}
+        content={form.content}
+        onChangeContent={form.setContent}
+        images={form.images}
+        mediaBusy={form.mediaBusy}
+        onAddMedia={onAddMedia}
+        onRemoveImage={form.removeImage}
+        onMoveImage={form.moveImage}
+        onToggleCrop={(id) => void form.toggleImageCrop(id)}
+        visibility={form.visibility}
+        onChangeVisibility={form.setVisibility}
+        defaultVisibility={form.defaultVisibility}
+        charCount={form.validation.charCount}
+        validationHint={form.validation.hint}
+        hasDraft={form.hasDraft}
+        onClearDraft={handleClearDraft}
+        clearDraftDisabled={form.submitting || form.restoringDraft}
+        format={format}
+      />
+
+      <CreatePostSessionPickerSheet
+        visible={sessionPickerOpen}
+        onClose={() => setSessionPickerOpen(false)}
+        sessions={sessionPicker.sessions}
+        available={sessionAvailable}
+        loading={sessionPicker.loading}
+        value={form.sessionId}
+        suggestedSessionId={form.suggestedSessionId}
+        showUnlink
+        onSelect={(id, meta) => void form.selectSession(id, meta)}
+      />
+
     </View>
   );
 }
 
-const THUMB = 88;
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: AUTH.bg,
-  },
-  flex: {
-    flex: 1,
-  },
+  root: { flex: 1, backgroundColor: AUTH.bg },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
-    paddingBottom: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(82, 82, 82, 0.65)",
+    borderBottomColor: "rgba(82, 82, 82, 0.6)",
+    backgroundColor: "rgba(8, 8, 10, 0.95)",
   },
-  headerSide: {
-    width: 88,
-    minHeight: 36,
-    justifyContent: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    textAlign: "center",
-    color: AUTH.neutral100,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  cancelText: {
-    color: AUTH.muted,
-    fontSize: 16,
-  },
-  publishText: {
-    color: AUTH.gold,
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "right",
-  },
-  publishDisabled: {
-    opacity: 0.4,
-  },
-  scroll: {
-    padding: 16,
-    paddingBottom: 32,
-    gap: 18,
-  },
-  authorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  authorMeta: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  username: {
-    color: AUTH.neutral100,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  authorHint: {
-    color: AUTH.faint,
-    fontSize: 12,
-  },
-  input: {
-    minHeight: 140,
-    color: AUTH.neutral100,
-    fontSize: 17,
-    lineHeight: 25,
-    padding: 0,
-  },
-  mediaSection: {
-    gap: 10,
-  },
-  sectionLabel: {
-    color: AUTH.muted,
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  mediaStrip: {
-    gap: 10,
-    alignItems: "center",
-  },
-  thumbWrap: {
-    width: THUMB,
-    height: THUMB,
-    borderRadius: 12,
-    overflow: "hidden",
-    backgroundColor: "#141416",
-  },
-  thumb: {
-    width: "100%",
-    height: "100%",
-  },
-  thumbRemove: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbRemoveText: {
-    color: "#fff",
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: "600",
-  },
-  addTile: {
-    width: THUMB,
-    height: THUMB,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "rgba(212, 175, 55, 0.45)",
-    backgroundColor: "rgba(35, 32, 22, 0.45)",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
-  },
-  addTilePressed: {
-    opacity: 0.88,
-  },
-  addTileBusy: {
-    opacity: 0.7,
-  },
-  addIcon: {
-    color: AUTH.gold,
-    fontSize: 26,
-    fontWeight: "300",
-  },
-  addLabel: {
-    color: AUTH.muted,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  mediaHint: {
-    color: AUTH.faint,
-    fontSize: 12,
-  },
-  visibilitySection: {
-    gap: 10,
-  },
-  visRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  visChip: {
-    borderRadius: 999,
-    borderWidth: 1,
+  headerSide: { width: 88, justifyContent: "center", minHeight: 40 },
+  headerSideEnd: { alignItems: "flex-end" },
+  headerCenter: { flex: 1, alignItems: "center", gap: 2 },
+  headerSub: { color: AUTH.muted, fontSize: 12, fontWeight: "600", textAlign: "center" },
+  cancelText: { color: AUTH.muted, fontSize: 16 },
+  publishPill: {
     paddingHorizontal: 14,
     paddingVertical: 8,
+    borderRadius: 999,
+    minWidth: 84,
+    alignItems: "center",
   },
-  visChipText: {
-    fontSize: 13,
-    fontWeight: "600",
+  publishPillReady: {
+    backgroundColor: AUTH.gold,
   },
-  footerMeta: {
-    gap: 6,
-    paddingTop: 4,
+  publishPillDisabled: {
+    backgroundColor: "rgba(115, 115, 115, 0.35)",
   },
-  charCount: {
-    color: AUTH.faint,
-    fontSize: 12,
-    textAlign: "right",
+  publishPillPressed: { opacity: 0.9 },
+  publishPillText: {
+    color: "#000",
+    fontSize: 14,
+    fontWeight: "800",
   },
-  charCountOver: {
-    color: AUTH.danger,
+  publishPillTextDisabled: {
+    color: "rgba(245, 245, 245, 0.55)",
   },
-  hint: {
-    color: AUTH.muted,
-    fontSize: 13,
-    lineHeight: 18,
+  previewScroll: { flex: 1 },
+  previewScrollContent: { flexGrow: 1, justifyContent: "flex-start", paddingVertical: 8 },
+  toolbarDock: {
+    marginHorizontal: 10,
+    marginTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(82, 82, 82, 0.55)",
+    borderRadius: 16,
+    backgroundColor: "rgba(8, 8, 10, 0.94)",
+    borderWidth: 1,
+    borderColor: AUTH.cardBorder,
   },
   error: {
     color: AUTH.danger,
     fontSize: 13,
-    lineHeight: 18,
+    textAlign: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 6,
   },
 });

@@ -142,7 +142,7 @@ export function PublicProfilePostsSection({
   const detailPost = modalPost ?? selectedPost;
 
   const handleSubmitComment = useCallback(async () => {
-    if (!detailPost) return;
+    if (!detailPost || !user?.id) return;
     const raw = commentByPostId[detailPost.id] ?? "";
     const parsed = commentFormSchema.safeParse({ content: raw });
     if (!parsed.success) {
@@ -152,12 +152,52 @@ export function PublicProfilePostsSection({
       }));
       return;
     }
-    setCommentingPostId(detailPost.id);
     setCommentErrorsByPostId((prev) => ({ ...prev, [detailPost.id]: null }));
+    const tempId = `temp-comment-${Date.now()}`;
+    const optimisticComment = {
+      id: tempId,
+      postId: detailPost.id,
+      userId: user.id,
+      authorUsername: user.username,
+      authorAvatarUrl: user.avatarUrl ?? "",
+      content: parsed.data.content,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setLocalPosts((prev) =>
+      prev.map((p) =>
+        p.id === detailPost.id
+          ? {
+              ...p,
+              comments: [...p.comments, optimisticComment].sort((a, b) =>
+                a.createdAt < b.createdAt ? -1 : 1
+              ),
+            }
+          : p
+      )
+    );
+    setCommentByPostId((prev) => ({ ...prev, [detailPost.id]: "" }));
+    setCommentingPostId(detailPost.id);
     try {
-      await createComment(detailPost.id, { content: parsed.data.content });
-      setCommentByPostId((prev) => ({ ...prev, [detailPost.id]: "" }));
+      const newComment = await createComment(detailPost.id, { content: parsed.data.content });
+      setLocalPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== detailPost.id) return p;
+          const comments = p.comments
+            .filter((c) => c.id !== tempId)
+            .concat(newComment)
+            .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+          return { ...p, comments };
+        })
+      );
     } catch (e) {
+      setLocalPosts((prev) =>
+        prev.map((p) =>
+          p.id === detailPost.id
+            ? { ...p, comments: p.comments.filter((c) => c.id !== tempId) }
+            : p
+        )
+      );
       setCommentErrorsByPostId((prev) => ({
         ...prev,
         [detailPost.id]: getErrorMessage(e, "No se pudo publicar el comentario"),
@@ -165,7 +205,7 @@ export function PublicProfilePostsSection({
     } finally {
       setCommentingPostId(null);
     }
-  }, [detailPost, commentByPostId]);
+  }, [detailPost, commentByPostId, user?.id, user?.username, user?.avatarUrl]);
 
   if (showRestricted) {
     return (

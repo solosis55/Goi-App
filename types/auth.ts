@@ -94,8 +94,19 @@ export type DiscoverMutualPreview = {
 
 export type DiscoverUser = ProfileUser & {
   isFollowing: boolean;
+  followPending?: boolean;
   mutualCount?: number;
   mutualPreview?: DiscoverMutualPreview[];
   reason?: string;
   activeThisWeek?: boolean;
+  trainedThisWeek?: boolean;
+};
+
+export type DiscoverFacetParam = "all" | "active" | "trained" | "sameGoal" | "nearby";
+
+export type DiscoverPageResponse = {
+  users: DiscoverUser[];
+  nextOffset: number | null;
+  total?: number;
+  facet?: DiscoverFacetParam;
 };

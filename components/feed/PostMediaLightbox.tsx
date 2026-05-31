@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Image,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -12,8 +11,9 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import { feedPostMediaRecyclingKey, resolveFeedPostMediaUrl } from "../../utils/feedPostMediaUrl";
+import { PostFeedImage } from "./PostFeedImage";
 
 type PostMediaLightboxProps = {
   visible: boolean;
@@ -24,7 +24,7 @@ type PostMediaLightboxProps = {
 
 export function PostMediaLightbox({ visible, urls, initialIndex, onClose }: PostMediaLightboxProps) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(initialIndex);
 
@@ -72,11 +72,17 @@ export function PostMediaLightbox({ visible, urls, initialIndex, onClose }: Post
           style={styles.scroller}
         >
           {urls.map((url, i) => {
-            const resolved = resolveMediaUrl(url);
+            const resolved = resolveFeedPostMediaUrl(url);
             return (
-              <View key={`${url}-${i}`} style={[styles.page, { width }]}>
+              <View key={feedPostMediaRecyclingKey(url, `lightbox-${i}`)} style={[styles.page, { width, height }]}>
                 {resolved ? (
-                  <Image source={{ uri: resolved }} style={styles.image} resizeMode="contain" accessibilityIgnoresInvertColors />
+                  <PostFeedImage
+                    url={url}
+                    layoutWidth={width}
+                    layoutHeight={height}
+                    recyclingKey={feedPostMediaRecyclingKey(url, `lightbox-${i}`)}
+                    contentFit="contain"
+                  />
                 ) : (
                   <Text style={styles.fallback}>Imagen no disponible</Text>
                 )}
@@ -121,13 +127,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   page: {
-    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
   },
   fallback: {
     color: AUTH.muted,

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlashList } from "@shopify/flash-list";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
-  SectionList,
   StyleSheet,
   Text,
   View,
+  type ViewToken,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, AUTH_PAD, authScreenStyles } from "../../constants/authUi";
@@ -50,6 +51,10 @@ export type ExerciseCatalogPanelProps = {
 };
 
 type MuscleSection = { title: string; key: string; data: Exercise[] };
+
+type CatalogListItem =
+  | { kind: "sectionHeader"; key: string; title: string }
+  | { kind: "exercise"; exercise: Exercise };
 
 function CatalogListHeader({ count, hasFilters }: { count: number; hasFilters: boolean }) {
   return (
@@ -106,6 +111,7 @@ export function ExerciseCatalogPanel({
   const [detailExercise, setDetailExercise] = useState<Exercise | null>(null);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [floatingSectionTitle, setFloatingSectionTitle] = useState<string | null>(null);
 
   useEffect(() => {
     void getCatalogExerciseUsage().then(setUsage);
@@ -127,6 +133,70 @@ export function ExerciseCatalogPanel({
     }
     return groupExercisesByMuscle(sorted);
   }, [sorted, sortMode]);
+
+  const showSectionHeaders = sortMode === "muscle" && sections.length > 1;
+
+  const listItems = useMemo((): CatalogListItem[] => {
+    const out: CatalogListItem[] = [];
+    for (const section of sections) {
+      if (showSectionHeaders) {
+        out.push({ kind: "sectionHeader", key: `${section.key}-header`, title: section.title });
+      }
+      for (const exercise of section.data) {
+        out.push({ kind: "exercise", exercise });
+      }
+    }
+    return out;
+  }, [sections, showSectionHeaders]);
+
+  const listItemsRef = useRef(listItems);
+  listItemsRef.current = listItems;
+
+  const sectionTitleByIndex = useMemo(() => {
+    const map = new Map<number, string>();
+    if (!showSectionHeaders) return map;
+    let current = "";
+    for (let i = 0; i < listItems.length; i += 1) {
+      const item = listItems[i];
+      if (item.kind === "sectionHeader") {
+        current = item.title;
+      } else if (item.kind === "exercise" && current) {
+        map.set(i, current);
+      }
+    }
+    return map;
+  }, [listItems, showSectionHeaders]);
+
+  useEffect(() => {
+    if (!showSectionHeaders) setFloatingSectionTitle(null);
+  }, [showSectionHeaders, sortMode, query, muscleSlugs, equipmentSlugs]);
+
+  const catalogViewabilityConfig = useRef({ itemVisiblePercentThreshold: 20, minimumViewTime: 80 }).current;
+
+  const onCatalogViewableChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!showSectionHeaders) {
+        setFloatingSectionTitle(null);
+        return;
+      }
+      const items = listItemsRef.current;
+      const visible = viewableItems
+        .filter((token) => token.isViewable && token.index != null)
+        .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+      if (visible.length === 0) return;
+
+      const topIndex = visible[0].index!;
+      const topItem = items[topIndex];
+      if (topItem?.kind === "sectionHeader") {
+        setFloatingSectionTitle(null);
+        return;
+      }
+
+      const title = sectionTitleByIndex.get(topIndex);
+      setFloatingSectionTitle(title ?? null);
+    },
+    [showSectionHeaders, sectionTitleByIndex]
+  );
 
   const totalCount = sorted.length;
   const hasFilters =
@@ -241,6 +311,70 @@ export function ExerciseCatalogPanel({
 
   const listBottomPad = insets.bottom + 24 + (multiSelectMode && pickedIds.length > 0 ? 72 : 0);
 
+  const listExtraKey = useMemo(
+    () =>
+      [
+        highlightId ?? "",
+        pickedIds.join(","),
+        [...selectedIds].sort().join(","),
+        multiSelectMode ? "1" : "0",
+        atCapacity ? "1" : "0",
+      ].join("|"),
+    [highlightId, pickedIds, selectedIds, multiSelectMode, atCapacity]
+  );
+
+  const renderCatalogItem = useCallback(
+    ({ item }: { item: CatalogListItem }) => {
+      if (item.kind === "sectionHeader") {
+        return (
+          <View style={catalogStyles.sectionHeader}>
+            <Text style={catalogStyles.sectionHeaderText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {item.title}
+            </Text>
+          </View>
+        );
+      }
+      const exercise = item.exercise;
+      const already = selectedIds.has(exercise.id);
+      const disabled = already || (!multiSelectMode && atCapacity);
+      const multiChecked = pickedIds.includes(exercise.id);
+      return (
+        <ExerciseCatalogRow
+          exercise={exercise}
+          already={already}
+          disabled={disabled}
+          highlighted={highlightId === exercise.id}
+          multiSelect={multiSelectMode}
+          multiChecked={multiChecked}
+          onToggleMulti={() => togglePicked(exercise.id)}
+          onOpenDetail={() => setDetailExercise(exercise)}
+          onAdd={() => {
+            if (multiSelectMode) {
+              togglePicked(exercise.id);
+              return;
+            }
+            if (disabled) return;
+            handlePickOne(exercise.id);
+          }}
+        />
+      );
+    },
+    [
+      selectedIds,
+      multiSelectMode,
+      atCapacity,
+      pickedIds,
+      highlightId,
+      togglePicked,
+      handlePickOne,
+    ]
+  );
+
+  const keyExtractor = useCallback((item: CatalogListItem) => {
+    if (item.kind === "sectionHeader") return item.key;
+    return item.exercise.id;
+  }, []);
+
   return (
     <View
       style={[
@@ -282,50 +416,31 @@ export function ExerciseCatalogPanel({
           </Text>
         </View>
       ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-          stickySectionHeadersEnabled
-          ListHeaderComponent={stickyToolbar}
-          contentContainerStyle={{ paddingBottom: listBottomPad }}
-          ListEmptyComponent={<CatalogEmptyState hasFilters={hasFilters} />}
-          renderSectionHeader={({ section }) =>
-            sortMode === "muscle" && sections.length > 1 ? (
-              <View style={catalogStyles.sectionHeader}>
-                <Text style={catalogStyles.sectionHeaderText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {section.title}
-                </Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            const already = selectedIds.has(item.id);
-            const disabled = already || (!multiSelectMode && atCapacity);
-            const multiChecked = pickedIds.includes(item.id);
-            return (
-              <ExerciseCatalogRow
-                exercise={item}
-                already={already}
-                disabled={disabled}
-                highlighted={highlightId === item.id}
-                multiSelect={multiSelectMode}
-                multiChecked={multiChecked}
-                onToggleMulti={() => togglePicked(item.id)}
-                onOpenDetail={() => setDetailExercise(item)}
-                onAdd={() => {
-                  if (multiSelectMode) {
-                    togglePicked(item.id);
-                    return;
-                  }
-                  if (disabled) return;
-                  handlePickOne(item.id);
-                }}
-              />
-            );
-          }}
-        />
+        <View style={styles.listWrap}>
+          <FlashList
+            style={styles.list}
+            data={listItems}
+            keyExtractor={keyExtractor}
+            getItemType={(item) => item.kind}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            ListHeaderComponent={stickyToolbar}
+            contentContainerStyle={{ paddingBottom: listBottomPad }}
+            ListEmptyComponent={<CatalogEmptyState hasFilters={hasFilters} />}
+            extraData={listExtraKey}
+            drawDistance={560}
+            renderItem={renderCatalogItem}
+            viewabilityConfig={catalogViewabilityConfig}
+            onViewableItemsChanged={onCatalogViewableChanged}
+          />
+          {floatingSectionTitle ? (
+            <View style={catalogStyles.floatingSectionChip} pointerEvents="none">
+              <Text style={catalogStyles.sectionHeaderText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                {floatingSectionTitle}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       )}
 
       {multiSelectMode && pickedIds.length > 0 ? (
@@ -384,6 +499,13 @@ const styles = StyleSheet.create({
   loader: {
     flex: 1,
     gap: 10,
+  },
+  list: {
+    flex: 1,
+  },
+  listWrap: {
+    flex: 1,
+    position: "relative",
   },
   errorText: {
     color: AUTH.danger,

@@ -6,8 +6,8 @@ import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useAuth } from "../../context/AuthContext";
 import { useProfilePosts } from "../../hooks/useProfilePosts";
+import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
 import type { Post } from "../../types/post";
-import { loadSavedPostIds, toggleSavedPost } from "../../utils/feedLocalPrefs";
 import { getErrorMessage } from "../../utils/errorMessages";
 import { useSyncProfilePostFromDetail } from "../../hooks/useSyncProfilePostFromDetail";
 import {
@@ -39,11 +39,13 @@ export function ProfilePostsSection({
   const { user } = useAuth();
   const useDetailScreen = usesProfilePostDetailScreen();
   const postsState = useProfilePosts(userId, pinnedPostId);
+  const savedPostIds = useFeedPrefsStore((s) => s.savedPostIds);
+  const toggleSavedPostForUser = useFeedPrefsStore((s) => s.toggleSavedPostForUser);
+  const savedIdSet = useMemo(() => new Set(savedPostIds), [savedPostIds]);
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [modalPost, setModalPost] = useState<Post | null>(null);
   const [gridThumbKey, setGridThumbKey] = useState(0);
-  const [savedIdSet, setSavedIdSet] = useState<Set<string>>(new Set());
   const [commentByPostId, setCommentByPostId] = useState<Record<string, string>>({});
   const [commentErrorsByPostId, setCommentErrorsByPostId] = useState<Record<string, string | null>>({});
   const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
@@ -59,18 +61,9 @@ export function ProfilePostsSection({
     onPostsTotalChange?.(postsState.total);
   }, [onPostsTotalChange, postsState.total]);
 
-  const reloadSavedIds = useCallback(async () => {
-    if (!userId) {
-      setSavedIdSet(new Set());
-      return;
-    }
-    const ids = await loadSavedPostIds(userId);
-    setSavedIdSet(new Set(ids));
-  }, [userId]);
-
   useEffect(() => {
-    void reloadSavedIds();
-  }, [reloadSavedIds, postsState.savedOrphansCount, postsState.sourceTab]);
+    postsState.refreshSavedLocal();
+  }, [savedPostIds, postsState.refreshSavedLocal]);
 
   const selectedPost = useMemo(() => {
     if (!selectedPostId) return null;
@@ -236,13 +229,12 @@ export function ProfilePostsSection({
   );
 
   const handleToggleSave = useCallback(
-    async (postId: string) => {
+    (postId: string) => {
       if (!userId) return;
-      await toggleSavedPost(userId, postId);
-      await reloadSavedIds();
+      toggleSavedPostForUser(userId, postId);
       postsState.refreshSavedLocal();
     },
-    [userId, reloadSavedIds, postsState]
+    [userId, toggleSavedPostForUser, postsState]
   );
 
   const handlePin = useCallback(

@@ -7,7 +7,6 @@ import { createComment, deletePost, toggleLike } from "../../api/posts";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useAuth } from "../../context/AuthContext";
-import { useGoiTheme } from "../../constants/theme";
 import type { Post } from "../../types/post";
 import { getErrorMessage } from "../../utils/errorMessages";
 import {
@@ -26,7 +25,6 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { palette, typography } = useGoiTheme();
   const likeInFlightRef = useRef(new Set<string>());
 
   const [openingMeta] = useState(() => consumeOpeningProfileMeta());
@@ -163,6 +161,16 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
           post={post}
           currentUserId={user?.id}
           sessionAvatarUrl={user?.avatarUrl}
+          onPressSession={
+            post.sessionId
+              ? () =>
+                  router.push({
+                    pathname: "/sesion/[id]",
+                    params: { id: post.sessionId as string, postId: post.id },
+                  })
+              : undefined
+          }
+          workoutTitle={post.sessionWorkoutTitle ?? undefined}
           commentValue={commentValue}
           onChangeComment={setCommentValue}
           onSubmitComment={() => void handleSubmitComment()}
@@ -174,8 +182,6 @@ export function ProfilePostDetailScreen({ postId, ownProfile }: ProfilePostDetai
           commentError={commentError}
           pinnedPostId={ownProfile ? pinnedPostId : undefined}
           onSetPinned={ownProfile ? onSetPinned : undefined}
-          palette={palette}
-          typography={typography}
         />
       </GuardedScrollView>
     </View>

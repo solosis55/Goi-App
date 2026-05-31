@@ -9,9 +9,11 @@ import { NotificationsList } from "./NotificationsList";
 
 type NotificationsTabScreenProps = {
   showBack?: boolean;
+  /** Dentro del tab Social con segmentos (sin cabecera duplicada). */
+  embedded?: boolean;
 };
 
-export function NotificationsTabScreen({ showBack = false }: NotificationsTabScreenProps) {
+export function NotificationsTabScreen({ showBack = false, embedded = false }: NotificationsTabScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { refreshBadge } = useSocialHub();
@@ -30,14 +32,20 @@ export function NotificationsTabScreen({ showBack = false }: NotificationsTabScr
   );
 
   const onOpenPost = useCallback(
-    (postId: string) => {
-      router.push({ pathname: "/(tabs)", params: { focusPostId: postId } });
+    (postId: string, commentId?: string) => {
+      router.push({
+        pathname: "/(tabs)",
+        params: commentId
+          ? { focusPostId: postId, focusCommentId: commentId }
+          : { focusPostId: postId },
+      });
     },
     [router]
   );
 
-  return (
-    <AppScreenShell variant="feed">
+  const body = (
+    <>
+      {embedded ? null : (
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 8) }]}>
         {showBack ? (
           <View style={styles.headerTopRow}>
@@ -65,18 +73,29 @@ export function NotificationsTabScreen({ showBack = false }: NotificationsTabScr
           Me gusta, comentarios y nuevos seguidores
         </Text>
       </View>
-      <View style={styles.listWrap}>
+      )}
+      <View style={[styles.listWrap, embedded ? styles.listWrapEmbedded : null]}>
         <NotificationsList
           onOpenActor={onOpenActor}
           onOpenPost={onOpenPost}
           onUnreadChange={() => void refreshBadge()}
         />
       </View>
-    </AppScreenShell>
+    </>
   );
+
+  if (embedded) {
+    return <View style={styles.embeddedRoot}>{body}</View>;
+  }
+
+  return <AppScreenShell variant="feed">{body}</AppScreenShell>;
 }
 
 const styles = StyleSheet.create({
+  embeddedRoot: {
+    flex: 1,
+    minHeight: 0,
+  },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 12,
@@ -122,5 +141,8 @@ const styles = StyleSheet.create({
   },
   listWrap: {
     flex: 1,
+  },
+  listWrapEmbedded: {
+    minHeight: 0,
   },
 });

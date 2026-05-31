@@ -4,20 +4,19 @@ import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  type FlatList as FlatListType,
   RefreshControl,
   StyleSheet,
   View,
   type ViewToken,
 } from "react-native";
-import Animated, { runOnJS, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
+import { runOnJS, useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getDiscover, getFollowing } from "../../api/auth";
-import { createComment, deletePost, getPosts, toggleLike } from "../../api/posts";
+import { getDiscover } from "../../api/auth";
+import { createComment, deletePost, toggleLike } from "../../api/posts";
 import { getStories } from "../../api/stories";
 import { getWorkouts } from "../../api/workouts";
-import { ApiError } from "../../api/client";
 import { AppScreenShell } from "../../components/AppScreenShell";
+import { FeedAnimatedFlashList, type FeedAnimatedFlashListRef } from "../../components/feed/FeedAnimatedFlashList";
 import { FeedDaySeparator } from "../../components/feed/FeedDaySeparator";
 import { FeedEmptyState } from "../../components/feed/FeedEmptyState";
 import { FeedErrorBanner } from "../../components/feed/FeedErrorBanner";
@@ -27,54 +26,50 @@ import { FeedStickyScopeHeader } from "../../components/feed/FeedStickyScopeHead
 import { FeedReportModal } from "../../components/feed/FeedReportModal";
 import { FeedScrollToTopFab } from "../../components/feed/FeedScrollToTopFab";
 import { FeedDiscoveryZone } from "../../components/feed/FeedDiscoveryZone";
-import {
-  FeedSuggestionsLoadingRow,
-  FeedSuggestionsRow,
-} from "../../components/feed/FeedSuggestionsRow";
+import { FeedWorkoutEventRow } from "../../components/feed/FeedWorkoutEventRow";
+import { FeedInlineSuggestionsRow, FeedSuggestionsRow } from "../../components/feed/FeedSuggestionsRow";
 import { FeedNewPostsBanner } from "../../components/feed/FeedNewPostsBanner";
 import { FeedTopBar } from "../../components/feed/FeedTopBar";
-import { PostCard } from "../../components/feed/PostCard";
+import { FeedPostCardRow } from "../../components/feed/FeedPostCardRow";
 import { StoryViewerModal } from "../../components/stories/StoryViewerModal";
 import { AUTH } from "../../constants/authUi";
 import { camaraHistoriaHref } from "../../constants/storyRoutes";
-import { FEED_PAGE_SIZE, type FeedScope } from "../../constants/feed";
-import { FEED_SUGGESTIONS_INSERT_AFTER_POSTS, FEED_SUGGESTIONS_SNOOZE_DAYS } from "../../constants/feedSuggestions";
-import type { FeedContentFilter } from "../../constants/feedContentFilter";
 import { commentFormSchema } from "../../constants/commentSchema";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
 import { useSocialHub } from "../../context/SocialHubContext";
+import { useFeed } from "../../hooks/useFeed";
+import { useFeedGoldBeamPref } from "../../hooks/useFeedGoldBeamPref";
+import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
+import { useFeedInteractionStore } from "../../stores/useFeedInteractionStore";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import {
   FeedGoldBeamProvider,
-  FeedGoldBeamScrollBridge,
 } from "../../context/FeedGoldBeamContext";
+import {
+  FeedPostActionsProvider,
+  type FeedPostActionsHandlers,
+  type FeedPostActionsSnapshot,
+} from "../../context/FeedPostActionsContext";
 import { goiToast } from "../../context/GoiToastContext";
 import type { DiscoverUser } from "../../types/auth";
 import { getErrorMessage } from "../../utils/errorMessages";
-import {
-  appendLocalReport,
-  loadMutedUserIds,
-  loadSavedPostIds,
-  loadSuggestionsDismiss,
-  muteUser,
-  saveSuggestionsDismiss,
-  toggleSavedPost,
-  type SuggestionsDismissState,
-} from "../../utils/feedLocalPrefs";
-import { buildFeedListItems, feedListIndexForPostId, type FeedListItem } from "../../utils/feedListItems";
+import { appendLocalReport } from "../../utils/feedLocalPrefs";
+import { feedListIndexForPostId, type FeedListItem } from "../../utils/feedListItems";
 import {
   feedSuggestionsPlacement,
   shouldOfferFeedSuggestions,
 } from "../../utils/feedSuggestionsVisibility";
-import { filterFeedPosts } from "../../utils/feedTimeline";
-import { readStoredFeedScope, writeStoredFeedScope } from "../../utils/feedScopeStorage";
-import { sharePost } from "../../utils/sharePost";
+import { postEligibleForGoldBeam } from "../../utils/feedTimeline";
+import { buildStoryStripAuthors, storyViewerAuthors } from "../../utils/storyStripAuthors";
 import type { Post } from "../../types/post";
 import type { FeedStoryAuthor } from "../../types/story";
 
 const FEED_MAX_WIDTH = 672;
 const LIST_BOTTOM_PAD = 24;
 const SCROLL_TOP_FAB_THRESHOLD = 380;
+const SCROLL_FAB_JS_THROTTLE_MS = 100;
+const FEED_AUX_REFRESH_STALE_MS = 45_000;
 
 function FeedListSeparator() {
   return <View style={styles.listGap} />;
@@ -82,45 +77,75 @@ function FeedListSeparator() {
 
 export default function HomeFeedScreen() {
   const router = useRouter();
-  const { focusPostId: focusPostIdParam } = useLocalSearchParams<{ focusPostId?: string }>();
+  const {
+    focusPostId: focusPostIdParam,
+    focusCommentId: focusCommentIdParam,
+    feedRefresh: feedRefreshParam,
+  } = useLocalSearchParams<{
+    focusPostId?: string;
+    focusCommentId?: string;
+    feedRefresh?: string;
+  }>();
   const { palette, typography } = useGoiTheme();
   const { isHydrated, isAuthenticated, user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
   const [storyAuthorsFromApi, setStoryAuthorsFromApi] = useState<FeedStoryAuthor[]>([]);
   const [storySeenRevision, setStorySeenRevision] = useState(0);
   const [storyViewerOpen, setStoryViewerOpen] = useState(false);
   const [storyViewerAuthorIdx, setStoryViewerAuthorIdx] = useState(0);
   const [storyViewerSlideIdx, setStoryViewerSlideIdx] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<{ message: string; detail?: string } | null>(null);
-  const [commentByPostId, setCommentByPostId] = useState<Record<string, string>>({});
-  const [commentErrorsByPostId, setCommentErrorsByPostId] = useState<Record<string, string | null>>({});
-  const [commentingPostId, setCommentingPostId] = useState<string | null>(null);
-  const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
-  const [savedPostIdSet, setSavedPostIdSet] = useState<Set<string>>(() => new Set());
-  const [mutedUserIdSet, setMutedUserIdSet] = useState<Set<string>>(() => new Set());
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const setCommentFieldError = useFeedInteractionStore((s) => s.setCommentFieldError);
+  const setCommentingPostId = useFeedInteractionStore((s) => s.setCommentingPostId);
+  const setDeletingPostId = useFeedInteractionStore((s) => s.setDeletingPostId);
+  const clearCommentError = useFeedInteractionStore((s) => s.clearCommentError);
+  const suggestionsDismiss = useFeedPrefsStore((s) => s.suggestionsDismiss);
+  const hydrateFeedLocalPrefs = useFeedPrefsStore((s) => s.hydrateFeedLocalPrefs);
+  const muteAuthorInStore = useFeedPrefsStore((s) => s.muteAuthor);
+  const toggleSavedPostForUser = useFeedPrefsStore((s) => s.toggleSavedPostForUser);
+  const snoozeSuggestions = useFeedPrefsStore((s) => s.snoozeSuggestions);
+  const dismissSuggestionsPermanent = useFeedPrefsStore((s) => s.dismissSuggestionsPermanent);
+  const followingIds = useSocialHubStore((s) => s.followingIds);
+  const applyFollowingChange = useSocialHubStore((s) => s.applyFollowingChange);
   const [discoverUsers, setDiscoverUsers] = useState<DiscoverUser[]>([]);
   const [discoverLoading, setDiscoverLoading] = useState(false);
-  const [feedScope, setFeedScope] = useState<FeedScope>("all");
-  const [feedScopeReady, setFeedScopeReady] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(FEED_PAGE_SIZE);
+  const discoverUsersRef = useRef<DiscoverUser[]>([]);
+  discoverUsersRef.current = discoverUsers;
   const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>({});
   const [highlightedPostId, setHighlightedPostId] = useState<string | null>(null);
   const [showScrollFab, setShowScrollFab] = useState(false);
   const [reportTarget, setReportTarget] = useState<Post | null>(null);
-  const [suggestionsDismiss, setSuggestionsDismiss] = useState<SuggestionsDismissState>({ mode: "none" });
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [contentFilter, setContentFilter] = useState<FeedContentFilter>("all");
   const { unreadNotifications, refreshBadge } = useSocialHub();
-  const [pendingNewCount, setPendingNewCount] = useState(0);
+  const feed = useFeed(user?.id);
+  const {
+    posts,
+    postCount,
+    feedScope,
+    feedScopeReady,
+    initScope,
+    setFeedScopePersisted,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    fetchFeed,
+    loadMore,
+    hasMore,
+    pendingNewCount,
+    setPendingNewCount,
+    markScrolledDown,
+    markAtTop,
+    buildListItems,
+    patchTimeline,
+    patchPost,
+  } = feed;
+  const { enabled: goldBeamEnabled } = useFeedGoldBeamPref();
   const feedFocusCountRef = useRef(0);
-  const listRef = useRef<FlatListType<FeedListItem>>(null);
+  const feedRefreshHandledRef = useRef(false);
+  const feedAuxRefreshAtRef = useRef(0);
+  const scrollFabStateRef = useRef({ atTop: true, showFab: false, lastJsAt: 0 });
+  const listRef = useRef<FeedAnimatedFlashListRef>(null);
   const scrollY = useSharedValue(0);
-  const beamNotifyScrollRef = useRef<(y: number) => void>(() => {});
   const [activeBeamPostId, setActiveBeamPostId] = useState<string | null>(null);
-  const beamViewabilityConfig = useRef({ itemVisiblePercentThreshold: 25, minimumViewTime: 0 }).current;
+  const beamViewabilityConfig = useRef({ itemVisiblePercentThreshold: 45, minimumViewTime: 280 }).current;
   const onBeamViewableChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const posts = viewableItems.filter(
       (t) => t.isViewable && t.item != null && (t.item as FeedListItem).kind === "post"
@@ -129,87 +154,67 @@ export default function HomeFeedScreen() {
 
     const visiblePostIds = posts
       .map((t) => (t.item as FeedListItem))
-      .filter((row): row is Extract<FeedListItem, { kind: "post" }> => row.kind === "post")
+      .filter(
+        (row): row is Extract<FeedListItem, { kind: "post" }> =>
+          row.kind === "post" && postEligibleForGoldBeam(row.post)
+      )
       .map((row) => row.post.id);
+
+    if (visiblePostIds.length === 0) return;
 
     setActiveBeamPostId((current) => {
       if (current && visiblePostIds.includes(current)) {
         return current;
       }
       const sorted = [...posts].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-      const center = sorted[Math.floor(sorted.length / 2)];
+      const eligible = sorted.filter((t) => {
+        const row = t.item as FeedListItem;
+        return row.kind === "post" && postEligibleForGoldBeam(row.post);
+      });
+      const center = eligible[Math.floor(eligible.length / 2)] ?? sorted[0];
       const row = center.item as FeedListItem;
-      return row.kind === "post" ? row.post.id : current;
+      return row.kind === "post" && postEligibleForGoldBeam(row.post) ? row.post.id : current;
     });
   }).current;
-  const beamViewabilityPairs = useRef([
-    { viewabilityConfig: beamViewabilityConfig, onViewableItemsChanged: onBeamViewableChanged },
-  ]).current;
+  const beamViewabilityPairs = useMemo(
+    () =>
+      goldBeamEnabled
+        ? [{ viewabilityConfig: beamViewabilityConfig, onViewableItemsChanged: onBeamViewableChanged }]
+        : [],
+    [goldBeamEnabled, beamViewabilityConfig, onBeamViewableChanged]
+  );
   const likeInFlightRef = useRef(new Set<string>());
   const focusHandledRef = useRef<string | null>(null);
-  const feedAnchorPostIdRef = useRef<string | null>(null);
-  const scrollAtTopRef = useRef(true);
   const insets = useSafeAreaInsets();
-
-  useEffect(() => {
-    void readStoredFeedScope().then((scope) => {
-      setFeedScope(scope);
-      setFeedScopeReady(true);
-    });
-  }, []);
-
-  const setFeedScopePersisted = useCallback((scope: FeedScope) => {
-    setFeedScope(scope);
-    void writeStoredFeedScope(scope);
-    setVisibleCount(FEED_PAGE_SIZE);
-  }, []);
-
-  const setContentFilterPersisted = useCallback((filter: FeedContentFilter) => {
-    setContentFilter(filter);
-    setVisibleCount(FEED_PAGE_SIZE);
-  }, []);
 
   const scrollFeedToTop = useCallback(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    scrollAtTopRef.current = true;
-    feedAnchorPostIdRef.current = posts[0]?.id ?? null;
-    setPendingNewCount(0);
-  }, [posts]);
+    feed.scrollToTop();
+  }, [feed]);
 
   const storyStripAuthors = useMemo((): FeedStoryAuthor[] => {
     if (!user) return [];
-    const withoutSelf = storyAuthorsFromApi.filter((a) => a.userId !== user.id);
-    const mine = storyAuthorsFromApi.find((a) => a.userId === user.id);
-    const selfRow: FeedStoryAuthor =
-      mine ?? {
-        userId: user.id,
-        authorUsername: user.username,
-        authorAvatarUrl: user.avatarUrl ?? "",
-        slides: [],
-      };
-    return [selfRow, ...withoutSelf];
+    return buildStoryStripAuthors(storyAuthorsFromApi, {
+      id: user.id,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+    });
   }, [storyAuthorsFromApi, user]);
 
-  const storyViewerAuthors = useMemo(
-    () => storyStripAuthors.filter((a) => a.slides.length > 0),
+  const storyViewerAuthorsList = useMemo(
+    () => storyViewerAuthors(storyStripAuthors),
     [storyStripAuthors]
   );
 
-  const filteredPosts = useMemo(
-    () =>
-      filterFeedPosts(posts, feedScope, {
-        userId: user?.id,
-        followingIds,
-        mutedUserIds: mutedUserIdSet,
-        contentFilter,
-      }),
-    [posts, feedScope, user?.id, followingIds, mutedUserIdSet, contentFilter]
+  const beamEligibilitySignature = posts
+    .map((p) => `${p.id}:${p.workoutId ?? ""}:${p.media?.length ?? 0}`)
+    .join("|");
+  const beamEligibleIdsKey = useMemo(
+    () => posts.filter(postEligibleForGoldBeam).map((p) => p.id).join(","),
+    [beamEligibilitySignature]
   );
-
-  const visiblePosts = useMemo(
-    () => filteredPosts.slice(0, visibleCount),
-    [filteredPosts, visibleCount]
-  );
+  const postsRef = useRef(posts);
+  postsRef.current = posts;
 
   const availableSuggestions = useMemo(
     () => discoverUsers.filter((u) => u.id !== user?.id && !followingIds.includes(u.id)),
@@ -224,7 +229,7 @@ export default function HomeFeedScreen() {
         followingCount: followingIds.length,
         accountCreatedAt: user?.createdAt,
         feedScope,
-        filteredPostsCount: filteredPosts.length,
+        filteredPostsCount: postCount,
       }),
     [
       suggestionsDismiss,
@@ -232,7 +237,7 @@ export default function HomeFeedScreen() {
       followingIds.length,
       user?.createdAt,
       feedScope,
-      filteredPosts.length,
+      postCount,
     ]
   );
 
@@ -240,47 +245,47 @@ export default function HomeFeedScreen() {
     () =>
       feedSuggestionsPlacement({
         shouldOffer: shouldOfferSuggestions,
-        filteredPostsCount: filteredPosts.length,
-        feedScope,
+        filteredPostsCount: postCount,
       }),
-    [shouldOfferSuggestions, filteredPosts.length, feedScope]
+    [shouldOfferSuggestions, postCount]
   );
 
   const insertSuggestionsInline = suggestionsPlacement === "inline";
-  const showSuggestionsInHeader = suggestionsPlacement === "header";
   const showSuggestionsInEmpty = suggestionsPlacement === "empty";
 
   const feedListItems = useMemo(
     () =>
-      buildFeedListItems(visiblePosts, {
+      buildListItems({
         insertSuggestions: insertSuggestionsInline && availableSuggestions.length > 0,
-        suggestionsAfterPostCount: FEED_SUGGESTIONS_INSERT_AFTER_POSTS,
       }),
-    [visiblePosts, insertSuggestionsInline, availableSuggestions.length]
+    [buildListItems, insertSuggestionsInline, availableSuggestions.length]
   );
 
   useEffect(() => {
-    if (visiblePosts.length === 0) return;
+    if (!goldBeamEnabled || !beamEligibleIdsKey) {
+      setActiveBeamPostId(null);
+      return;
+    }
+    const eligible = postsRef.current.filter(postEligibleForGoldBeam);
     setActiveBeamPostId((current) => {
-      if (current && visiblePosts.some((p) => p.id === current)) return current;
-      return visiblePosts[0]?.id ?? null;
+      if (current && eligible.some((p) => p.id === current)) return current;
+      return eligible[0]?.id ?? null;
     });
-  }, [visiblePosts]);
+  }, [goldBeamEnabled, beamEligibleIdsKey]);
 
   useFocusEffect(
     useCallback(() => {
-      if (visiblePosts.length === 0) return;
+      if (!goldBeamEnabled || !beamEligibleIdsKey) return;
+      const eligible = postsRef.current.filter(postEligibleForGoldBeam);
       setActiveBeamPostId((current) => {
-        if (current && visiblePosts.some((p) => p.id === current)) return current;
-        return visiblePosts[0]?.id ?? null;
+        if (current && eligible.some((p) => p.id === current)) return current;
+        return eligible[0]?.id ?? null;
       });
-    }, [visiblePosts])
+    }, [goldBeamEnabled, beamEligibleIdsKey])
   );
 
-  const hasMoreToShow = visibleCount < filteredPosts.length;
-
   const showFollowingHint =
-    feedScope === "following" && filteredPosts.length === 0 && !loading && !error;
+    feedScope === "following" && postCount === 0 && !loading && !error;
 
   const refreshStories = useCallback(async () => {
     if (!user) return;
@@ -292,17 +297,10 @@ export default function HomeFeedScreen() {
     }
   }, [user]);
 
-  const refreshFollowing = useCallback(async () => {
-    if (!user?.id) {
-      setFollowingIds([]);
-      return;
-    }
-    try {
-      const res = await getFollowing(user.id);
-      setFollowingIds(res.followingIds ?? []);
-    } catch {
-      setFollowingIds([]);
-    }
+  const refreshFollowing = useCallback(async (): Promise<string[]> => {
+    if (!user?.id) return [];
+    await useSocialHubStore.getState().refreshHub({ silent: true });
+    return useSocialHubStore.getState().followingIds;
   }, [user?.id]);
 
   const refreshDiscover = useCallback(async () => {
@@ -310,14 +308,15 @@ export default function HomeFeedScreen() {
       setDiscoverUsers([]);
       return;
     }
-    setDiscoverLoading(true);
+    const showLoading = discoverUsersRef.current.length === 0;
+    if (showLoading) setDiscoverLoading(true);
     try {
       const res = await getDiscover(24);
       setDiscoverUsers(res.users ?? []);
     } catch {
-      setDiscoverUsers([]);
+      if (discoverUsersRef.current.length === 0) setDiscoverUsers([]);
     } finally {
-      setDiscoverLoading(false);
+      if (showLoading) setDiscoverLoading(false);
     }
   }, [user?.id]);
 
@@ -344,32 +343,22 @@ export default function HomeFeedScreen() {
         router.push(camaraHistoriaHref());
         return;
       }
-      const idx = storyViewerAuthors.findIndex((a) => a.userId === clickedUserId);
+      const idx = storyViewerAuthorsList.findIndex((a) => a.userId === clickedUserId);
       if (idx === -1) return;
       setStoryViewerAuthorIdx(idx);
       setStoryViewerSlideIdx(0);
       setStoryViewerOpen(true);
     },
-    [router, storyStripAuthors, storyViewerAuthors, user]
+    [router, storyStripAuthors, storyViewerAuthorsList, user]
   );
 
-  const refreshSavedIds = useCallback(async () => {
-    if (!user?.id) {
-      setSavedPostIdSet(new Set());
-      return;
-    }
-    const ids = await loadSavedPostIds(user.id);
-    setSavedPostIdSet(new Set(ids));
-  }, [user?.id]);
+  const refreshFeedLocalPrefs = useCallback(async () => {
+    await hydrateFeedLocalPrefs(user?.id);
+  }, [user?.id, hydrateFeedLocalPrefs]);
 
-  const refreshMutedIds = useCallback(async () => {
-    if (!user?.id) {
-      setMutedUserIdSet(new Set());
-      return;
-    }
-    const ids = await loadMutedUserIds(user.id);
-    setMutedUserIdSet(new Set(ids));
-  }, [user?.id]);
+  const refreshFeedLocalPrefsForce = useCallback(async () => {
+    await hydrateFeedLocalPrefs(user?.id, { force: true });
+  }, [user?.id, hydrateFeedLocalPrefs]);
 
   const handleOpenAuthor = useCallback(
     (authorUserId: string) => {
@@ -380,29 +369,21 @@ export default function HomeFeedScreen() {
   );
 
   const handleMuteAuthor = useCallback(
-    async (authorUserId: string) => {
+    (authorUserId: string) => {
       if (!user?.id || authorUserId === user.id) return;
-      await muteUser(user.id, authorUserId);
-      await refreshMutedIds();
-      setPosts((prev) => prev.filter((p) => p.userId !== authorUserId));
+      void muteAuthorInStore(user.id, authorUserId);
       goiToast("Usuario silenciado");
     },
-    [user?.id, refreshMutedIds]
+    [user?.id, muteAuthorInStore]
   );
 
   const handleToggleSave = useCallback(
-    async (postId: string) => {
+    (postId: string) => {
       if (!user?.id) return;
-      const nowSaved = await toggleSavedPost(user.id, postId);
-      setSavedPostIdSet((prev) => {
-        const next = new Set(prev);
-        if (nowSaved) next.add(postId);
-        else next.delete(postId);
-        return next;
-      });
+      const nowSaved = toggleSavedPostForUser(user.id, postId);
       goiToast(nowSaved ? "Guardado en tu perfil" : "Quitado de guardados");
     },
-    [user?.id]
+    [user?.id, toggleSavedPostForUser]
   );
 
   const handleReportSubmit = useCallback(
@@ -419,86 +400,15 @@ export default function HomeFeedScreen() {
     [user?.id, reportTarget]
   );
 
-  const fetchPosts = useCallback(async (mode: "initial" | "refresh") => {
-    if (mode === "initial") setLoading(true);
-    else setRefreshing(true);
-    setError(null);
-    try {
-      const data = await getPosts();
-      const list = Array.isArray(data) ? data : [];
-      const anchor = feedAnchorPostIdRef.current;
-
-      if (mode === "refresh" && anchor && !scrollAtTopRef.current) {
-        const anchorIdx = list.findIndex((p) => p.id === anchor);
-        if (anchorIdx > 0) {
-          setPendingNewCount(anchorIdx);
-        } else if (anchorIdx === -1 && list[0] && list[0].id !== anchor) {
-          setPendingNewCount(1);
-        }
-      } else if (mode === "refresh" || mode === "initial") {
-        feedAnchorPostIdRef.current = list[0]?.id ?? null;
-        if (scrollAtTopRef.current) setPendingNewCount(0);
-      }
-
-      setPosts(list);
-      setVisibleCount(FEED_PAGE_SIZE);
-    } catch (e) {
-      if (e instanceof ApiError) {
-        setError({
-          message: e.message,
-          detail: `Código ${e.code} · HTTP ${e.status}`,
-        });
-      } else {
-        setError({ message: "No se pudo cargar el feed." });
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const loadMoreVisible = useCallback(() => {
-    if (!hasMoreToShow || loadingMore) return;
-    setLoadingMore(true);
-    requestAnimationFrame(() => {
-      setVisibleCount((n) => Math.min(n + FEED_PAGE_SIZE, filteredPosts.length));
-      setLoadingMore(false);
-    });
-  }, [hasMoreToShow, filteredPosts.length, loadingMore]);
-
-  const refreshSuggestionsDismiss = useCallback(async () => {
-    if (!user?.id) {
-      setSuggestionsDismiss({ mode: "none" });
-      return;
-    }
-    const state = await loadSuggestionsDismiss(user.id);
-    setSuggestionsDismiss(state);
-  }, [user?.id]);
-
   const handleSnoozeSuggestions = useCallback(() => {
     if (!user?.id) return;
-    const until = new Date();
-    until.setDate(until.getDate() + FEED_SUGGESTIONS_SNOOZE_DAYS);
-    const state: SuggestionsDismissState = { mode: "snooze", until: until.toISOString() };
-    setSuggestionsDismiss(state);
-    void saveSuggestionsDismiss(user.id, state);
-  }, [user?.id]);
+    void snoozeSuggestions(user.id);
+  }, [user?.id, snoozeSuggestions]);
 
   const handleDismissSuggestionsPermanent = useCallback(() => {
     if (!user?.id) return;
-    const state: SuggestionsDismissState = { mode: "permanent" };
-    setSuggestionsDismiss(state);
-    void saveSuggestionsDismiss(user.id, state);
-  }, [user?.id]);
-
-  const scrollToSuggestions = useCallback(() => {
-    const idx = feedListItems.findIndex((item) => item.kind === "suggestions");
-    if (idx >= 0) {
-      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.15 });
-      return;
-    }
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [feedListItems]);
+    void dismissSuggestionsPermanent(user.id);
+  }, [user?.id, dismissSuggestionsPermanent]);
 
   const suggestionsRowProps = useMemo(
     () => ({
@@ -510,10 +420,9 @@ export default function HomeFeedScreen() {
       onSnooze: handleSnoozeSuggestions,
       onDismissPermanent: handleDismissSuggestionsPermanent,
       onFollowingChanged: (targetId: string, following: boolean) => {
-        setFollowingIds((prev) =>
-          following ? (prev.includes(targetId) ? prev : [...prev, targetId]) : prev.filter((id) => id !== targetId)
-        );
+        applyFollowingChange(targetId, following);
       },
+      showManageInSocial: true,
     }),
     [
       discoverUsers,
@@ -523,28 +432,61 @@ export default function HomeFeedScreen() {
       discoverLoading,
       handleSnoozeSuggestions,
       handleDismissSuggestionsPermanent,
+      applyFollowingChange,
     ]
   );
 
-  const updateScrollFab = useCallback((y: number) => {
-    scrollAtTopRef.current = y < 48;
-    if (scrollAtTopRef.current && posts[0]?.id) {
-      feedAnchorPostIdRef.current = posts[0].id;
-      setPendingNewCount(0);
-    }
-    setShowScrollFab(y > SCROLL_TOP_FAB_THRESHOLD);
-  }, [posts]);
+  const updateScrollFab = useCallback(
+    (y: number) => {
+      const now = Date.now();
+      if (now - scrollFabStateRef.current.lastJsAt < SCROLL_FAB_JS_THROTTLE_MS) return;
+      scrollFabStateRef.current.lastJsAt = now;
 
-  const notifyBeamScroll = useCallback((y: number) => {
-    beamNotifyScrollRef.current(y);
-  }, []);
+      const atTop = y < 48;
+      const showFab = y > SCROLL_TOP_FAB_THRESHOLD;
+      if (atTop !== scrollFabStateRef.current.atTop) {
+        scrollFabStateRef.current.atTop = atTop;
+        if (atTop) markAtTop();
+        else markScrolledDown();
+      }
+      if (showFab !== scrollFabStateRef.current.showFab) {
+        scrollFabStateRef.current.showFab = showFab;
+        setShowScrollFab(showFab);
+      }
+    },
+    [markAtTop, markScrolledDown]
+  );
+
+  const handlePressSession = useCallback(
+    (sessionId: string, fromPostId?: string | null) => {
+      router.push({
+        pathname: "/sesion/[id]",
+        params: {
+          id: sessionId,
+          ...(fromPostId ? { postId: fromPostId } : {}),
+        },
+      });
+    },
+    [router]
+  );
+
+  const handlePressWorkout = useCallback(
+    (post: Post) => {
+      if (!post.workoutId) return;
+      if (post.userId === user?.id) {
+        router.push({ pathname: "/rutina/[id]", params: { id: post.workoutId } });
+        return;
+      }
+      handleOpenAuthor(post.userId);
+    },
+    [router, user?.id, handleOpenAuthor]
+  );
 
   const onListScroll = useAnimatedScrollHandler({
     onScroll: (e) => {
       const y = e.contentOffset.y;
       scrollY.value = y;
       runOnJS(updateScrollFab)(y);
-      runOnJS(notifyBeamScroll)(y);
     },
   });
 
@@ -552,99 +494,104 @@ export default function HomeFeedScreen() {
     async (postId: string) => {
       if (!user?.id || likeInFlightRef.current.has(postId)) return;
 
-      const snapshot = posts.find((p) => p.id === postId);
+      const snapshot = postsRef.current.find((p) => p.id === postId);
       if (!snapshot) return;
 
       const wasLiked = !!snapshot.likedByMe;
       const optimisticLiked = !wasLiked;
 
-      setPosts((prev) =>
-        prev.map((p) => {
-          if (p.id !== postId) return p;
-          let nextCount = p.likesCount;
-          if (optimisticLiked && !wasLiked) nextCount += 1;
-          else if (!optimisticLiked && wasLiked) nextCount = Math.max(0, nextCount - 1);
-          return { ...p, likedByMe: optimisticLiked, likesCount: nextCount };
-        })
-      );
+      patchPost(postId, (p) => {
+        let nextCount = p.likesCount;
+        if (optimisticLiked && !wasLiked) nextCount += 1;
+        else if (!optimisticLiked && wasLiked) nextCount = Math.max(0, nextCount - 1);
+        return { ...p, likedByMe: optimisticLiked, likesCount: nextCount };
+      });
 
       likeInFlightRef.current.add(postId);
       try {
         const { liked } = await toggleLike(postId);
-        setPosts((prev) =>
-          prev.map((p) => {
-            if (p.id !== postId) return p;
-            let nextCount = snapshot.likesCount;
-            if (liked && !snapshot.likedByMe) nextCount += 1;
-            else if (!liked && snapshot.likedByMe) nextCount = Math.max(0, snapshot.likesCount - 1);
-            return { ...p, likedByMe: liked, likesCount: nextCount };
-          })
-        );
+        patchPost(postId, (p) => {
+          let nextCount = snapshot.likesCount;
+          if (liked && !snapshot.likedByMe) nextCount += 1;
+          else if (!liked && snapshot.likedByMe) nextCount = Math.max(0, snapshot.likesCount - 1);
+          return { ...p, likedByMe: liked, likesCount: nextCount };
+        });
       } catch (e) {
-        setPosts((prev) => prev.map((p) => (p.id === postId ? snapshot : p)));
+        patchPost(postId, () => snapshot);
         goiToast(getErrorMessage(e, "No se pudo actualizar el me gusta."));
       } finally {
         likeInFlightRef.current.delete(postId);
       }
     },
-    [posts, user?.id]
+    [user?.id, patchPost]
   );
 
   const handleCreateComment = useCallback(
-    async (postId: string) => {
-      if (!user?.id || commentingPostId) return;
-      const raw = commentByPostId[postId] ?? "";
+    async (postId: string, raw: string) => {
+      if (!user?.id || useFeedInteractionStore.getState().commentingPostId) return;
       const parsed = commentFormSchema.safeParse({ content: raw });
       if (!parsed.success) {
         const msg = parsed.error.issues[0]?.message ?? "Comentario no válido";
-        setCommentErrorsByPostId((prev) => ({ ...prev, [postId]: msg }));
+        setCommentFieldError({ postId, message: msg });
         return;
       }
 
-      setCommentErrorsByPostId((prev) => ({ ...prev, [postId]: null }));
+      setCommentFieldError(null);
+      const tempId = `temp-comment-${Date.now()}`;
+      const optimisticComment = {
+        id: tempId,
+        postId,
+        userId: user.id,
+        authorUsername: user.username,
+        authorAvatarUrl: user.avatarUrl ?? "",
+        content: parsed.data.content,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      patchPost(postId, (p) => {
+        const comments = [...p.comments, optimisticComment].sort((a, b) =>
+          a.createdAt < b.createdAt ? -1 : 1
+        );
+        return { ...p, comments };
+      });
+
       setCommentingPostId(postId);
       try {
         const newComment = await createComment(postId, { content: parsed.data.content });
-        setCommentByPostId((prev) => ({ ...prev, [postId]: "" }));
-        setPosts((prev) =>
-          prev.map((p) => {
-            if (p.id !== postId) return p;
-            const comments = [...p.comments, newComment].sort((a, b) =>
-              a.createdAt < b.createdAt ? -1 : 1
-            );
-            return { ...p, comments };
-          })
-        );
+        patchPost(postId, (p) => {
+          const comments = p.comments
+            .filter((c) => c.id !== tempId)
+            .concat(newComment)
+            .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+          return { ...p, comments };
+        });
         goiToast("Comentario publicado");
       } catch (e) {
-        setCommentErrorsByPostId((prev) => ({
-          ...prev,
-          [postId]: getErrorMessage(e, "No se pudo publicar el comentario."),
+        patchPost(postId, (p) => ({
+          ...p,
+          comments: p.comments.filter((c) => c.id !== tempId),
         }));
+        setCommentFieldError({
+          postId,
+          message: getErrorMessage(e, "No se pudo publicar el comentario."),
+        });
       } finally {
         setCommentingPostId(null);
       }
     },
-    [commentByPostId, commentingPostId, user?.id]
+    [user?.id, user?.username, user?.avatarUrl, patchPost, setCommentFieldError, setCommentingPostId]
   );
 
   const handleDeletePost = useCallback(
     async (postId: string) => {
-      if (!user?.id || deletingPostId) return;
+      if (!user?.id || useFeedInteractionStore.getState().deletingPostId) return;
       setDeletingPostId(postId);
       try {
         await deletePost(postId);
-        setPosts((prev) => prev.filter((p) => p.id !== postId));
-        setCommentByPostId((prev) => {
-          const next = { ...prev };
-          delete next[postId];
-          return next;
-        });
-        setCommentErrorsByPostId((prev) => {
-          const next = { ...prev };
-          delete next[postId];
-          return next;
-        });
+        patchTimeline((prev) => prev.filter((e) => e.kind !== "post" || e.post.id !== postId));
+        const err = useFeedInteractionStore.getState().commentFieldError;
+        if (err?.postId === postId) setCommentFieldError(null);
         goiToast("Publicación eliminada");
       } catch (e) {
         goiToast(getErrorMessage(e, "No se pudo eliminar la publicación."));
@@ -652,66 +599,150 @@ export default function HomeFeedScreen() {
         setDeletingPostId(null);
       }
     },
-    [deletingPostId, user?.id]
+    [user?.id, patchTimeline, setDeletingPostId, setCommentFieldError]
   );
 
   const focusPostId = typeof focusPostIdParam === "string" ? focusPostIdParam : undefined;
+  const focusCommentId =
+    typeof focusCommentIdParam === "string" ? focusCommentIdParam.trim() : undefined;
 
   useEffect(() => {
     if (!focusPostId || loading || focusHandledRef.current === focusPostId) return;
     const idx = feedListIndexForPostId(feedListItems, focusPostId);
     if (idx < 0) {
-      if (hasMoreToShow) {
-        setVisibleCount(filteredPosts.length);
-      }
+      if (hasMore) loadMore();
       return;
     }
     focusHandledRef.current = focusPostId;
     setHighlightedPostId(focusPostId);
     requestAnimationFrame(() => {
-      listRef.current?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 });
+      void listRef.current
+        ?.scrollToIndex({ index: idx, animated: true, viewPosition: 0.3 })
+        .catch(() => {
+          listRef.current?.scrollToOffset({ offset: Math.max(0, idx * 480), animated: true });
+        });
     });
     const t = setTimeout(() => setHighlightedPostId(null), 3500);
     return () => clearTimeout(t);
-  }, [focusPostId, loading, feedListItems, hasMoreToShow, filteredPosts.length]);
+  }, [focusPostId, loading, feedListItems, hasMore, loadMore]);
 
   useFocusEffect(
     useCallback(() => {
       if (!isHydrated || !isAuthenticated) return;
-      feedFocusCountRef.current += 1;
-      const mode = feedFocusCountRef.current === 1 ? "initial" : "refresh";
-      void fetchPosts(mode);
+
+      const now = Date.now();
+      const afterPublish = feedRefreshParam === "1" && !feedRefreshHandledRef.current;
+      const auxStale = now - feedAuxRefreshAtRef.current > FEED_AUX_REFRESH_STALE_MS;
+
+      if (afterPublish) {
+        feedRefreshHandledRef.current = true;
+        requestAnimationFrame(() => scrollFeedToTop());
+        router.setParams({ feedRefresh: undefined });
+      } else {
+        feedFocusCountRef.current += 1;
+      }
+
+      const mode = afterPublish ? "refresh" : feedFocusCountRef.current === 1 ? "initial" : "refresh";
+
+      void (async () => {
+        if (!feedScopeReady) {
+          const following = await refreshFollowing();
+          const scope = await initScope(following.length);
+          void fetchFeed(mode, scope, afterPublish ? { force: true } : undefined);
+          return;
+        }
+        void refreshFollowing();
+        void fetchFeed(mode, feedScope, afterPublish ? { force: true } : undefined);
+      })();
+
       void refreshStories();
-      void refreshSavedIds();
-      void refreshMutedIds();
-      void refreshFollowing();
-      void refreshDiscover();
-      void refreshWorkoutTitles();
-      void refreshSuggestionsDismiss();
+      void refreshFeedLocalPrefs();
+      if (auxStale || afterPublish) {
+        feedAuxRefreshAtRef.current = now;
+        void refreshDiscover();
+        void refreshWorkoutTitles();
+      }
       void refreshBadge();
+
+      return () => {
+        if (feedRefreshParam !== "1") {
+          feedRefreshHandledRef.current = false;
+        }
+      };
     }, [
       isHydrated,
       isAuthenticated,
-      fetchPosts,
+      feedRefreshParam,
+      feedScope,
+      feedScopeReady,
+      initScope,
+      fetchFeed,
       refreshStories,
-      refreshSavedIds,
-      refreshMutedIds,
+      refreshFeedLocalPrefs,
       refreshFollowing,
       refreshDiscover,
       refreshWorkoutTitles,
-      refreshSuggestionsDismiss,
       refreshBadge,
+      scrollFeedToTop,
+      router,
     ])
   );
 
   const handleNewPostsBanner = useCallback(() => {
     scrollFeedToTop();
-    void fetchPosts("refresh");
-  }, [scrollFeedToTop, fetchPosts]);
+    void fetchFeed("refresh", feedScope);
+  }, [scrollFeedToTop, fetchFeed, feedScope]);
 
   const openNotifications = useCallback(() => {
-    router.push("/notificaciones");
+    router.push({ pathname: "/(tabs)/social", params: { activity: "1" } });
   }, [router]);
+
+  const feedPostActionsHandlers = useMemo<FeedPostActionsHandlers>(
+    () => ({
+      toggleLike: (postId) => void handleToggleLike(postId),
+      submitComment: (postId, content) => void handleCreateComment(postId, content),
+      deletePost: (postId) => void handleDeletePost(postId),
+      toggleSave: (postId) => void handleToggleSave(postId),
+      muteAuthor: (authorId) => void handleMuteAuthor(authorId),
+      openAuthor: handleOpenAuthor,
+      reportPost: (post) => setReportTarget(post),
+      openWorkoutForPost: handlePressWorkout,
+      openSession: handlePressSession,
+      clearCommentError: () => clearCommentError(),
+    }),
+    [
+      handleToggleLike,
+      handleCreateComment,
+      handleDeletePost,
+      handleToggleSave,
+      handleMuteAuthor,
+      handleOpenAuthor,
+      handlePressWorkout,
+      handlePressSession,
+      clearCommentError,
+    ]
+  );
+
+  const feedPostActionsSnapshot = useMemo<FeedPostActionsSnapshot>(
+    () => ({
+      getCommentError: () => undefined,
+      isCommenting: () => false,
+      isDeleting: () => false,
+      isSaved: () => false,
+    }),
+    []
+  );
+
+  const feedListExtraKey = useMemo(
+    () =>
+      [
+        activeBeamPostId ?? "",
+        highlightedPostId ?? "",
+        feedScope,
+        showFollowingHint ? "1" : "0",
+      ].join("|"),
+    [activeBeamPostId, highlightedPostId, feedScope, showFollowingHint]
+  );
 
   const renderFeedItem = useCallback(
     ({ item }: { item: FeedListItem }) => {
@@ -719,66 +750,42 @@ export default function HomeFeedScreen() {
         return <FeedDaySeparator label={item.label} />;
       }
       if (item.kind === "suggestions") {
-        return <FeedSuggestionsRow {...suggestionsRowProps} variant="inline" />;
+        return <FeedInlineSuggestionsRow {...suggestionsRowProps} />;
+      }
+      if (item.kind === "workout") {
+        return <FeedWorkoutEventRow event={item.event} onOpenAuthor={handleOpenAuthor} />;
       }
       const post = item.post;
+      const openCommentsFromNotification =
+        focusPostId === post.id && Boolean(focusCommentId);
       return (
-        <PostCard
+        <FeedPostCardRow
           post={post}
-          isBeamActive={activeBeamPostId === post.id}
-          palette={palette}
-          typography={typography}
           currentUserId={user?.id}
           sessionAvatarUrl={user?.avatarUrl}
+          isBeamActive={
+            goldBeamEnabled && activeBeamPostId === post.id && postEligibleForGoldBeam(post)
+          }
+          initialCommentsOpen={openCommentsFromNotification}
           highlighted={highlightedPostId === post.id}
-          workoutTitle={post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null}
-          commentValue={commentByPostId[post.id] ?? ""}
-          onChangeComment={(value) => {
-            setCommentByPostId((prev) => ({ ...prev, [post.id]: value }));
-            if (commentErrorsByPostId[post.id]) {
-              setCommentErrorsByPostId((prev) => ({ ...prev, [post.id]: null }));
-            }
-          }}
-          onSubmitComment={() => void handleCreateComment(post.id)}
-          onToggleLike={() => void handleToggleLike(post.id)}
-          onDelete={(postId) => void handleDeletePost(postId)}
-          onEdit={(postId) => router.push({ pathname: "/editar-publicacion", params: { id: postId } })}
-          deleting={deletingPostId === post.id}
-          commenting={commentingPostId === post.id}
-          commentError={commentErrorsByPostId[post.id]}
-          saved={savedPostIdSet.has(post.id)}
-          onToggleSave={() => void handleToggleSave(post.id)}
-          onMuteAuthor={(authorId) => void handleMuteAuthor(authorId)}
-          onOpenAuthor={handleOpenAuthor}
-          onSharePost={() => void sharePost(post.id, post.authorUsername, post.content)}
-          onReportPost={() => setReportTarget(post)}
+          workoutTitle={
+            post.sessionWorkoutTitle ??
+            (post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null)
+          }
         />
       );
     },
     [
-      feedScope,
-      setFeedScopePersisted,
-      showFollowingHint,
-      palette,
-      typography,
+      focusPostId,
+      focusCommentId,
       user?.id,
       user?.avatarUrl,
+      activeBeamPostId,
+      goldBeamEnabled,
       highlightedPostId,
       workoutTitles,
-      commentByPostId,
-      commentErrorsByPostId,
-      commentingPostId,
-      deletingPostId,
-      savedPostIdSet,
-      router,
-      handleCreateComment,
-      handleToggleLike,
-      handleDeletePost,
-      handleToggleSave,
-      handleMuteAuthor,
-      handleOpenAuthor,
-      activeBeamPostId,
       suggestionsRowProps,
+      handleOpenAuthor,
     ]
   );
 
@@ -806,28 +813,18 @@ export default function HomeFeedScreen() {
         />
       ) : null}
 
-      {shouldOfferSuggestions && discoverLoading && discoverUsers.length === 0 ? (
-        <FeedSuggestionsLoadingRow />
-      ) : null}
-
-      {showSuggestionsInHeader ? (
-        <FeedSuggestionsRow {...suggestionsRowProps} variant="header" />
-      ) : null}
-
       {feedScopeReady ? (
         <FeedStickyScopeHeader
           mode={feedScope}
           onChangeMode={setFeedScopePersisted}
           showFollowingHint={showFollowingHint}
-          contentFilter={contentFilter}
-          onChangeContentFilter={setContentFilterPersisted}
         />
       ) : null}
 
       <FeedErrorBanner
         errorMessage={error?.message}
         errorDetail={error?.detail}
-        onRetry={error ? () => void fetchPosts("initial") : undefined}
+        onRetry={error ? () => void fetchFeed("initial", feedScope) : undefined}
       />
 
       {loading && posts.length === 0 ? <FeedPostCardSkeleton count={3} /> : null}
@@ -836,10 +833,9 @@ export default function HomeFeedScreen() {
 
   const listFooter = (
     <View>
-      {!loading && !error && filteredPosts.length === 0 ? (
+      {!loading && !error && postCount === 0 ? (
         <FeedEmptyState
           scope={feedScope}
-          onScrollToSuggestions={scrollToSuggestions}
           suggestionsSlot={
             showSuggestionsInEmpty ? (
               <FeedSuggestionsRow {...suggestionsRowProps} variant="empty" />
@@ -848,9 +844,9 @@ export default function HomeFeedScreen() {
         />
       ) : null}
       <FeedLoadMoreFooter
-        hasMore={hasMoreToShow && visiblePosts.length > 0}
+        hasMore={hasMore && postCount > 0}
         loadingMore={loadingMore}
-        onLoadMore={loadMoreVisible}
+        onLoadMore={loadMore}
       />
     </View>
   );
@@ -859,8 +855,7 @@ export default function HomeFeedScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <AppScreenShell variant="feed">
-        <FeedGoldBeamProvider scrollY={scrollY}>
-          <FeedGoldBeamScrollBridge notifyRef={beamNotifyScrollRef} />
+        <FeedGoldBeamProvider scrollY={scrollY} enabled={goldBeamEnabled}>
         <View style={styles.screen}>
           <FeedTopBar
             user={user}
@@ -872,41 +867,24 @@ export default function HomeFeedScreen() {
           <View style={[styles.newPostsBannerSlot, { top: Math.max(insets.top, 6) + 52 }]}>
             <FeedNewPostsBanner count={pendingNewCount} onPress={handleNewPostsBanner} />
           </View>
-          <Animated.FlatList
+          <FeedPostActionsProvider
+            handlers={feedPostActionsHandlers}
+            snapshot={feedPostActionsSnapshot}
+          >
+          <FeedAnimatedFlashList
             ref={listRef}
             style={styles.list}
             data={feedListItems}
             keyExtractor={(item) => item.key}
+            getItemType={(item) => item.kind}
             keyboardShouldPersistTaps="handled"
-            removeClippedSubviews={false}
-            windowSize={7}
-            maxToRenderPerBatch={6}
-            initialNumToRender={5}
+            drawDistance={720}
             viewabilityConfigCallbackPairs={beamViewabilityPairs}
             onScroll={onListScroll}
-            onContentSizeChange={() => notifyBeamScroll(scrollY.value)}
-            onLayout={() => notifyBeamScroll(scrollY.value)}
-            scrollEventThrottle={8}
-            onEndReached={loadMoreVisible}
+            scrollEventThrottle={16}
+            onEndReached={loadMore}
             onEndReachedThreshold={0.4}
-            onScrollToIndexFailed={(info) => {
-              listRef.current?.scrollToOffset({
-                offset: info.averageItemLength * info.index,
-                animated: true,
-              });
-            }}
-            extraData={{
-              commentByPostId,
-              commentErrorsByPostId,
-              commentingPostId,
-              deletingPostId,
-              savedPostIdSet,
-              highlightedPostId,
-              activeBeamPostId,
-              feedScope,
-              contentFilter,
-              showFollowingHint,
-            }}
+            extraData={feedListExtraKey}
             ItemSeparatorComponent={FeedListSeparator}
             renderItem={renderFeedItem}
             ListHeaderComponent={listHeader}
@@ -916,10 +894,11 @@ export default function HomeFeedScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={() => {
-                  void fetchPosts("refresh");
+                  void fetchFeed("refresh", feedScope, { force: true });
                   void refreshStories();
                   void refreshFollowing();
                   void refreshDiscover();
+                  void refreshFeedLocalPrefsForce();
                 }}
                 tintColor={AUTH.gold}
                 colors={[AUTH.gold]}
@@ -927,6 +906,7 @@ export default function HomeFeedScreen() {
               />
             }
           />
+          </FeedPostActionsProvider>
           <FeedScrollToTopFab visible={showScrollFab} onPress={scrollFeedToTop} />
         </View>
         </FeedGoldBeamProvider>
@@ -934,7 +914,7 @@ export default function HomeFeedScreen() {
 
       <StoryViewerModal
         visible={storyViewerOpen}
-        authors={storyViewerAuthors}
+        authors={storyViewerAuthorsList}
         startAuthorIdx={storyViewerAuthorIdx}
         startSlideIdx={storyViewerSlideIdx}
         onClose={() => setStoryViewerOpen(false)}

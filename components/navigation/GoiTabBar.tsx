@@ -2,7 +2,7 @@ import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { useSocialHub } from "../../context/SocialHubContext";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import { useWorkoutTabBadge } from "../../hooks/useWorkoutTabBadge";
 import { TabDumbbellIcon, TabHomeIcon, TabProfileIcon, TabSocialIcon } from "./TabBarIcons";
 
@@ -33,7 +33,9 @@ function routeLabel(name: TabRouteName): string {
 export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) {
   const insets = useSafeAreaInsets();
   const workoutBadge = useWorkoutTabBadge();
-  const { socialBadgeCount } = useSocialHub();
+  const socialTabBadgeCount = useSocialHubStore(
+    (s) => s.pendingFollowRequests + s.unreadNotifications
+  );
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
@@ -100,10 +102,10 @@ export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) 
             ) : name === "social" ? (
               <View style={styles.iconBadgeWrap}>
                 <TabSocialIcon color={color} filled={focused} />
-                {socialBadgeCount > 0 ? (
+                {socialTabBadgeCount > 0 ? (
                   <View
                     style={styles.tabBadge}
-                    accessibilityLabel={`${socialBadgeCount} solicitudes de seguimiento`}
+                    accessibilityLabel={`${socialTabBadgeCount} novedades en Social`}
                     accessible
                   />
                 ) : null}

@@ -14,7 +14,8 @@ type TapSlopPressableProps = PressableProps & {
 };
 
 /**
- * Pressable que no dispara si el dedo se movió (p. ej. al hacer scroll en un ScrollView padre).
+ * Pressable con tap slop + scroll guard. Usar vía `ScrollAwarePressable` (`scrollGuarded`)
+ * solo en detalle de post dentro de `GuardedScrollView` — no en feed ni grids de perfil.
  */
 export function TapSlopPressable({
   onPress,

@@ -1,19 +1,18 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Animated,
-  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  UIManager,
   View,
 } from "react-native";
 import { toggleFollow } from "../../api/auth";
 import type { DiscoverUser } from "../../types/auth";
+import { discoverDisplayReason } from "../../utils/discoverDisplayReason";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import {
   FEED_SUGGESTIONS_CAROUSEL_MAX,
@@ -25,10 +24,6 @@ import { profileFollowButtonStyles as followStyles } from "../profile/profileFol
 import { ProfileSectionSurface } from "../profile/ProfileSectionSurface";
 import { UserAvatar } from "../ui/UserAvatar";
 import { FeedSuggestionsSkeleton } from "./FeedSuggestionsSkeleton";
-
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const CARD_WIDTH = 92;
 const SECTION_INSET = 14;
@@ -45,7 +40,11 @@ type FeedSuggestionsRowProps = {
   loading?: boolean;
   onSnooze?: () => void;
   onDismissPermanent?: () => void;
-  onFollowingChanged: (targetId: string, following: boolean) => void;
+  onFollowingChanged: (targetId: string, following: boolean, pending?: boolean) => void;
+  /** Enlace al hub Social (feed). */
+  showManageInSocial?: boolean;
+  /** Sin superficie propia (p. ej. dentro de otra sección en Social). */
+  embedded?: boolean;
 };
 
 function headerCopy(scope: FeedScope | undefined, variant: FeedSuggestionsVariant) {
@@ -72,11 +71,13 @@ function SuggestionsSectionHeader({
   subtitle,
   onDismissPress,
   onSeeAll,
+  onManageInSocial,
 }: {
   title: string;
   subtitle: string;
   onDismissPress?: () => void;
   onSeeAll?: () => void;
+  onManageInSocial?: () => void;
 }) {
   return (
     <View style={styles.header}>
@@ -89,6 +90,19 @@ function SuggestionsSectionHeader({
         </Text>
       </View>
       <View style={styles.headerActions}>
+        {onManageInSocial ? (
+          <Pressable
+            onPress={onManageInSocial}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Gestionar sugerencias en Social"
+            style={({ pressed }) => [styles.seeAllBtn, pressed ? styles.pressed : null]}
+          >
+            <Text style={styles.seeAllText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              En Social
+            </Text>
+          </Pressable>
+        ) : null}
         {onSeeAll ? (
           <Pressable
             onPress={onSeeAll}
@@ -128,10 +142,10 @@ function SuggestionsCarousel({ children }: { children: ReactNode }) {
   );
 }
 
-function MutualAvatars({ preview }: { preview: DiscoverUser["mutualPreview"] }) {
+function MutualAvatars({ preview, align = "center" }: { preview: DiscoverUser["mutualPreview"]; align?: "center" | "start" }) {
   if (!preview?.length) return null;
   return (
-    <View style={styles.mutualRow}>
+    <View style={[styles.mutualRow, align === "start" ? styles.mutualRowStart : null]}>
       {preview.map((m) => (
         <View key={m.id} style={styles.mutualAvatarWrap}>
           <UserAvatar src={m.avatarUrl} username={m.username} size={16} />
@@ -146,6 +160,7 @@ function SuggestionCard({
   pending,
   followed,
   fullWidth,
+  layout = "card",
   onOpenProfile,
   onFollow,
 }: {
@@ -153,10 +168,74 @@ function SuggestionCard({
   pending: boolean;
   followed: boolean;
   fullWidth?: boolean;
+  layout?: "card" | "row";
   onOpenProfile: () => void;
   onFollow: () => void;
 }) {
-  const reason = user.reason?.trim() || user.goal?.trim() || user.bio?.trim() || "Perfil en GoI";
+  const reason = discoverDisplayReason(user);
+  const showPending = pending || user.followPending;
+
+  if (layout === "row") {
+    return (
+      <View style={styles.listRow}>
+        <Pressable
+          onPress={onOpenProfile}
+          style={({ pressed }) => [styles.listRowMain, pressed ? styles.pressed : null]}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver perfil de ${user.username}`}
+        >
+          <View style={styles.listAvatarWrap}>
+            <UserAvatar src={user.avatarUrl} username={user.username} size={40} />
+            {user.activeThisWeek ? <View style={styles.listActiveDot} /> : null}
+          </View>
+          <View style={styles.listMeta}>
+            <Text style={styles.listName} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              @{user.username}
+            </Text>
+            <View style={styles.listMetaLine}>
+              {user.mutualPreview?.length ? (
+                <MutualAvatars preview={user.mutualPreview} align="start" />
+              ) : null}
+              {reason ? (
+                <Text style={styles.listHint} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {reason}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={onFollow}
+          disabled={showPending || followed}
+          style={({ pressed }) => [
+            followStyles.base,
+            followed || showPending ? followStyles.following : followStyles.primary,
+            styles.listFollowBtn,
+            pressed ? followStyles.pressed : null,
+            showPending && !followed ? followStyles.busy : null,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={
+            followed
+              ? `Siguiendo a ${user.username}`
+              : showPending
+                ? `Solicitud pendiente a ${user.username}`
+                : `Seguir a ${user.username}`
+          }
+        >
+          <Text
+            style={[
+              followed || showPending ? followStyles.textFollowing : followStyles.textPrimary,
+              styles.listFollowText,
+            ]}
+            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+          >
+            {followed ? "Siguiendo" : showPending ? "Pendiente" : "Seguir"}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.card, fullWidth ? styles.cardFullWidth : null]}>
@@ -185,34 +264,36 @@ function SuggestionCard({
 
         <Pressable
           onPress={onFollow}
-          disabled={pending || followed}
+          disabled={showPending || followed}
           style={({ pressed }) => [
             followStyles.base,
-            followed ? followStyles.following : followStyles.primary,
+            followed || showPending ? followStyles.following : followStyles.primary,
             styles.followBtn,
             pressed ? followStyles.pressed : null,
-            pending ? followStyles.busy : null,
+            showPending && !followed ? followStyles.busy : null,
           ]}
           accessibilityRole="button"
-          accessibilityLabel={followed ? `Siguiendo a ${user.username}` : `Seguir a ${user.username}`}
+          accessibilityLabel={
+            followed
+              ? `Siguiendo a ${user.username}`
+              : showPending
+                ? `Solicitud pendiente a ${user.username}`
+                : `Seguir a ${user.username}`
+          }
         >
-          {pending ? (
-            <ActivityIndicator size="small" color="#0a0a0a" />
-          ) : (
-            <Text
-              style={[followed ? followStyles.textFollowing : followStyles.textPrimary, styles.followText]}
-              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-            >
-              {followed ? "Siguiendo ✓" : "Seguir"}
-            </Text>
-          )}
+          <Text
+            style={[followed || showPending ? followStyles.textFollowing : followStyles.textPrimary, styles.followText]}
+            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+          >
+            {followed ? "Siguiendo ✓" : showPending ? "Pendiente" : "Seguir"}
+          </Text>
         </Pressable>
       </View>
     </View>
   );
 }
 
-export function FeedSuggestionsRow({
+function FeedSuggestionsRowInner({
   users,
   followingIds,
   currentUserId,
@@ -222,14 +303,18 @@ export function FeedSuggestionsRow({
   onSnooze,
   onDismissPermanent,
   onFollowingChanged,
+  embedded = false,
+  showManageInSocial = false,
 }: FeedSuggestionsRowProps) {
   const router = useRouter();
   const { showAlert } = useGoiAlert();
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [optimisticPending, setOptimisticPending] = useState<Set<string>>(() => new Set());
   const [followedIds, setFollowedIds] = useState<Set<string>>(() => new Set());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(variant === "inline" ? 1 : 0)).current;
   const hideTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const skipFade = variant === "inline";
 
   const carouselMax = variant === "list" ? users.length : FEED_SUGGESTIONS_CAROUSEL_MAX;
 
@@ -249,14 +334,14 @@ export function FeedSuggestionsRow({
   const copy = headerCopy(feedScope, variant);
 
   useEffect(() => {
-    if (suggestions.length === 0) return;
+    if (skipFade || suggestions.length === 0) return;
     fadeAnim.setValue(0);
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 320,
       useNativeDriver: true,
     }).start();
-  }, [suggestions.length, fadeAnim]);
+  }, [skipFade, suggestions.length, fadeAnim]);
 
   useEffect(() => {
     return () => {
@@ -269,7 +354,6 @@ export function FeedSuggestionsRow({
     const existing = hideTimers.current.get(userId);
     if (existing) clearTimeout(existing);
     const t = setTimeout(() => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       setHiddenIds((prev) => new Set(prev).add(userId));
       setFollowedIds((prev) => {
         const next = new Set(prev);
@@ -283,15 +367,26 @@ export function FeedSuggestionsRow({
 
   const handleFollow = useCallback(
     (u: DiscoverUser) => {
-      if (pendingIds.has(u.id) || followedIds.has(u.id)) return;
+      if (pendingIds.has(u.id) || followedIds.has(u.id) || u.followPending || optimisticPending.has(u.id))
+        return;
       setPendingIds((prev) => new Set(prev).add(u.id));
+      setOptimisticPending((prev) => new Set(prev).add(u.id));
+      onFollowingChanged(u.id, false, true);
       void toggleFollow(u.id)
-        .then(({ following }) => {
-          onFollowingChanged(u.id, following);
+        .then(({ following, pending, status }) => {
+          const isPending = pending === true || status === "pending";
+          if (isPending) {
+            onFollowingChanged(u.id, false, true);
+            return;
+          }
+          onFollowingChanged(u.id, following, false);
           if (following) {
             setFollowedIds((prev) => new Set(prev).add(u.id));
             scheduleHide(u.id);
           }
+        })
+        .catch(() => {
+          onFollowingChanged(u.id, false, false);
         })
         .finally(() => {
           setPendingIds((prev) => {
@@ -299,10 +394,19 @@ export function FeedSuggestionsRow({
             next.delete(u.id);
             return next;
           });
+          setOptimisticPending((prev) => {
+            const next = new Set(prev);
+            next.delete(u.id);
+            return next;
+          });
         });
     },
-    [onFollowingChanged, pendingIds, followedIds, scheduleHide]
+    [onFollowingChanged, pendingIds, followedIds, optimisticPending, scheduleHide]
   );
+
+  const handleManageInSocial = useCallback(() => {
+    router.push({ pathname: "/(tabs)/social", params: { discover: "1" } });
+  }, [router]);
 
   const handleDismissPress = useCallback(() => {
     if (!onSnooze && !onDismissPermanent) return;
@@ -334,32 +438,43 @@ export function FeedSuggestionsRow({
   }, [onSnooze, onDismissPermanent, showAlert]);
 
   const handleSeeAll = useCallback(() => {
-    router.push("/(tabs)/social");
+    router.push({ pathname: "/(tabs)/social", params: { discover: "1" } });
   }, [router]);
 
-  if (loading) return null;
+  if (loading && suggestions.length === 0) {
+    return skipFade ? <FeedSuggestionsLoadingRow inline /> : null;
+  }
 
   if (suggestions.length === 0) return null;
 
   const surfaceStyle = variant === "inline" ? styles.surfaceInline : styles.surface;
-  const showSeeAll = variant !== "list";
+  const showSeeAll = variant !== "list" && !embedded;
+
+  const showHeader = !embedded || variant !== "list";
 
   const body = (
     <>
-      <SuggestionsSectionHeader
-        title={copy.title}
-        subtitle={copy.subtitle}
-        onDismissPress={onSnooze || onDismissPermanent ? handleDismissPress : undefined}
-        onSeeAll={showSeeAll ? handleSeeAll : undefined}
-      />
+      {showHeader ? (
+        <SuggestionsSectionHeader
+          title={copy.title}
+          subtitle={copy.subtitle}
+          onDismissPress={onSnooze || onDismissPermanent ? handleDismissPress : undefined}
+          onSeeAll={showSeeAll ? handleSeeAll : undefined}
+          onManageInSocial={showManageInSocial && !embedded ? handleManageInSocial : undefined}
+        />
+      ) : null}
       {variant === "list" ? (
-        <View style={styles.listColumn}>
-          {suggestions.map((u) => (
-            <View key={u.id} style={styles.listCardWrap}>
+        <View style={[styles.listColumn, embedded ? styles.listColumnEmbedded : null]}>
+          {suggestions.map((u, index) => (
+            <View
+              key={`${u.id || "user"}-${index}`}
+              style={[styles.listCardWrap, index < suggestions.length - 1 ? styles.listRowDivider : null]}
+            >
               <SuggestionCard
                 user={u}
+                layout="row"
                 fullWidth
-                pending={pendingIds.has(u.id)}
+                pending={pendingIds.has(u.id) || optimisticPending.has(u.id)}
                 followed={followedIds.has(u.id)}
                 onOpenProfile={() => router.push({ pathname: "/usuario/[id]", params: { id: u.id } })}
                 onFollow={() => handleFollow(u)}
@@ -369,33 +484,49 @@ export function FeedSuggestionsRow({
         </View>
       ) : (
         <SuggestionsCarousel>
-          {suggestions.map((u) => (
-            <SuggestionCard
-              key={u.id}
-              user={u}
-              pending={pendingIds.has(u.id)}
-              followed={followedIds.has(u.id)}
-              onOpenProfile={() => router.push({ pathname: "/usuario/[id]", params: { id: u.id } })}
-              onFollow={() => handleFollow(u)}
-            />
+          {suggestions.map((u, index) => (
+            <View key={`${u.id || "user"}-${index}`} style={styles.carouselItem}>
+              <SuggestionCard
+                user={u}
+                pending={pendingIds.has(u.id) || optimisticPending.has(u.id)}
+                followed={followedIds.has(u.id)}
+                onOpenProfile={() => router.push({ pathname: "/usuario/[id]", params: { id: u.id } })}
+                onFollow={() => handleFollow(u)}
+              />
+            </View>
           ))}
         </SuggestionsCarousel>
       )}
     </>
   );
 
-  return (
-    <Animated.View style={{ opacity: fadeAnim }}>
-      <ProfileSectionSurface flush style={surfaceStyle}>
-        {body}
-      </ProfileSectionSurface>
-    </Animated.View>
+  const surface = embedded ? (
+    body
+  ) : (
+    <ProfileSectionSurface flush style={surfaceStyle}>
+      {body}
+    </ProfileSectionSurface>
   );
+
+  if (skipFade) {
+    return <View collapsable={false}>{surface}</View>;
+  }
+
+  return <Animated.View style={{ opacity: fadeAnim }}>{surface}</Animated.View>;
 }
 
-export function FeedSuggestionsLoadingRow() {
+export const FeedSuggestionsRow = memo(FeedSuggestionsRowInner);
+
+/** Fila inline del feed: tipo de ítem distinto en FlashList (`getItemType`) para evitar reciclado con posts. */
+export const FeedInlineSuggestionsRow = memo(function FeedInlineSuggestionsRow(
+  props: Omit<FeedSuggestionsRowProps, "variant">
+) {
+  return <FeedSuggestionsRow {...props} variant="inline" />;
+});
+
+export function FeedSuggestionsLoadingRow({ inline = false }: { inline?: boolean }) {
   return (
-    <ProfileSectionSurface flush style={styles.surface}>
+    <ProfileSectionSurface flush style={inline ? styles.surfaceInline : styles.surface}>
       <View style={styles.header}>
         <View style={styles.headerText}>
           <View style={styles.titleSkeleton} />
@@ -481,12 +612,94 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: SECTION_INSET,
   },
+  carouselItem: {
+    width: CARD_WIDTH,
+  },
   listColumn: {
     paddingHorizontal: SECTION_INSET,
-    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.15)",
+    backgroundColor: "rgba(14, 14, 16, 0.6)",
+    overflow: "hidden",
+  },
+  listColumnEmbedded: {
+    paddingHorizontal: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    borderRadius: 0,
   },
   listCardWrap: {
     alignSelf: "stretch",
+  },
+  listRowDivider: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(64, 64, 64, 0.65)",
+  },
+  listRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minHeight: 0,
+  },
+  listRowMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
+  listAvatarWrap: {
+    position: "relative",
+  },
+  listActiveDot: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#4ade80",
+    borderWidth: 1.5,
+    borderColor: "#0e0e10",
+  },
+  listMeta: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  listName: {
+    color: AUTH.neutral100,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  listMetaLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minWidth: 0,
+  },
+  listHint: {
+    flex: 1,
+    color: AUTH.muted,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  listFollowBtn: {
+    alignSelf: "center",
+    minWidth: 84,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+  },
+  listFollowText: {
+    fontSize: 12,
+  },
+  mutualRowStart: {
+    justifyContent: "flex-start",
+    marginBottom: 0,
   },
   cardFullWidth: {
     width: "100%",

@@ -6,6 +6,7 @@ import type { Exercise } from "../types/exercise";
 import type { Workout, WorkoutSetRow } from "../types/workout";
 import type { ActiveWorkoutSession, SessionPerformBlock, SessionPerformSet } from "../types/workoutSessionPerform";
 import { getErrorMessage } from "../utils/errorMessages";
+import { buildSessionSnapshotFromPerform } from "../utils/buildSessionSnapshot";
 import { mergeExerciseLastPerformanceFromBlocks } from "../utils/exerciseLastPerformance";
 import { readWorkoutRestPreference } from "../utils/workoutRestPreference";
 import { blockRestSec } from "../utils/performBlockRest";
@@ -267,11 +268,11 @@ export function useWorkoutPerform(workout: Workout) {
   );
 
   const finishSession = useCallback(
-    async (notesOverride?: string): Promise<boolean> => {
-      if (!session) return false;
+    async (notesOverride?: string): Promise<string | null> => {
+      if (!session) return null;
       if (session.blocks.length === 0) {
         setError("Añade al menos un ejercicio para completar el entrenamiento");
-        return false;
+        return null;
       }
       setFinishing(true);
       setError(null);
@@ -286,17 +287,21 @@ export function useWorkoutPerform(workout: Workout) {
           progress.totalSets,
           blockNoteLines
         );
-        await createWorkoutSession({
+        const snapshot = buildSessionSnapshotFromPerform(session, progress, (id) =>
+          catalogById.get(id)?.name?.trim() || "Ejercicio"
+        );
+        const saved = await createWorkoutSession({
           workoutId: session.workoutId,
           performedAt: new Date().toISOString(),
           notes,
+          snapshot,
         });
         await mergeExerciseLastPerformanceFromBlocks(session.blocks);
         await clearActiveWorkoutSession();
-        return true;
+        return saved.id;
       } catch (e) {
         setError(getErrorMessage(e, "No se pudo completar el entrenamiento"));
-        return false;
+        return null;
       } finally {
         setFinishing(false);
       }

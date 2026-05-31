@@ -1,13 +1,12 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { FlashList } from "@shopify/flash-list";
 import {
   ActivityIndicator,
-  FlatList,
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -59,7 +58,7 @@ type WorkoutRowProps = {
   onStartWorkout: () => void;
 };
 
-function WorkoutRow({
+function WorkoutRowInner({
   workout,
   exerciseNames,
   firstExerciseImageUrl,
@@ -181,6 +180,16 @@ function WorkoutRow({
   );
 }
 
+const WorkoutRow = memo(WorkoutRowInner, (prev, next) => {
+  return (
+    prev.workout === next.workout &&
+    prev.exerciseNames === next.exerciseNames &&
+    prev.firstExerciseImageUrl === next.firstExerciseImageUrl &&
+    prev.sessionCount === next.sessionCount &&
+    prev.lastSessionAt === next.lastSessionAt
+  );
+});
+
 export function WorkoutsListScreen() {
   const router = useRouter();
   const { showAlert } = useGoiAlert();
@@ -192,12 +201,24 @@ export function WorkoutsListScreen() {
   const [sessionQuery, setSessionQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [sort, setSort] = useState<WorkoutListSort>("recent");
+  const hubSnapshotRef = useRef({ workouts: 0, sessions: 0 });
+  hubSnapshotRef.current = { workouts: hub.workouts.length, sessions: hub.sessions.length };
+  const hubLastLoadRef = useRef(0);
+  const HUB_FOCUS_STALE_MS = 30_000;
 
   useFocusEffect(
     useCallback(() => {
-      hub.setLoading(true);
-      void hub.load().finally(() => hub.setLoading(false));
-    }, [hub.load])
+      const hasData =
+        hubSnapshotRef.current.workouts > 0 || hubSnapshotRef.current.sessions > 0;
+      const stale = Date.now() - hubLastLoadRef.current > HUB_FOCUS_STALE_MS;
+      if (!hasData) hub.setLoading(true);
+      if (!hasData || stale) {
+        void hub.load().finally(() => {
+          hubLastLoadRef.current = Date.now();
+          if (!hasData) hub.setLoading(false);
+        });
+      }
+    }, [hub.load, hub.setLoading])
   );
 
   const onRefresh = useCallback(async () => {
@@ -321,35 +342,102 @@ export function WorkoutsListScreen() {
 
   const fabBottom = insets.bottom + 20;
 
+  const renderWorkoutRow = useCallback(
+    ({ item }: { item: Workout }) => {
+      const st = hub.sessionStatsByWorkoutId.get(item.id);
+      return (
+        <WorkoutRow
+          workout={item}
+          exerciseNames={exerciseNamesFor(item)}
+          firstExerciseImageUrl={firstExerciseImageFor(item)}
+          sessionCount={st?.sessionCount ?? 0}
+          lastSessionAt={st?.lastSessionPerformedAt ?? null}
+          onEdit={() => router.push({ pathname: "/rutina/[id]", params: { id: item.id } })}
+          onDuplicate={() => {
+            void seedDuplicateWorkoutDraft(item).then(() => router.push("/rutina/nueva"));
+          }}
+          onDelete={() => {
+            showAlert({
+              title: "Eliminar rutina",
+              message: "Esta acción no se puede deshacer.",
+              buttons: [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Eliminar",
+                  style: "destructive",
+                  onPress: () => {
+                    void deleteWorkout(item.id)
+                      .then(() => hub.setWorkouts((prev) => prev.filter((w) => w.id !== item.id)))
+                      .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
+                  },
+                },
+              ],
+            });
+          }}
+          onStartWorkout={() => startWorkout(item.id)}
+        />
+      );
+    },
+    [
+      hub.sessionStatsByWorkoutId,
+      hub.setWorkouts,
+      hub.setError,
+      exerciseNamesFor,
+      firstExerciseImageFor,
+      router,
+      showAlert,
+      startWorkout,
+    ]
+  );
+
+  const workoutsListHeader = useMemo(
+    () => (
+      <>
+        {header}
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar rutina…"
+          placeholderTextColor={AUTH.faint}
+          style={styles.search}
+          accessibilityLabel="Buscar rutinas"
+        />
+        <WorkoutSortBar value={sort} onChange={setSort} />
+      </>
+    ),
+    [header, query, sort]
+  );
+
   if (subTab === "sessions") {
+    const sessionsHeader = (
+      <>
+        {header}
+        <TextInput
+          value={sessionQuery}
+          onChangeText={setSessionQuery}
+          placeholder="Buscar en el historial…"
+          placeholderTextColor={AUTH.faint}
+          style={styles.search}
+          accessibilityLabel="Buscar sesiones"
+        />
+      </>
+    );
+
     return (
       <View style={styles.root}>
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: fabBottom + 24 }]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={AUTH.gold} />
-          }
-          keyboardShouldPersistTaps="handled"
-        >
-          {header}
-          <TextInput
-            value={sessionQuery}
-            onChangeText={setSessionQuery}
-            placeholder="Buscar en el historial…"
-            placeholderTextColor={AUTH.faint}
-            style={styles.search}
-            accessibilityLabel="Buscar sesiones"
-          />
-          <WorkoutSessionsList
-            sessions={filteredSessions}
-            loading={hub.loading}
-            onDelete={(id) => {
-              void deleteWorkoutSession(id)
-                .then(() => hub.setSessions((prev) => prev.filter((s) => s.id !== id)))
-                .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
-            }}
-          />
-        </ScrollView>
+        <WorkoutSessionsList
+          sessions={filteredSessions}
+          loading={hub.loading}
+          refreshing={refreshing}
+          onRefresh={() => void onRefresh()}
+          contentPaddingBottom={fabBottom + 24}
+          ListHeaderComponent={sessionsHeader}
+          onDelete={(id) => {
+            void deleteWorkoutSession(id)
+              .then(() => hub.setSessions((prev) => prev.filter((s) => s.id !== id)))
+              .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
+          }}
+        />
       </View>
     );
   }
@@ -361,58 +449,12 @@ export function WorkoutsListScreen() {
           <WorkoutListSkeleton count={3} />
         </View>
       ) : (
-        <FlatList
+        <FlashList
+          style={styles.list}
           data={filteredWorkouts}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const st = hub.sessionStatsByWorkoutId.get(item.id);
-            return (
-              <WorkoutRow
-                workout={item}
-                exerciseNames={exerciseNamesFor(item)}
-                firstExerciseImageUrl={firstExerciseImageFor(item)}
-                sessionCount={st?.sessionCount ?? 0}
-                lastSessionAt={st?.lastSessionPerformedAt ?? null}
-                onEdit={() => router.push({ pathname: "/rutina/[id]", params: { id: item.id } })}
-                onDuplicate={() => {
-                  void seedDuplicateWorkoutDraft(item).then(() => router.push("/rutina/nueva"));
-                }}
-                onDelete={() => {
-                  showAlert({
-                    title: "Eliminar rutina",
-                    message: "Esta acción no se puede deshacer.",
-                    buttons: [
-                      { text: "Cancelar", style: "cancel" },
-                      {
-                        text: "Eliminar",
-                        style: "destructive",
-                        onPress: () => {
-                          void deleteWorkout(item.id)
-                            .then(() => hub.setWorkouts((prev) => prev.filter((w) => w.id !== item.id)))
-                            .catch((e) => hub.setError(getErrorMessage(e, "No se pudo eliminar")));
-                        },
-                      },
-                    ],
-                  });
-                }}
-                onStartWorkout={() => startWorkout(item.id)}
-              />
-            );
-          }}
-          ListHeaderComponent={
-            <>
-              {header}
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Buscar rutina…"
-                placeholderTextColor={AUTH.faint}
-                style={styles.search}
-                accessibilityLabel="Buscar rutinas"
-              />
-              <WorkoutSortBar value={sort} onChange={setSort} />
-            </>
-          }
+          renderItem={renderWorkoutRow}
+          ListHeaderComponent={workoutsListHeader}
           ListEmptyComponent={
             hub.loading ? null : (
               <WorkoutHubEmptyState
@@ -471,6 +513,9 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: AUTH_PAD,
     gap: 12,
+  },
+  list: {
+    flex: 1,
   },
   listHeader: {
     gap: 10,

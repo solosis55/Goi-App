@@ -119,7 +119,7 @@ export type PostCardGoldBeamGlowFrame = {
   opacity: number;
 };
 
-/** Segmento visible del brillo (sin strokeDashoffset; fiable en Android). */
+/** Segmento visible del brillo. Preferir `beamDashFromProgress` + path estático en UI thread. */
 export function postCardGoldBeamGlowPath(
   progress: number,
   w: number,
@@ -163,7 +163,8 @@ export function postCardGoldBeamGlowPath(
     return { d: "", x1: 0, y1: 0, x2: 0, y2: 0, opacity: 0 };
   }
 
-  const steps = Math.max(10, Math.ceil(span / 7));
+  /** Resolución fija: evita saltos cuando `span` cambia entre frames. */
+  const steps = Math.max(18, Math.ceil(fullGlowLen / 4));
   const points: { x: number; y: number }[] = [];
 
   for (let i = 0; i <= steps; i++) {
@@ -172,7 +173,7 @@ export function postCardGoldBeamGlowPath(
   }
 
   const d = points
-    .map((pt, i) => `${i === 0 ? "M" : "L"} ${pt.x.toFixed(2)} ${pt.y.toFixed(2)}`)
+    .map((pt, i) => `${i === 0 ? "M" : "L"} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`)
     .join(" ");
 
   const first = points[0]!;

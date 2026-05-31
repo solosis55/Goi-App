@@ -1,9 +1,11 @@
+import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { TapSlopPressable } from "../ui/TapSlopPressable";
+import { ScrollAwarePressable } from "../ui/ScrollAwarePressable";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { FeedHeartIcon } from "./FeedHeartIcon";
+import { TabDumbbellIcon } from "../navigation/TabBarIcons";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -19,7 +21,11 @@ type PostActionBarProps = {
   onPressCommentsCount?: () => void;
   saved?: boolean;
   onToggleSave?: () => void;
+  /** Publicación estándar con sesión: alterna preview del entreno en el cuerpo del post. */
+  onPressSessionPreview?: () => void;
+  sessionPreviewActive?: boolean;
   guardScrollPresses?: boolean;
+  compact?: boolean;
 };
 
 function CommentIcon({ size = 24, color = AUTH.neutral100 }: { size?: number; color?: string }) {
@@ -65,7 +71,7 @@ function bounceScale() {
   return withSequence(withSpring(1.28, { damping: 8, stiffness: 380 }), withSpring(1, { damping: 12 }));
 }
 
-export function PostActionBar({
+function PostActionBarInner({
   liked,
   likesCount,
   commentsCount = 0,
@@ -77,9 +83,12 @@ export function PostActionBar({
   onPressCommentsCount,
   saved = false,
   onToggleSave,
+  onPressSessionPreview,
+  sessionPreviewActive = false,
   guardScrollPresses = false,
+  compact = false,
 }: PostActionBarProps) {
-  const Touchable = guardScrollPresses ? TapSlopPressable : Pressable;
+  const scrollGuarded = guardScrollPresses;
   const heartColor = liked ? AUTH.gold : AUTH.neutral100;
   const likeScale = useSharedValue(1);
   const saveScale = useSharedValue(1);
@@ -106,11 +115,16 @@ export function PostActionBar({
   const commentsLabel =
     commentsCount === 1 ? "1 comentario" : `${commentsCount} comentarios`;
 
+  const showSave = onToggleSave != null || compact;
+  const showSession = Boolean(onPressSessionPreview);
+
   return (
-    <View style={styles.bar}>
-      <View style={styles.icons}>
-        {guardScrollPresses ? (
-          <Touchable
+    <View style={[styles.bar, compact ? styles.barCompact : null]}>
+      <View style={styles.iconsRow}>
+        <View style={[styles.icons, compact ? styles.iconsCompact : null]}>
+        {scrollGuarded ? (
+          <ScrollAwarePressable
+            scrollGuarded
             onPress={handleLike}
             hitSlop={8}
             accessibilityRole="button"
@@ -121,7 +135,7 @@ export function PostActionBar({
             <Animated.View style={likeAnimStyle}>
               <FeedHeartIcon filled={liked} color={heartColor} size={26} />
             </Animated.View>
-          </Touchable>
+          </ScrollAwarePressable>
         ) : (
           <AnimatedPressable
             onPress={handleLike}
@@ -135,7 +149,8 @@ export function PostActionBar({
           </AnimatedPressable>
         )}
 
-        <Touchable
+        <ScrollAwarePressable
+          scrollGuarded={scrollGuarded}
           onPress={onPressComment}
           hitSlop={8}
           accessibilityRole="button"
@@ -144,10 +159,30 @@ export function PostActionBar({
           style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
         >
           <CommentIcon />
-        </Touchable>
+        </ScrollAwarePressable>
+
+        {showSession && onPressSessionPreview ? (
+          <ScrollAwarePressable
+            scrollGuarded={scrollGuarded}
+            onPress={onPressSessionPreview}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityState={{ selected: sessionPreviewActive }}
+            accessibilityLabel="Ver entreno vinculado"
+            style={({ pressed }) => [
+              styles.iconBtn,
+              styles.sessionBtn,
+              sessionPreviewActive ? styles.sessionBtnActive : null,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <TabDumbbellIcon size={22} color={AUTH.gold} filled />
+          </ScrollAwarePressable>
+        ) : null}
 
         {onPressShare ? (
-          <Touchable
+          <ScrollAwarePressable
+            scrollGuarded={scrollGuarded}
             onPress={onPressShare}
             hitSlop={8}
             accessibilityRole="button"
@@ -155,47 +190,62 @@ export function PostActionBar({
             style={({ pressed }) => [styles.iconBtn, pressed ? styles.pressed : null]}
           >
             <ShareIcon />
-          </Touchable>
+          </ScrollAwarePressable>
         ) : null}
+        </View>
 
-        {onToggleSave ? (
-          guardScrollPresses ? (
-            <Touchable
-              onPress={handleSave}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityState={{ selected: saved }}
-              accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
-              style={styles.iconBtn}
-            >
-              <Animated.View style={saveAnimStyle}>
-                <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
-              </Animated.View>
-            </Touchable>
-          ) : (
-            <AnimatedPressable
-              onPress={handleSave}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityState={{ selected: saved }}
-              accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
-              style={({ pressed }) => [styles.iconBtn, saveAnimStyle, pressed ? styles.pressed : null]}
-            >
-              <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
-            </AnimatedPressable>
-          )
-        ) : null}
+        <View style={[styles.iconsRight, compact ? styles.iconsCompact : null]}>
+          {showSave ? (
+            onToggleSave ? (
+              scrollGuarded ? (
+                <ScrollAwarePressable
+                  scrollGuarded
+                  onPress={handleSave}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: saved }}
+                  accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
+                  style={styles.iconBtn}
+                >
+                  <Animated.View style={saveAnimStyle}>
+                    <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
+                  </Animated.View>
+                </ScrollAwarePressable>
+              ) : (
+                <AnimatedPressable
+                  onPress={handleSave}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: saved }}
+                  accessibilityLabel={saved ? "Quitar de guardados" : "Guardar publicación"}
+                  style={({ pressed }) => [styles.iconBtn, saveAnimStyle, pressed ? styles.pressed : null]}
+                >
+                  <BookmarkIcon filled={saved} color={saved ? AUTH.gold : AUTH.neutral100} />
+                </AnimatedPressable>
+              )
+            ) : (
+              <View style={styles.iconBtn} accessibilityLabel="Guardar publicación">
+                <BookmarkIcon filled={false} color={AUTH.neutral100} />
+              </View>
+            )
+          ) : null}
+        </View>
       </View>
 
       {likesCount > 0 || commentsCount > 0 ? (
         <View style={styles.statsRow}>
           {likesCount > 0 ? (
             onPressLikesCount ? (
-              <Touchable onPress={onPressLikesCount} hitSlop={6} accessibilityRole="button">
+              <ScrollAwarePressable
+                scrollGuarded={scrollGuarded}
+                onPress={onPressLikesCount}
+                hitSlop={6}
+                accessibilityRole="button"
+              >
                 <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   {likesLabel}
                 </Text>
-              </Touchable>
+              </ScrollAwarePressable>
             ) : (
               <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {likesLabel}
@@ -210,11 +260,16 @@ export function PostActionBar({
           ) : null}
           {commentsCount > 0 ? (
             onPressCommentsCount ? (
-              <Touchable onPress={onPressCommentsCount} hitSlop={6} accessibilityRole="button">
+              <ScrollAwarePressable
+                scrollGuarded={scrollGuarded}
+                onPress={onPressCommentsCount}
+                hitSlop={6}
+                accessibilityRole="button"
+              >
                 <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   {commentsLabel}
                 </Text>
-              </Touchable>
+              </ScrollAwarePressable>
             ) : (
               <Text style={styles.statsText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                 {commentsLabel}
@@ -227,6 +282,8 @@ export function PostActionBar({
   );
 }
 
+export const PostActionBar = memo(PostActionBarInner);
+
 const styles = StyleSheet.create({
   bar: {
     paddingHorizontal: 14,
@@ -234,10 +291,39 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     gap: 6,
   },
+  barCompact: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 2,
+  },
+  iconsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
   icons: {
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
+  },
+  iconsCompact: {
+    gap: 12,
+  },
+  iconsRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: "auto",
+  },
+  sessionBtn: {
+    backgroundColor: "rgba(212, 175, 55, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.22)",
+  },
+  sessionBtnActive: {
+    backgroundColor: "rgba(212, 175, 55, 0.2)",
+    borderColor: "rgba(212, 175, 55, 0.55)",
   },
   iconBtn: {
     width: 40,

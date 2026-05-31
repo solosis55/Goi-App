@@ -1,5 +1,5 @@
 import { Redirect } from "expo-router";
-import { SocialHubScreen } from "../../components/social/SocialHubScreen";
+import { SocialTabRoot } from "../../components/social/SocialTabRoot";
 import { useAuth } from "../../context/AuthContext";
 
 export default function SocialTab() {
@@ -11,5 +11,5 @@ export default function SocialTab() {
     return <Redirect href="/login" />;
   }
 
-  return <SocialHubScreen title="Social" />;
+  return <SocialTabRoot />;
 }

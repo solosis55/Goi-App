@@ -13,9 +13,15 @@ import { apiFetch } from "./client";
 /** Misma ruta que `getPosts` en Goi Web (`src/api/postsApi.ts`). */
 
 export function getPosts() {
-
   return apiFetch<Post[]>("/posts");
+}
 
+export function getFeedPage(scope: "all" | "following", limit = 20, cursor?: string | null) {
+  const sp = new URLSearchParams();
+  sp.set("scope", scope);
+  sp.set("limit", String(limit));
+  if (cursor) sp.set("cursor", cursor);
+  return apiFetch<import("../types/post").FeedPageResponse>(`/posts/feed?${sp.toString()}`);
 }
 
 export type PostsByUserPageResponse = {

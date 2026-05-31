@@ -12,3 +12,14 @@ export const POST_VISIBILITY_OPTIONS: { value: PostVisibility; label: string }[]
   { value: "followers", label: "Seguidores" },
   { value: "private", label: "Solo yo" },
 ];
+
+export const POST_VISIBILITY_CHIPS = POST_VISIBILITY_OPTIONS.map((o) => ({
+  id: o.value,
+  label: o.label,
+}));
+
+export function visibilityDescription(visibility: PostVisibility): string {
+  if (visibility === "followers") return "Solo quienes te siguen";
+  if (visibility === "private") return "Nadie más en el feed";
+  return "Visible para toda la comunidad";
+}

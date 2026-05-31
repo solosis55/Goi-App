@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, memo } from "react";
 import { Animated, PanResponder, Pressable, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
 import { AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
@@ -44,7 +44,7 @@ function TagGroup({ label, items, muscle }: { label: string; items: string[]; mu
   );
 }
 
-export function ExerciseCatalogRow({
+function ExerciseCatalogRowInner({
   exercise,
   already,
   disabled,
@@ -208,3 +208,14 @@ export function ExerciseCatalogRow({
     </View>
   );
 }
+
+export const ExerciseCatalogRow = memo(ExerciseCatalogRowInner, (prev, next) => {
+  return (
+    prev.exercise === next.exercise &&
+    prev.already === next.already &&
+    prev.disabled === next.disabled &&
+    prev.highlighted === next.highlighted &&
+    prev.multiSelect === next.multiSelect &&
+    prev.multiChecked === next.multiChecked
+  );
+});

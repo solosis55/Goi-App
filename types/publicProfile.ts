@@ -74,3 +74,10 @@ export type FollowRequestPreview = {
   avatarUrl: string;
   createdAt: string;
 };
+
+export type SentFollowRequestPreview = {
+  targetUserId: string;
+  username: string;
+  avatarUrl: string;
+  createdAt: string;
+};

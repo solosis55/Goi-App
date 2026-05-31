@@ -25,7 +25,7 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const goPost = useCallback(() => {
+  const goPublish = useCallback(() => {
     hapticLight();
     onClose();
     router.push("/nueva-publicacion");
@@ -56,9 +56,9 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
         </Text>
 
         <Pressable
-          onPress={goPost}
+          onPress={goPublish}
           accessibilityRole="button"
-          accessibilityLabel="Nueva publicación"
+          accessibilityLabel="Publicar en el feed"
           style={({ pressed }) => [styles.option, pressed ? styles.optionPressed : null]}
         >
           <View style={styles.optionIcon}>
@@ -66,10 +66,10 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
           </View>
           <View style={styles.optionText}>
             <Text style={styles.optionTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Publicación
+              Publicar
             </Text>
             <Text style={styles.optionDesc} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Texto, idea o entrenamiento en el feed
+              Comparte en el feed · publicación o training
             </Text>
           </View>
         </Pressable>

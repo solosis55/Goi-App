@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { getUsers } from "../api/auth";
+import { getUsersPreviews } from "../api/auth";
 import { loadMutedUserIds, unmuteUser } from "../utils/feedLocalPrefs";
 
 export type MutedUserRow = { id: string; username: string };
@@ -21,7 +21,7 @@ export function useMutedUsers(userId: string | undefined) {
         return;
       }
       try {
-        const { users } = await getUsers();
+        const { users } = await getUsersPreviews(ids);
         const map = new Map(users.map((u) => [u.id, u.username] as const));
         setRows(ids.map((id) => ({ id, username: map.get(id) ?? `usuario-${id.slice(0, 6)}` })));
       } catch {

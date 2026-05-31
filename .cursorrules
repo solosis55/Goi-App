@@ -13,7 +13,9 @@ En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nomb
 - **Red / API:** `api/` (`client`, `config` con `resolveMediaUrl`, `session`, `auth`, `health`, **`posts`**).
 - **Tipos alineados con la web:** `types/post.ts` (mismo contrato que `Goi Web/src/types/post.ts` para `GET /posts`).
 - **Pantallas:** `/` inicio (landing) → `/login` → `/feed` (protegida); `/nueva-publicacion` (protegida).
-- **Stack previsto más adelante:** FlashList, Zustand, AsyncStorage — **solo cuando el enunciado lo autorice**.
+- **Listas:** **FlashList** en listas verticales principales — ver `docs/flashlist-migration.md`.
+- **Estado global compartido:** **Zustand** en `stores/` (prefs feed, social hub, notificaciones, UI hub). Migración cerrada — ver `docs/zustand-migration.md`. **Context** solo para auth, toasts/alertas, handlers por pantalla (`FeedPostActionsContext`), beam Reanimated y scroll guard.
+- **AsyncStorage** en prefs/borradores locales.
 - **TypeScript** en todo el código de app.
 - **Validación / formularios:** Zod (`constants/loginSchema.ts`, `constants/publicacionSchema.ts`).
 
@@ -41,4 +43,4 @@ En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nomb
 ## React Native + TypeScript (recordatorios útiles)
 - No usar APIs exclusivas de navegador en pantallas móviles.
 - Código específico por plataforma solo con sufijos `.android` / `.ios` (o `.native`) cuando sea necesario.
-- Rendimiento: listas grandes con **FlashList** cuando el proyecto ya lo tenga instalado.
+- Rendimiento: listas largas con **FlashList**; estado compartido con **Zustand** (`stores/`, selectores finos). Context para auth y UI imperativa — tabla en `docs/react-native-teoria.md` § Zustand.

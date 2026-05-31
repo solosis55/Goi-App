@@ -7,7 +7,7 @@ import {
 import type { SuggestionsDismissState } from "./feedLocalPrefs";
 import { isSuggestionsDismissed } from "./feedLocalPrefs";
 
-export type FeedSuggestionsPlacement = "inline" | "header" | "empty" | "none";
+export type FeedSuggestionsPlacement = "inline" | "empty" | "none";
 
 export function shouldOfferFeedSuggestions(input: {
   dismiss: SuggestionsDismissState;
@@ -37,18 +37,13 @@ export function shouldOfferFeedSuggestions(input: {
   return false;
 }
 
+/** Sin bloque en header del feed: solo inline o vacío con CTA a Social. */
 export function feedSuggestionsPlacement(input: {
   shouldOffer: boolean;
   filteredPostsCount: number;
-  feedScope: FeedScope;
 }): FeedSuggestionsPlacement {
   if (!input.shouldOffer) return "none";
-
-  if (input.filteredPostsCount === 0) {
-    return input.feedScope === "following" ? "empty" : "header";
-  }
-
-  if (input.filteredPostsCount >= 3) return "inline";
-
-  return "header";
+  if (input.filteredPostsCount === 0) return "empty";
+  if (input.filteredPostsCount >= 2) return "inline";
+  return "none";
 }

@@ -12,14 +12,29 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
   });
 }
 
-/** Redimensiona y devuelve data URL JPEG para `POST /posts` (sin recorte forzado). */
-export async function uriToPostImageDataUrl(uri: string): Promise<string> {
+/** Redimensiona y devuelve data URL JPEG para `POST /posts`. */
+export async function uriToPostImageDataUrl(
+  uri: string,
+  opts?: { cropSquare?: boolean }
+): Promise<string> {
   const { width, height } = await imageSize(uri);
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(width, height));
-  const targetWidth = Math.max(1, Math.round(width * scale));
+  const actions: ImageManipulator.Action[] = [];
 
-  const actions =
-    scale < 1 ? [{ resize: { width: targetWidth } } as const] : [];
+  if (opts?.cropSquare) {
+    const side = Math.min(width, height);
+    const originX = Math.floor((width - side) / 2);
+    const originY = Math.floor((height - side) / 2);
+    actions.push({ crop: { originX, originY, width: side, height: side } });
+  }
+
+  const w = opts?.cropSquare ? Math.min(width, height) : width;
+  const h = opts?.cropSquare ? Math.min(width, height) : height;
+  const scale = Math.min(1, MAX_DIMENSION / Math.max(w, h));
+  const targetWidth = Math.max(1, Math.round(w * scale));
+
+  if (scale < 1) {
+    actions.push({ resize: { width: targetWidth } });
+  }
 
   const result = await ImageManipulator.manipulateAsync(uri, actions, {
     compress: JPEG_QUALITY,
@@ -38,6 +53,29 @@ export type PickPostImagesResult =
   | { ok: true; uris: string[] }
   | { ok: false; cancelled: true }
   | { ok: false; error: string };
+
+/** Toma una foto con la cámara (una por llamada). */
+export async function takePostPhoto(): Promise<PickPostImagesResult> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) {
+    return { ok: false, error: "Necesitamos acceso a la cámara." };
+  }
+
+  try {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 1,
+    });
+
+    if (result.canceled || !result.assets[0]?.uri) {
+      return { ok: false, cancelled: true };
+    }
+
+    return { ok: true, uris: [result.assets[0].uri] };
+  } catch {
+    return { ok: false, error: "No se pudo usar la cámara." };
+  }
+}
 
 /** Elige hasta `maxCount` fotos del carrete (sin recorte del sistema). */
 export async function pickPostImages(maxCount: number): Promise<PickPostImagesResult> {

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { GOI_DAILY_LABEL } from "../../constants/storyBranding";
+import {
+  GOI_DAILY_LABEL,
+  STORY_STRIP_AVATAR_SIZE,
+  STORY_STRIP_CELL_WIDTH,
+  STORY_STRIP_RING_BOX,
+} from "../../constants/storyBranding";
 import type { FeedStoryAuthor } from "../../types/story";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { UserAvatar } from "../ui/UserAvatar";
@@ -69,18 +74,12 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
               : styles.ringSeen
             : styles.ringMuted;
 
-        const avatarSize = isSelf ? 64 : 56;
-        const cellWidth = isSelf ? 80 : 72;
-
         return (
           <Pressable
             key={author.userId}
             onPress={() => onPress(author.userId)}
             style={({ pressed }) => [
               styles.cell,
-              { width: cellWidth },
-              isNewSlot ? styles.cellNew : null,
-              isSelf ? styles.cellSelf : null,
               pressed ? styles.cellPressed : null,
             ]}
             accessibilityRole="button"
@@ -93,8 +92,14 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
             }
           >
             <View style={styles.avatarWrap}>
-              <View style={[styles.ring, ringStyle]}>
-                <UserAvatar src={author.authorAvatarUrl} username={author.authorUsername} size={avatarSize} />
+              <View style={styles.ringBox}>
+                <View style={[styles.ring, ringStyle, isSelf && hasSlides ? styles.ringSelf : null]}>
+                  <UserAvatar
+                    src={author.authorAvatarUrl}
+                    username={author.authorUsername}
+                    size={STORY_STRIP_AVATAR_SIZE}
+                  />
+                </View>
               </View>
               {isNewSlot ? (
                 <View style={styles.plusBadge}>
@@ -102,7 +107,11 @@ export function StoriesRow({ authors, currentUserId, seenRevision, onSelectAutho
                 </View>
               ) : null}
             </View>
-            <Text style={[styles.label, isNewSlot ? styles.labelNew : null]} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            <Text
+              style={[styles.label, isNewSlot ? styles.labelNew : null, isSelf ? styles.labelSelf : null]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+            >
               {label}
             </Text>
           </Pressable>
@@ -142,26 +151,33 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   cell: {
+    width: STORY_STRIP_CELL_WIDTH,
     alignItems: "center",
     gap: 6,
-  },
-  cellSelf: {
-    marginRight: 4,
-  },
-  cellNew: {
-    borderRadius: 14,
-    paddingTop: 4,
-    paddingHorizontal: 2,
   },
   cellPressed: {
     opacity: 0.85,
   },
   avatarWrap: {
     position: "relative",
+    width: STORY_STRIP_RING_BOX,
+    height: STORY_STRIP_RING_BOX,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  ringBox: {
+    width: STORY_STRIP_RING_BOX,
+    height: STORY_STRIP_RING_BOX,
+    alignItems: "center",
+    justifyContent: "center",
   },
   ring: {
     borderRadius: 999,
     padding: 2,
+    overflow: "hidden",
+  },
+  ringSelf: {
+    borderColor: "rgba(212, 175, 55, 0.55)",
   },
   ringNew: {
     borderWidth: 2,
@@ -173,18 +189,18 @@ const styles = StyleSheet.create({
     borderColor: AUTH.gold,
   },
   ringSeen: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: "rgba(115, 115, 115, 0.9)",
   },
   ringMuted: {
-    borderWidth: 1,
+    borderWidth: 2,
     borderStyle: "dashed",
     borderColor: "rgba(115, 115, 115, 0.55)",
   },
   plusBadge: {
     position: "absolute",
-    right: -2,
-    bottom: -2,
+    right: 0,
+    bottom: 0,
     width: 22,
     height: 22,
     borderRadius: 11,
@@ -201,13 +217,16 @@ const styles = StyleSheet.create({
     marginTop: -1,
   },
   label: {
-    maxWidth: 72,
+    width: STORY_STRIP_CELL_WIDTH,
     color: AUTH.muted,
     fontSize: 11,
     textAlign: "center",
   },
   labelNew: {
     color: AUTH.gold,
+    fontWeight: "600",
+  },
+  labelSelf: {
     fontWeight: "600",
   },
 });

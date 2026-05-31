@@ -1,12 +1,17 @@
 import type {
   CreateWorkoutSessionInput,
   WorkoutSession,
+  WorkoutSessionDetail,
   WorkoutSessionWithTitle,
 } from "../types/workoutSession";
 import { apiFetch } from "./client";
 
 export function getWorkoutSessions() {
   return apiFetch<WorkoutSessionWithTitle[]>("/workout-sessions");
+}
+
+export function getWorkoutSession(id: string) {
+  return apiFetch<WorkoutSessionDetail>(`/workout-sessions/${encodeURIComponent(id)}`);
 }
 
 export function createWorkoutSession(input: CreateWorkoutSessionInput) {

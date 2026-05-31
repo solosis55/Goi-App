@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { updateProfile } from "../../api/auth";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { DEFAULT_PROFILE_SECTION_TAB, type ProfileSectionTab } from "../../constants/profileTabs";
+import type { ProfileEditSubTab } from "../../constants/profileEditTabs";
 import { camaraHistoriaHref } from "../../constants/storyRoutes";
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
@@ -43,12 +44,17 @@ const PAD = 16;
 
 export function ProfileScreen() {
   const router = useRouter();
+  const { editPrivate } = useLocalSearchParams<{ editPrivate?: string }>();
+  const openPrivateEdit = editPrivate === "1" || editPrivate === "true";
   const { showAlert } = useGoiAlert();
   const insets = useSafeAreaInsets();
   const { user, storedAccounts, switchAccount, updateSessionUser } = useAuth();
   const editor = useProfileEditor();
   const stats = useProfileStats(editor.user?.id);
-  const [activeTab, setActiveTab] = useState<ProfileSectionTab>(DEFAULT_PROFILE_SECTION_TAB);
+  const [activeTab, setActiveTab] = useState<ProfileSectionTab>(
+    openPrivateEdit ? "profile" : DEFAULT_PROFILE_SECTION_TAB
+  );
+  const profileEditSubTab: ProfileEditSubTab | undefined = openPrivateEdit ? "private" : undefined;
   const [postsTotal, setPostsTotal] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -337,7 +343,11 @@ export function ProfileScreen() {
           ) : null}
 
           {activeTab === "profile" ? (
-            <ProfileEditSection editor={editor} userId={editor.user?.id} />
+            <ProfileEditSection
+              editor={editor}
+              userId={editor.user?.id}
+              initialEditSubTab={profileEditSubTab}
+            />
           ) : null}
 
           {activeTab === "workouts" ? <ProfileWorkoutsSummary goal={form.goal} /> : null}

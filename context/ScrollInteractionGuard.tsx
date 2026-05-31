@@ -1,3 +1,7 @@
+/**
+ * Scroll guard para pantallas con scroll vertical anidado (p. ej. detalle de post en perfil).
+ * El feed usa `FlashList` sin guard: media con RNGH, botones con `Pressable` directo.
+ */
 import {
   createContext,
   useCallback,

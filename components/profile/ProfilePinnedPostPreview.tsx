@@ -1,5 +1,4 @@
-import { Image, StyleSheet, Text, View } from "react-native";
-import { TapSlopPressable } from "../ui/TapSlopPressable";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { Post } from "../../types/post";
@@ -16,7 +15,7 @@ export function ProfilePinnedPostPreview({ post, onPress }: ProfilePinnedPostPre
   const preview = post.content.trim();
 
   return (
-    <TapSlopPressable
+    <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
       accessibilityRole="button"
@@ -41,7 +40,7 @@ export function ProfilePinnedPostPreview({ post, onPress }: ProfilePinnedPostPre
           {preview}
         </Text>
       ) : null}
-    </TapSlopPressable>
+    </Pressable>
   );
 }
 

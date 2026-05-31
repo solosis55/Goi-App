@@ -115,3 +115,14 @@ En este repo, `newArchEnabled` está en **false** para mejor compatibilidad con 
 ## Sesión
 
 Tras un **401** o códigos de sesión inválida, la app limpia el token y navega a **`/login`**. El botón **Salir** en el feed cierra sesión y vuelve al inicio (`/`).
+
+## Documentación (tutorial / prácticas)
+
+| Documento | Descripción |
+|-----------|-------------|
+| [`docs/README.md`](docs/README.md) | Índice general de documentación |
+| [`docs/react-native-teoria.md`](docs/react-native-teoria.md) | **Teoría principal** (RN, Metro, Expo, FlashList, Zustand, fluidez) |
+| [`docs/ai-setup.md`](docs/ai-setup.md) | Configuración IA (`.cursorrules`) |
+| [`docs/performance-fluidity-verification.md`](docs/performance-fluidity-verification.md) | Checklist manual en dispositivo |
+
+Verificación automática: `npm run verify:fluidity`.

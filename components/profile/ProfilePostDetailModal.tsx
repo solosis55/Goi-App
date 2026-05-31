@@ -3,7 +3,6 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { GuardedScrollView } from "../../context/ScrollInteractionGuard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { useGoiTheme } from "../../constants/theme";
 import type { Post } from "../../types/post";
 import { PostCard } from "../feed/PostCard";
 
@@ -52,7 +51,6 @@ export function ProfilePostDetailModal({
   onSetPinned,
 }: ProfilePostDetailModalProps) {
   const insets = useSafeAreaInsets();
-  const { palette, typography } = useGoiTheme();
   const [contentMounted, setContentMounted] = useState(false);
   const wasVisibleRef = useRef(false);
   const afterCloseFiredRef = useRef(false);
@@ -141,8 +139,6 @@ export function ProfilePostDetailModal({
               onToggleSave={onToggleSave}
               pinnedPostId={pinnedPostId}
               onSetPinned={onSetPinned}
-              palette={palette}
-              typography={typography}
             />
           ) : null}
         </GuardedScrollView>

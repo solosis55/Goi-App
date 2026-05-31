@@ -9,7 +9,6 @@ import { feedScopeEmptyMessage } from "../../utils/feedTimeline";
 type FeedEmptyStateProps = {
   scope: FeedScope;
   onCreatePost?: () => void;
-  onScrollToSuggestions?: () => void;
   suggestionsSlot?: ReactNode;
 };
 
@@ -36,12 +35,7 @@ function FeedEmptyIllustration() {
   );
 }
 
-export function FeedEmptyState({
-  scope,
-  onCreatePost,
-  onScrollToSuggestions,
-  suggestionsSlot,
-}: FeedEmptyStateProps) {
+export function FeedEmptyState({ scope, onCreatePost, suggestionsSlot }: FeedEmptyStateProps) {
   const router = useRouter();
   const { title, body } = feedScopeEmptyMessage(scope);
 
@@ -66,22 +60,18 @@ export function FeedEmptyState({
             Crear publicación
           </Text>
         </Pressable>
-      ) : scope === "following" && onScrollToSuggestions ? (
+      ) : (
         <Pressable
-          onPress={onScrollToSuggestions}
+          onPress={() => router.push({ pathname: "/(tabs)/social", params: { discover: "1" } })}
           style={({ pressed }) => [styles.ctaSecondary, pressed ? styles.pressed : null]}
           accessibilityRole="button"
-          accessibilityLabel="Ver sugerencias para seguir"
+          accessibilityLabel="Buscar atletas en Social"
         >
           <Text style={styles.ctaSecondaryText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Ver sugerencias
+            Buscar atletas en Social
           </Text>
         </Pressable>
-      ) : scope === "following" ? (
-        <Text style={styles.hint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Desliza las sugerencias de arriba para seguir cuentas.
-        </Text>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -140,12 +130,6 @@ const styles = StyleSheet.create({
     color: AUTH.gold,
     fontSize: 14,
     fontWeight: "600",
-  },
-  hint: {
-    color: AUTH.faint,
-    fontSize: 13,
-    textAlign: "center",
-    marginTop: 4,
   },
   pressed: {
     opacity: 0.9,

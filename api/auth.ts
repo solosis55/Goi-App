@@ -80,8 +80,56 @@ export function getUsers() {
   return apiFetch<{ users: DiscoverUser[] }>("/auth/users");
 }
 
-export function getDiscover(limit = 24) {
-  return apiFetch<{ users: DiscoverUser[] }>(`/auth/discover?limit=${limit}`);
+export function getDiscover(
+  limit = 24,
+  offset = 0,
+  facet: import("../types/auth").DiscoverFacetParam = "all"
+) {
+  const sp = new URLSearchParams();
+  sp.set("limit", String(limit));
+  sp.set("offset", String(offset));
+  if (facet !== "all") sp.set("facet", facet);
+  return apiFetch<import("../types/auth").DiscoverPageResponse>(`/auth/discover?${sp.toString()}`);
+}
+
+export function getSocialHub(opts?: { lite?: boolean }) {
+  const q = opts?.lite ? "?lite=1" : "";
+  return apiFetch<import("../types/socialHub").SocialHubResponse>(`/auth/social/hub${q}`);
+}
+
+export function getUsersPreviews(ids: string[]) {
+  if (ids.length === 0) return Promise.resolve({ users: [] as { id: string; username: string; avatarUrl: string }[] });
+  const sp = new URLSearchParams();
+  sp.set("ids", ids.slice(0, 64).join(","));
+  return apiFetch<{ users: { id: string; username: string; avatarUrl: string }[] }>(
+    `/auth/users/previews?${sp.toString()}`
+  );
+}
+
+export function searchUsers(q: string, limit = 24) {
+  const sp = new URLSearchParams();
+  sp.set("q", q);
+  sp.set("limit", String(limit));
+  return apiFetch<{ users: DiscoverUser[] }>(`/auth/users/search?${sp.toString()}`);
+}
+
+export function getNotificationPrefsRemote() {
+  return apiFetch<{ prefs: import("../types/socialHub").NotificationPrefsDto }>(
+    "/auth/notification-prefs"
+  );
+}
+
+export function putNotificationPrefsRemote(prefs: import("../types/socialHub").NotificationPrefsDto) {
+  return apiFetch<{ prefs: import("../types/socialHub").NotificationPrefsDto }>(
+    "/auth/notification-prefs",
+    { method: "PUT", body: JSON.stringify(prefs) }
+  );
+}
+
+export function getBlockedUsersPreviews() {
+  return apiFetch<{ users: { id: string; username: string; avatarUrl: string }[] }>(
+    "/auth/blocks/previews"
+  );
 }
 
 export type ToggleFollowResponse = {
@@ -109,6 +157,12 @@ export function respondFollowRequest(requesterId: string, action: "accept" | "re
 export function getPendingFollowRequests() {
   return apiFetch<{ requests: import("../types/publicProfile").FollowRequestPreview[] }>(
     "/auth/follow-requests"
+  );
+}
+
+export function getSentFollowRequests() {
+  return apiFetch<{ requests: import("../types/publicProfile").SentFollowRequestPreview[] }>(
+    "/auth/follow-requests/sent"
   );
 }
 

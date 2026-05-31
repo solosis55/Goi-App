@@ -1,5 +1,5 @@
 /** Tras cuántos posts del feed se inserta el bloque de sugerencias (feed activo). */
-export const FEED_SUGGESTIONS_INSERT_AFTER_POSTS = 3;
+export const FEED_SUGGESTIONS_INSERT_AFTER_POSTS = 2;
 
 /** Máximo de tarjetas en el carrusel del feed. */
 export const FEED_SUGGESTIONS_CAROUSEL_MAX = 5;

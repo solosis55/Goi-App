@@ -1,14 +1,22 @@
-import { useCallback, useEffect, useId, useRef, useState, type RefObject } from "react";
-import { StyleSheet, useWindowDimensions, View, type View as RNView } from "react-native";
+import { useEffect, useId, useMemo } from "react";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
+import Animated, { useAnimatedProps, useDerivedValue, useSharedValue } from "react-native-reanimated";
 import Svg, { Defs, G, LinearGradient, Path, Stop } from "react-native-svg";
 import { AUTH } from "../../constants/authUi";
 import { useFeedGoldBeam } from "../../context/FeedGoldBeamContext";
-import { postCardGoldBeamGlowPath } from "../../utils/postCardGoldBeamPath";
-import { isCardOnScreen } from "../../utils/postCardGoldBeamProgress";
-import { postCardGoldBeamProgressFromScroll } from "../../utils/postCardGoldBeamScrollProgress";
-import { measureViewInWindow } from "../../utils/measureInWindow";
+import {
+  postCardGoldBeamGlowLength,
+  postCardGoldBeamPath,
+  postCardGoldBeamPathLength,
+} from "../../utils/postCardGoldBeamPath";
+import { postCardGoldBeamTravelPx } from "../../utils/postCardGoldBeamScrollProgress";
+import {
+  beamDashFromProgress,
+  beamProgressFromScrollDelta,
+} from "../../utils/postCardGoldBeamWorklet";
 
-/** Brillo sutil: fade largo, pico bajo (alineado con `GoiGoldFadeLine` subtle). */
+const AnimatedPath = Animated.createAnimatedComponent(Path);
+
 const BEAM_GRADIENT_STOPS = [
   { offset: "0%", opacity: 0 },
   { offset: "10%", opacity: 0.025 },
@@ -22,195 +30,126 @@ const BEAM_GRADIENT_STOPS = [
 ] as const;
 
 const STROKE_CORE = 1;
-const STROKE_HALO_INNER = 2.5;
 const STROKE_HALO_OUTER = 4.5;
 const STROKE_HALO_WIDE = 8;
 const HALO_WIDE_OPACITY = 0.028;
-const HALO_INNER_OPACITY = 0.055;
 const HALO_OUTER_OPACITY = 0.038;
 const CORE_GOLD = AUTH.gold;
-const CORE_WARM = "#f0d878";
-const CORE_WARM_OPACITY = 0.1;
-
-type ScrollAnchor = { scrollY: number };
 
 type PostCardGoldBeamProps = {
-  hostRef: RefObject<RNView | null>;
   width: number;
   height: number;
 };
 
-function BeamGlowPaths({
-  glowD,
-  gradId,
-  grad,
-  opacity,
-}: {
-  glowD: string;
-  gradId: string;
-  grad: { x1: number; y1: number; x2: number; y2: number };
-  opacity: number;
-}) {
-  const cap = { strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-
-  return (
-    <G opacity={opacity}>
-      <Defs>
-        <LinearGradient
-          id={gradId}
-          gradientUnits="userSpaceOnUse"
-          x1={grad.x1}
-          y1={grad.y1}
-          x2={grad.x2}
-          y2={grad.y2}
-        >
-          {BEAM_GRADIENT_STOPS.map((s) => (
-            <Stop key={s.offset} offset={s.offset} stopColor={CORE_GOLD} stopOpacity={s.opacity} />
-          ))}
-        </LinearGradient>
-      </Defs>
-      <Path
-        d={glowD}
-        stroke={CORE_GOLD}
-        strokeWidth={STROKE_HALO_WIDE}
-        strokeOpacity={HALO_WIDE_OPACITY}
-        fill="none"
-        {...cap}
-      />
-      <Path
-        d={glowD}
-        stroke={CORE_GOLD}
-        strokeWidth={STROKE_HALO_OUTER}
-        strokeOpacity={HALO_OUTER_OPACITY}
-        fill="none"
-        {...cap}
-      />
-      <Path
-        d={glowD}
-        stroke={CORE_GOLD}
-        strokeWidth={STROKE_HALO_INNER}
-        strokeOpacity={HALO_INNER_OPACITY}
-        fill="none"
-        {...cap}
-      />
-      <Path
-        d={glowD}
-        stroke={`url(#${gradId})`}
-        strokeWidth={STROKE_CORE}
-        fill="none"
-        {...cap}
-      />
-      <Path
-        d={glowD}
-        stroke={CORE_WARM}
-        strokeWidth={0.65}
-        strokeOpacity={CORE_WARM_OPACITY}
-        fill="none"
-        {...cap}
-      />
-    </G>
-  );
-}
-
-export function PostCardGoldBeam({ hostRef, width, height }: PostCardGoldBeamProps) {
+export function PostCardGoldBeam({ width, height }: PostCardGoldBeamProps) {
   const feedBeam = useFeedGoldBeam();
   const gradId = useId().replace(/:/g, "");
   const { height: winHeight } = useWindowDimensions();
-  const anchorRef = useRef<ScrollAnchor | null>(null);
 
   const w = Math.max(1, Math.round(width));
   const h = Math.max(1, Math.round(height));
 
-  const [glowD, setGlowD] = useState("");
-  const [grad, setGrad] = useState({ x1: 0, y1: 0, x2: 1, y2: 0 });
-  const [beamOpacity, setBeamOpacity] = useState(0);
-  const [show, setShow] = useState(false);
+  const pathD = useMemo(() => postCardGoldBeamPath(w, h), [w, h]);
+  const pathLen = useMemo(() => postCardGoldBeamPathLength(w, h), [w, h]);
+  const fullGlowLen = useMemo(() => postCardGoldBeamGlowLength(w, h), [w, h]);
+  const travelPx = useMemo(() => postCardGoldBeamTravelPx(winHeight, h), [winHeight, h]);
 
-  const applyProgress = useCallback(
-    (progress: number) => {
-      const frame = postCardGoldBeamGlowPath(progress, w, h);
-      setGlowD(frame.d);
-      setGrad({ x1: frame.x1, y1: frame.y1, x2: frame.x2, y2: frame.y2 });
-      setBeamOpacity(frame.opacity);
-      setShow(frame.opacity > 0.02 && frame.d.length > 0);
-    },
-    [w, h]
-  );
+  const grad = useMemo(() => {
+    const { x0, y0, iw } = { x0: 1.5, y0: 1.5, iw: w - 3 };
+    return { x1: x0, y1: y0, x2: x0 + iw, y2: y0 };
+  }, [w]);
 
-  const resetAnchor = useCallback(
-    (contentOffsetY: number) => {
-      anchorRef.current = { scrollY: contentOffsetY };
-      applyProgress(0);
-    },
-    [applyProgress]
-  );
-
-  const onFeedScroll = useCallback(
-    (contentOffsetY: number) => {
-      if (!anchorRef.current) {
-        resetAnchor(contentOffsetY);
-        return;
-      }
-
-      const progress = postCardGoldBeamProgressFromScroll(
-        contentOffsetY,
-        anchorRef.current.scrollY,
-        0,
-        winHeight,
-        h
-      );
-      applyProgress(progress);
-    },
-    [resetAnchor, winHeight, h, applyProgress]
-  );
-
-  const syncFromScroll = useCallback(() => {
-    if (!feedBeam) return;
-    const y = feedBeam.scrollY.value;
-    if (anchorRef.current === null) {
-      resetAnchor(y);
-    } else {
-      onFeedScroll(y);
-    }
-  }, [feedBeam, resetAnchor, onFeedScroll]);
-
-  const checkOnScreen = useCallback(() => {
-    measureViewInWindow(hostRef.current, (rect) => {
-      if (!rect || !isCardOnScreen(rect.y, rect.height, winHeight)) {
-        setShow(false);
-        return;
-      }
-      syncFromScroll();
-    });
-  }, [hostRef, winHeight, syncFromScroll]);
+  const anchorScrollY = useSharedValue(0);
 
   useEffect(() => {
-    if (!feedBeam) return;
+    if (feedBeam) {
+      anchorScrollY.value = feedBeam.scrollY.value;
+    }
+  }, [feedBeam, w, h, anchorScrollY]);
 
-    anchorRef.current = null;
+  const dashState = useDerivedValue(() => {
+    if (!feedBeam) {
+      return { dash1: 0, dash2: pathLen, dashOffset: 0, opacity: 0 };
+    }
+    const delta = feedBeam.scrollY.value - anchorScrollY.value;
+    const progress = beamProgressFromScrollDelta(delta, travelPx);
+    return beamDashFromProgress(progress, pathLen, fullGlowLen);
+  }, [feedBeam, pathLen, fullGlowLen, travelPx]);
 
-    const boot = () => syncFromScroll();
-    boot();
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(boot);
-    });
-
-    const unregister = feedBeam.registerScrollListener(onFeedScroll);
-    const visId = setInterval(checkOnScreen, 500);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      unregister();
-      clearInterval(visId);
+  const haloWideProps = useAnimatedProps(() => {
+    const { dash1, dash2, dashOffset, opacity } = dashState.value;
+    return {
+      strokeDasharray: [dash1, dash2],
+      strokeDashoffset: dashOffset,
+      opacity: opacity * HALO_WIDE_OPACITY,
     };
-  }, [feedBeam, w, h, onFeedScroll, syncFromScroll, checkOnScreen]);
+  });
 
-  if (!show || !glowD || w < 48 || h < 48) return null;
+  const haloOuterProps = useAnimatedProps(() => {
+    const { dash1, dash2, dashOffset, opacity } = dashState.value;
+    return {
+      strokeDasharray: [dash1, dash2],
+      strokeDashoffset: dashOffset,
+      opacity: opacity * HALO_OUTER_OPACITY,
+    };
+  });
+
+  const coreProps = useAnimatedProps(() => {
+    const { dash1, dash2, dashOffset, opacity } = dashState.value;
+    return {
+      strokeDasharray: [dash1, dash2],
+      strokeDashoffset: dashOffset,
+      opacity,
+    };
+  });
+
+  if (w < 48 || h < 48) return null;
+
+  const cap = { strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
   return (
     <View style={styles.layer} pointerEvents="none" collapsable={false}>
       <Svg width={w} height={h}>
-        <BeamGlowPaths glowD={glowD} gradId={gradId} grad={grad} opacity={beamOpacity} />
+        <Defs>
+          <LinearGradient
+            id={gradId}
+            gradientUnits="userSpaceOnUse"
+            x1={grad.x1}
+            y1={grad.y1}
+            x2={grad.x2}
+            y2={grad.y2}
+          >
+            {BEAM_GRADIENT_STOPS.map((s) => (
+              <Stop key={s.offset} offset={s.offset} stopColor={CORE_GOLD} stopOpacity={s.opacity} />
+            ))}
+          </LinearGradient>
+        </Defs>
+        <G>
+          <AnimatedPath
+            d={pathD}
+            stroke={CORE_GOLD}
+            strokeWidth={STROKE_HALO_WIDE}
+            fill="none"
+            animatedProps={haloWideProps}
+            {...cap}
+          />
+          <AnimatedPath
+            d={pathD}
+            stroke={CORE_GOLD}
+            strokeWidth={STROKE_HALO_OUTER}
+            fill="none"
+            animatedProps={haloOuterProps}
+            {...cap}
+          />
+          <AnimatedPath
+            d={pathD}
+            stroke={`url(#${gradId})`}
+            strokeWidth={STROKE_CORE}
+            fill="none"
+            animatedProps={coreProps}
+            {...cap}
+          />
+        </G>
       </Svg>
     </View>
   );

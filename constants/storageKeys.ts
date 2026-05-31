@@ -39,3 +39,24 @@ export const EXERCISE_LAST_PERFORMANCE_KEY = "goi:exerciseLastPerformance:v1";
 
 /** "1" = sonido al terminar descanso; "0" = solo vibración. */
 export const WORKOUT_REST_SOUND_KEY = "goi:workoutRestSound";
+
+/** Perfiles visitados recientemente (solo este dispositivo). */
+export const RECENT_PROFILE_VISITS_KEY = "goi:recentProfileVisits:v1";
+
+/** Banner de ayuda en pestaña Social (solicitudes vs actividad). */
+export const SOCIAL_TAB_HINT_SEEN_KEY = "goi:socialTabHintSeen:v1";
+
+/** Preferencias locales de tipos de notificación (sin push). */
+export const NOTIFICATION_PREFS_KEY = "goi:notificationPrefs:v1";
+
+/** Secciones colapsadas en hub Social (ids separados por coma). */
+export const SOCIAL_HUB_COLLAPSED_KEY = "goi:socialHubCollapsed:v1";
+
+/** Borrador de nueva publicación (texto, visibilidad, URIs locales de fotos). */
+export const POST_CREATE_DRAFT_KEY = "goi:postCreateDraft:v1";
+
+/** Publicación que no pudo subirse (reintento manual). */
+export const POST_PUBLISH_QUEUE_KEY = "goi:postPublishQueue:v1";
+
+/** "1" = brillo dorado en feed; "0" = desactivado (ahorro batería / dispositivos lentos). */
+export const FEED_GOLD_BEAM_ENABLED_KEY = "goi:feedGoldBeamEnabled:v1";

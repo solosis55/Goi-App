@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -24,7 +25,9 @@ import { computeProfileBadges } from "../../utils/profileBadges";
 import { computeProfileStatsFromSessions } from "../../utils/profileStatsFromSessions";
 import { formatMemberSince } from "../../utils/profileMemberSince";
 import { buildProfileActivityLine } from "../../utils/profileRecentActivity";
+import { recordRecentProfileVisit } from "../../utils/profileRecentVisits";
 import { shareProfile } from "../../utils/shareProfile";
+import { confirmBlock, confirmUnfollow } from "../../utils/socialConfirmActions";
 import { hasUnseenStories, loadStorySeenMap } from "../../utils/storySeen";
 import { StoryViewerModal } from "../stories/StoryViewerModal";
 import { ExternalProfileSkeleton } from "./ExternalProfileSkeleton";
@@ -118,6 +121,15 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     },
   });
 
+  const handleToggleFollow = useCallback(() => {
+    const username = profile.profile?.username?.trim() || "usuario";
+    if (profile.following) {
+      confirmUnfollow(showAlert, username, () => void profile.handleToggleFollow());
+      return;
+    }
+    void profile.handleToggleFollow();
+  }, [profile, showAlert]);
+
   const sessionStats = useMemo(() => {
     const routinesCount = Object.keys(profile.workoutTitles).length;
     return computeProfileStatsFromSessions(profile.sessions, profile.workoutTitles, routinesCount);
@@ -187,8 +199,13 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     }
   }, [profile]);
 
+  const stickyVisibleRef = useRef(false);
+
   const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setStickyVisible(e.nativeEvent.contentOffset.y > 220);
+    const show = e.nativeEvent.contentOffset.y > 220;
+    if (show === stickyVisibleRef.current) return;
+    stickyVisibleRef.current = show;
+    setStickyVisible(show);
   }, []);
 
   const handleViewStory = useCallback((author: FeedStoryAuthor) => {
@@ -235,16 +252,18 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
           text: "Bloquear usuario",
           style: "destructive",
           onPress: () => {
-            void (async () => {
-              await toggleBlockUser(userId);
-              await blockUser(userId);
-              showAlert({
-                title: "Usuario bloqueado",
-                message: "No verás su contenido en el feed.",
-                buttons: [{ text: "Entendido", style: "default" }],
-              });
-              router.back();
-            })();
+            confirmBlock(showAlert, username, () => {
+              void (async () => {
+                await toggleBlockUser(userId);
+                await blockUser(userId);
+                showAlert({
+                  title: "Usuario bloqueado",
+                  message: "No verás su contenido en el feed.",
+                  buttons: [{ text: "Entendido", style: "default" }],
+                });
+                router.back();
+              })();
+            });
           },
         },
         {
@@ -261,6 +280,15 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
       ],
     });
   }, [profile.profile?.username, userId, showAlert, router]);
+
+  useEffect(() => {
+    if (!user?.id || user.id === userId || !profile.profile?.username) return;
+    void recordRecentProfileVisit(user.id, {
+      userId,
+      username: profile.profile.username,
+      avatarUrl: profile.profile.avatarUrl ?? "",
+    });
+  }, [user?.id, userId, profile.profile?.username, profile.profile?.avatarUrl]);
 
   if (user?.id === userId) {
     router.replace("/(tabs)/perfil");
@@ -286,13 +314,13 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
         following={profile.following}
         followBusy={profile.followBusy}
         onBack={() => router.back()}
-        onToggleFollow={() => void profile.handleToggleFollow()}
+        onToggleFollow={handleToggleFollow}
       />
 
       <ScrollView
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        removeClippedSubviews={false}
+        removeClippedSubviews={Platform.OS === "android"}
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={AUTH.gold} />
@@ -322,7 +350,7 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
           activityLine={activityLine}
           unseenDaily={unseenDaily}
           onBack={() => router.back()}
-          onToggleFollow={() => void profile.handleToggleFollow()}
+          onToggleFollow={handleToggleFollow}
           onShare={handleShareProfile}
           onMore={handleMoreMenu}
           onAvatarPress={dailyAuthor?.slides.length ? handleAvatarDaily : undefined}
@@ -345,7 +373,7 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
             postCountTotal={profile.postCountTotal}
             previewPosts={profile.previewPosts}
             unavailable={profile.profileUnavailable}
-            onFollow={() => void profile.handleToggleFollow()}
+            onFollow={handleToggleFollow}
           />
         ) : (
           <>

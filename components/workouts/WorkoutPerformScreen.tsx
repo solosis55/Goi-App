@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  LayoutAnimation,
   Modal,
   Platform,
   Pressable,
@@ -10,7 +9,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -48,10 +46,10 @@ import { WorkoutRestTimerBar } from "./WorkoutRestTimerBar";
 import { WorkoutNotesIcon } from "./WorkoutPerformIcons";
 import { WorkoutSessionNotesSheet } from "./WorkoutSessionNotesSheet";
 import { WorkoutHubEmptyState } from "./WorkoutHubEmptyState";
-
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import {
+  ShareWorkoutPromptSheet,
+  type ShareWorkoutPromptStats,
+} from "../post/ShareWorkoutPromptSheet";
 
 type WorkoutPerformScreenProps = {
   workout: Workout;
@@ -69,6 +67,10 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
   const [blockKeys, setBlockKeys] = useState<string[]>([]);
   const [restSoundEnabled, setRestSoundEnabled] = useState(true);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [sharePrompt, setSharePrompt] = useState<{
+    sessionId: string;
+    stats: ShareWorkoutPromptStats;
+  } | null>(null);
   const restWarned3sRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const blocksTopYRef = useRef(0);
@@ -152,15 +154,6 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
     setFinishModalOpen(true);
   }, [perform.allSetsDone, perform.progress, perform.session?.notes, showAlert]);
 
-  const confirmFinish = useCallback(async () => {
-    const ok = await perform.finishSession(finishNotes);
-    if (ok) {
-      workoutHapticSuccess();
-      setFinishModalOpen(false);
-      router.replace("/(tabs)/entrenamientos");
-    }
-  }, [perform, finishNotes, router]);
-
   const progressPct = useMemo(() => {
     if (perform.progress.totalSets === 0) return 0;
     return Math.round((perform.progress.completedSets / perform.progress.totalSets) * 100);
@@ -169,6 +162,28 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
   const activeBlockIndex = useMemo(() => firstIncompleteBlockIndex(blocks), [blocks]);
 
   const volumeKg = useMemo(() => estimateSessionVolumeKg(blocks), [blocks]);
+
+  const confirmFinish = useCallback(async () => {
+    const sessionId = await perform.finishSession(finishNotes);
+    if (sessionId) {
+      workoutHapticSuccess();
+      setFinishModalOpen(false);
+      const vol = estimateSessionVolumeKg(blocks);
+      const pct =
+        perform.progress.totalSets === 0
+          ? 0
+          : Math.round((perform.progress.completedSets / perform.progress.totalSets) * 100);
+      setSharePrompt({
+        sessionId,
+        stats: {
+          setsLabel: `${perform.progress.completedSets}/${perform.progress.totalSets}`,
+          exercisesLabel: `${perform.progress.completedExercises}/${perform.progress.totalExercises}`,
+          progressPct: pct,
+          volumeKg: vol > 0 ? vol : undefined,
+        },
+      });
+    }
+  }, [perform, finishNotes, blocks]);
 
   useEffect(() => {
     if (activeBlockIndex < 0 || activeBlockIndex === prevActiveBlockRef.current) return;
@@ -220,7 +235,6 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
         const sec = blockRestSec(block);
         if (sec > 0) {
           workoutHapticLight();
-          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
           const name = perform.catalogById.get(block.exerciseId)?.name;
           setRestExerciseLabel(name?.trim() || "Ejercicio");
           restTimer.start(sec);
@@ -540,6 +554,32 @@ export function WorkoutPerformScreen({ workout }: WorkoutPerformScreenProps) {
           </View>
         </View>
       </Modal>
+
+      <ShareWorkoutPromptSheet
+        visible={sharePrompt != null}
+        workoutTitle={workout.title}
+        stats={
+          sharePrompt?.stats ?? {
+            setsLabel: "0/0",
+            exercisesLabel: "0/0",
+            progressPct: 0,
+          }
+        }
+        onLater={() => {
+          setSharePrompt(null);
+          router.replace("/(tabs)/entrenamientos");
+        }}
+        onShare={() => {
+          const sessionId = sharePrompt?.sessionId;
+          setSharePrompt(null);
+          if (sessionId) {
+            router.replace({
+              pathname: "/nueva-publicacion",
+              params: { sessionId },
+            });
+          }
+        }}
+      />
     </View>
     </AppScreenShell>
   );

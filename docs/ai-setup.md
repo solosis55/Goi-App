@@ -11,7 +11,7 @@ Este documento cumple el apartado inicial de prácticas: dejar **documentada** l
 ### Archivo `.cursorrules` (raíz de `Goi App`)
 
 - **Ubicación:** `Goi App/.cursorrules` (raíz del proyecto móvil, no de todo el monorepo).
-- **Contenido:** contexto de producto (Goi, relación con Goi Web), **stack previsto** (Expo, React Native, TypeScript, Expo Router, Gluestack UI, FlashList, Zustand, AsyncStorage), **convenciones** de código y **límites** (no instalar dependencias hasta que el guion lo indique, cambios acotados, alineación con la API de Goi Web).
+- **Contenido:** contexto de producto (Goi, relación con Goi Web), **stack** (Expo, React Native, TypeScript, Expo Router, Gluestack UI, FlashList, Zustand, AsyncStorage), **convenciones** de código y **límites** (cambios acotados, alineación con la API de Goi Web).
 - **Motivo:** Cursor inyecta estas instrucciones como contexto persistente del repositorio, de modo que las sugerencias no contradigan el stack acordado ni el backend ya existente.
 
 ### Por qué no solo dependemos del chat
@@ -32,3 +32,4 @@ Las versiones recientes de Cursor recomiendan también reglas en `.cursor/rules/
 | ----------- | ------ |
 | 2026-05-12  | Creación inicial de `.cursorrules` y este documento. |
 | 2026-05-12  | Setup Expo (SDK 54): plantilla `blank-typescript`, Expo Router y dependencias del enunciado; estructura de carpetas recomendada. El nombre de carpeta del workspace es `Goi App` (con espacio); el paquete npm usa el identificador `goi` por compatibilidad con Expo. |
+| 2026-05     | Documentación tutorial: `docs/README.md`, `react-native-teoria.md` (FlashList, Zustand, fluidez), migraciones y checklist de verificación. |

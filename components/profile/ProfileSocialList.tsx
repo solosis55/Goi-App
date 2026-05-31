@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { FlashList } from "@shopify/flash-list";
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { toggleFollow } from "../../api/auth";
+import { useGoiAlert } from "../../context/GoiAlertContext";
+import { confirmUnfollow } from "../../utils/socialConfirmActions";
 import { resolveMediaUrl } from "../../api/config";
 import { getProfileSocialPage } from "../../api/publicProfile";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
@@ -85,9 +87,14 @@ export function ProfileSocialList({ userId, kind, onFollowingChanged }: ProfileS
     void load(false, null, { silent: true });
   }, [load]);
 
-  const handleToggle = useCallback(
+  const { showAlert } = useGoiAlert();
+
+  const runToggle = useCallback(
     async (target: SocialUserPreview) => {
-      if (target.id === currentUser?.id) return;
+      const prevFollowing = target.isFollowing;
+      setUsers((prev) =>
+        prev.map((u) => (u.id === target.id ? { ...u, isFollowing: !prevFollowing } : u))
+      );
       setBusyId(target.id);
       try {
         const res = await toggleFollow(target.id);
@@ -99,12 +106,26 @@ export function ProfileSocialList({ userId, kind, onFollowingChanged }: ProfileS
         );
         onFollowingChanged?.(target.id, following);
       } catch {
-        /* ignore */
+        setUsers((prev) =>
+          prev.map((u) => (u.id === target.id ? { ...u, isFollowing: prevFollowing } : u))
+        );
       } finally {
         setBusyId(null);
       }
     },
-    [currentUser?.id, onFollowingChanged]
+    [onFollowingChanged]
+  );
+
+  const handleToggle = useCallback(
+    (target: SocialUserPreview) => {
+      if (target.id === currentUser?.id) return;
+      if (target.isFollowing) {
+        confirmUnfollow(showAlert, target.username, () => void runToggle(target));
+        return;
+      }
+      void runToggle(target);
+    },
+    [currentUser?.id, showAlert, runToggle]
   );
 
   const openProfile = useCallback(
@@ -116,6 +137,55 @@ export function ProfileSocialList({ userId, kind, onFollowingChanged }: ProfileS
       router.push({ pathname: "/usuario/[id]", params: { id: targetId } });
     },
     [currentUser?.id, router]
+  );
+
+  const listExtraKey = `${busyId ?? ""}|${currentUser?.id ?? ""}`;
+
+  const renderUserRow = useCallback(
+    ({ item }: { item: SocialUserPreview }) => {
+      const isSelf = item.id === currentUser?.id;
+      return (
+        <View style={styles.row}>
+          <Pressable style={styles.rowMain} onPress={() => openProfile(item.id)}>
+            <UserAvatar
+              src={item.avatarUrl ? resolveMediaUrl(item.avatarUrl) : ""}
+              username={item.username}
+              size={48}
+            />
+            <View style={styles.rowText}>
+              <Text style={styles.username} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                @{item.username}
+              </Text>
+              {item.followsYou ? (
+                <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  Te sigue
+                </Text>
+              ) : null}
+            </View>
+          </Pressable>
+          {isSelf ? null : (
+            <Pressable
+              onPress={() => void handleToggle(item)}
+              disabled={busyId === item.id}
+              style={({ pressed }) => [
+                styles.followBtn,
+                item.isFollowing ? styles.followBtnOn : null,
+                pressed ? styles.pressed : null,
+                busyId === item.id ? styles.followBusy : null,
+              ]}
+            >
+              <Text
+                style={[styles.followText, item.isFollowing ? styles.followTextOn : null]}
+                maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+              >
+                {busyId === item.id ? "…" : item.isFollowing ? "Siguiendo" : "Seguir"}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      );
+    },
+    [busyId, currentUser?.id, handleToggle, openProfile]
   );
 
   if (loading && users.length === 0) {
@@ -142,10 +212,11 @@ export function ProfileSocialList({ userId, kind, onFollowingChanged }: ProfileS
   }
 
   return (
-    <FlatList
+    <FlashList
       style={styles.list}
       data={users}
       keyExtractor={(item) => item.id}
+      extraData={listExtraKey}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={AUTH.gold} colors={[AUTH.gold]} />
       }
@@ -169,49 +240,7 @@ export function ProfileSocialList({ userId, kind, onFollowingChanged }: ProfileS
       ListFooterComponent={
         loadingMore ? <ActivityIndicator color={AUTH.gold} style={styles.footerLoader} /> : null
       }
-      renderItem={({ item }) => {
-        const isSelf = item.id === currentUser?.id;
-        return (
-          <View style={styles.row}>
-            <Pressable style={styles.rowMain} onPress={() => openProfile(item.id)}>
-              <UserAvatar
-                src={item.avatarUrl ? resolveMediaUrl(item.avatarUrl) : ""}
-                username={item.username}
-                size={48}
-              />
-              <View style={styles.rowText}>
-                <Text style={styles.username} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  @{item.username}
-                </Text>
-                {item.followsYou ? (
-                  <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                    Te sigue
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-            {isSelf ? null : (
-              <Pressable
-                onPress={() => void handleToggle(item)}
-                disabled={busyId === item.id}
-                style={({ pressed }) => [
-                  styles.followBtn,
-                  item.isFollowing ? styles.followBtnOn : null,
-                  pressed ? styles.pressed : null,
-                  busyId === item.id ? styles.followBusy : null,
-                ]}
-              >
-                <Text
-                  style={[styles.followText, item.isFollowing ? styles.followTextOn : null]}
-                  maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-                >
-                  {busyId === item.id ? "…" : item.isFollowing ? "Siguiendo" : "Seguir"}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        );
-      }}
+      renderItem={renderUserRow}
     />
   );
 }

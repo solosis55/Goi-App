@@ -1,4 +1,5 @@
 import { POST_BODY_MAX, POST_BODY_MIN } from "../constants/createPost";
+import type { PostFormat } from "../constants/postFormat";
 
 export type CreatePostValidation = {
   canSubmit: boolean;
@@ -6,17 +7,41 @@ export type CreatePostValidation = {
   charCount: number;
 };
 
-export function validateCreatePost(content: string, imageCount: number): CreatePostValidation {
+export function validateCreatePost(
+  content: string,
+  imageCount: number,
+  format: PostFormat = "standard"
+): CreatePostValidation {
   const trimmed = content.trim();
   const charCount = trimmed.length;
 
-  if (imageCount === 0 && charCount < POST_BODY_MIN) {
+  if (format === "standard" && imageCount === 0) {
+    return {
+      canSubmit: false,
+      hint: "Añade al menos una foto para publicar.",
+      charCount,
+    };
+  }
+
+  if (format === "training" && imageCount === 0 && charCount < POST_BODY_MIN) {
     const need = POST_BODY_MIN - charCount;
     return {
       canSubmit: false,
       hint: `Escribe al menos ${need} caracteres más o adjunta una foto.`,
       charCount,
     };
+  }
+
+  if (format === "standard" && imageCount > 0 && charCount < POST_BODY_MIN) {
+    // Foto obligatoria; el texto puede ir vacío o corto si hay imagen.
+    if (charCount > POST_BODY_MAX) {
+      return {
+        canSubmit: false,
+        hint: `Te pasaste por ${charCount - POST_BODY_MAX} caracteres.`,
+        charCount,
+      };
+    }
+    return { canSubmit: true, hint: "", charCount };
   }
 
   if (charCount > POST_BODY_MAX) {

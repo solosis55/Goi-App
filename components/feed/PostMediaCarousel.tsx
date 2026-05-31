@@ -1,27 +1,28 @@
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { DoubleTapHeartBurst } from "./DoubleTapHeartBurst";
 import {
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions,
 } from "react-native";
-import { TapSlopPressable } from "../ui/TapSlopPressable";
-import { resolveMediaUrl } from "../../api/config";
+import { Gesture, GestureDetector, ScrollView } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { PostMediaItem } from "../../types/post";
-import { useSingleDoubleTap } from "../../utils/useSingleDoubleTap";
+import { feedPostMediaRecyclingKey, resolveFeedPostMediaUrl } from "../../utils/feedPostMediaUrl";
+import { PostFeedImage } from "./PostFeedImage";
 import { PostMediaLightbox } from "./PostMediaLightbox";
 
 const MAX_CONTENT_WIDTH = 672;
 
-function heroHeightForWidth(width: number): number {
-  return Math.round(width * (5 / 4));
+export type PostMediaAspect = "square" | "portrait45";
+export type PostMediaLayout = "bleed" | "inset";
+
+function heroHeightForWidth(width: number, aspect: PostMediaAspect): number {
+  return aspect === "square" ? width : Math.round(width * (5 / 4));
 }
 
 type PostMediaCarouselProps = {
@@ -29,24 +30,56 @@ type PostMediaCarouselProps = {
   onDoubleTapLike?: () => void;
   /** Ancho del carrusel (p. ej. pantalla completa en feed). */
   slideWidth?: number;
-  guardScrollPresses?: boolean;
+  /** Publicación: 1:1. Training: 4:5 (ignorado si slideHeight está definido). */
+  mediaAspect?: PostMediaAspect;
+  /** Altura fija del slide (p. ej. training compacto en feed). */
+  slideHeight?: number;
+  /** bleed = ancho completo (publicación). inset = márgenes (training). */
+  layout?: PostMediaLayout;
 };
 
-function CarouselSlide({
-  uri,
-  width,
-  height,
-  onPress,
-  guardScrollPresses,
-}: {
+type MediaSlideProps = {
   uri: string;
   width: number;
   height: number;
-  onPress: () => void;
-  guardScrollPresses?: boolean;
-}) {
+  slideIndex: number;
+  onOpenLightbox: (index: number) => void;
+  onDoubleTap: () => void;
+};
+
+const MediaSlide = memo(function MediaSlide({
+  uri,
+  width,
+  height,
+  slideIndex,
+  onOpenLightbox,
+  onDoubleTap,
+}: MediaSlideProps) {
   const [failed, setFailed] = useState(false);
-  const resolved = resolveMediaUrl(uri);
+  const resolved = resolveFeedPostMediaUrl(uri);
+  const recyclingKey = feedPostMediaRecyclingKey(uri, String(slideIndex));
+
+  const openLightbox = useCallback(() => {
+    onOpenLightbox(slideIndex);
+  }, [onOpenLightbox, slideIndex]);
+
+  const tapGestures = useMemo(() => {
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .maxDelay(280)
+      .onEnd(() => {
+        runOnJS(onDoubleTap)();
+      });
+
+    const singleTap = Gesture.Tap()
+      .numberOfTaps(1)
+      .maxDuration(280)
+      .onEnd(() => {
+        runOnJS(openLightbox)();
+      });
+
+    return Gesture.Exclusive(doubleTap, singleTap);
+  }, [onDoubleTap, openLightbox]);
 
   if (failed || !resolved) {
     return (
@@ -58,65 +91,37 @@ function CarouselSlide({
     );
   }
 
-  const Touchable = guardScrollPresses ? TapSlopPressable : Pressable;
-
   return (
-    <Touchable
-      onPress={onPress}
-      style={[styles.slide, { width, height }]}
-      accessibilityRole="button"
-      accessibilityLabel="Ampliar foto. Doble toque para me gusta."
-    >
-      <Image
-        source={{ uri: resolved }}
-        style={styles.image}
-        resizeMode="cover"
-        onError={() => setFailed(true)}
-        accessibilityIgnoresInvertColors
-      />
-    </Touchable>
+    <GestureDetector gesture={tapGestures}>
+      <View
+        style={[styles.slide, { width, height }]}
+        accessibilityRole="button"
+        accessibilityLabel="Ampliar foto. Doble toque para me gusta."
+      >
+        <PostFeedImage
+          url={uri}
+          layoutWidth={width}
+          layoutHeight={height}
+          recyclingKey={recyclingKey}
+          contentFit="cover"
+          onError={() => setFailed(true)}
+        />
+      </View>
+    </GestureDetector>
   );
-}
-
-function TappableSlide({
-  uri,
-  width,
-  height,
-  slideIndex,
-  onOpenLightbox,
-  onDoubleTap,
-  guardScrollPresses,
-}: {
-  uri: string;
-  width: number;
-  height: number;
-  slideIndex: number;
-  onOpenLightbox: (index: number) => void;
-  onDoubleTap: () => void;
-  guardScrollPresses?: boolean;
-}) {
-  const onPress = useSingleDoubleTap(() => onOpenLightbox(slideIndex), onDoubleTap);
-
-  return (
-    <CarouselSlide
-      uri={uri}
-      width={width}
-      height={height}
-      onPress={onPress}
-      guardScrollPresses={guardScrollPresses}
-    />
-  );
-}
+});
 
 export function PostMediaCarousel({
   media,
   onDoubleTapLike,
   slideWidth: slideWidthProp,
-  guardScrollPresses,
+  mediaAspect = "portrait45",
+  slideHeight: slideHeightProp,
+  layout = "bleed",
 }: PostMediaCarouselProps) {
   const { width: windowWidth } = useWindowDimensions();
   const slideWidth = slideWidthProp ?? Math.min(windowWidth, MAX_CONTENT_WIDTH);
-  const slideHeight = heroHeightForWidth(slideWidth);
+  const slideHeight = slideHeightProp ?? heroHeightForWidth(slideWidth, mediaAspect);
   const images = media.filter((m) => m.type === "image" && m.url?.trim());
   const urls = useMemo(() => images.map((m) => m.url), [images]);
   const [index, setIndex] = useState(0);
@@ -145,19 +150,20 @@ export function PostMediaCarousel({
 
   if (images.length === 0) return null;
 
+  const slideProps = (item: PostMediaItem, i: number) => ({
+    uri: item.url,
+    width: slideWidth,
+    height: slideHeight,
+    slideIndex: i,
+    onOpenLightbox: openLightbox,
+    onDoubleTap: handleDoubleTap,
+  });
+
   return (
     <>
-      <View style={styles.wrap}>
+      <View style={[styles.wrap, layout === "inset" ? styles.wrapInset : styles.wrapBleed]}>
         {images.length === 1 ? (
-          <TappableSlide
-            uri={images[0].url}
-            width={slideWidth}
-            height={slideHeight}
-            slideIndex={0}
-            onOpenLightbox={openLightbox}
-            onDoubleTap={handleDoubleTap}
-            guardScrollPresses={guardScrollPresses}
-          />
+          <MediaSlide {...slideProps(images[0], 0)} />
         ) : (
           <>
             <ScrollView
@@ -168,18 +174,10 @@ export function PostMediaCarousel({
               decelerationRate="fast"
               bounces={false}
               style={{ height: slideHeight }}
+              keyboardShouldPersistTaps="handled"
             >
               {images.map((item, i) => (
-                <TappableSlide
-                  key={`${item.url}-${i}`}
-                  uri={item.url}
-                  width={slideWidth}
-                  height={slideHeight}
-                  slideIndex={i}
-                  onOpenLightbox={openLightbox}
-                  onDoubleTap={handleDoubleTap}
-                  guardScrollPresses={guardScrollPresses}
-                />
+                <MediaSlide key={feedPostMediaRecyclingKey(item.url, String(i))} {...slideProps(item, i)} />
               ))}
             </ScrollView>
             <View style={styles.dots} pointerEvents="none">
@@ -211,16 +209,19 @@ const styles = StyleSheet.create({
   wrap: {
     position: "relative",
     backgroundColor: "#141416",
+    overflow: "hidden",
+  },
+  wrapBleed: {
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    overflow: "hidden",
+  },
+  wrapInset: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(82, 82, 82, 0.55)",
   },
   slide: {
     overflow: "hidden",
-  },
-  image: {
-    width: "100%",
-    height: "100%",
   },
   placeholder: {
     alignItems: "center",

@@ -1,13 +1,18 @@
-import { Redirect, Tabs } from "expo-router";
+import { Redirect, Tabs, usePathname } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { CreateContentSheet } from "../../components/navigation/CreateContentSheet";
 import { GoiTabBar } from "../../components/navigation/GoiTabBar";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
+import { useSocialBadgePolling } from "../../hooks/useSocialBadgePolling";
+
 export default function TabsLayout() {
   const { palette } = useGoiTheme();
   const { isHydrated, isAuthenticated } = useAuth();
+  const pathname = usePathname();
+  const socialTabActive = pathname.includes("/social");
+  useSocialBadgePolling(isAuthenticated, { fast: socialTabActive });
   const [createOpen, setCreateOpen] = useState(false);
 
   if (!isHydrated) {

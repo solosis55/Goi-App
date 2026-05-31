@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { TapSlopPressable } from "../ui/TapSlopPressable";
+import { memo } from "react";
+import { StyleSheet, Text, View, useWindowDimensions, Pressable } from "react-native";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { Post } from "../../types/post";
@@ -21,6 +21,85 @@ type ProfilePostsGridProps = {
   workoutLabelByPostId?: Record<string, string>;
   onSelect: (postId: string) => void;
 };
+
+type ProfileGridCellProps = {
+  post: Post;
+  cellSize: number;
+  selected: boolean;
+  isPinned: boolean;
+  multi: boolean;
+  thumbUri: string;
+  workoutLabel?: string;
+  label: string;
+  thumbRemountKey: number;
+  hidden: boolean;
+  onSelect: (postId: string) => void;
+};
+
+const ProfileGridCell = memo(function ProfileGridCell({
+  post,
+  cellSize,
+  selected,
+  isPinned,
+  multi,
+  thumbUri,
+  workoutLabel,
+  label,
+  thumbRemountKey,
+  hidden,
+  onSelect,
+}: ProfileGridCellProps) {
+  return (
+    <Pressable
+      onPress={() => onSelect(post.id)}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.cell,
+        { width: cellSize, height: cellSize, borderRadius: CELL_RADIUS },
+        selected ? styles.cellSelected : null,
+        pressed ? styles.cellPressed : null,
+      ]}
+    >
+      {thumbUri ? (
+        <ProfileGridThumbnail
+          postId={post.id}
+          uri={thumbUri}
+          remountKey={thumbRemountKey}
+          hidden={hidden}
+        />
+      ) : (
+        <View style={styles.textOnly}>
+          <View style={styles.textOnlyGlow} />
+          <Text style={styles.textOnlyBody} numberOfLines={5} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            {post.content.trim() || "—"}
+          </Text>
+        </View>
+      )}
+      {isPinned ? (
+        <View style={styles.badgeTopLeft}>
+          <Text style={styles.badgeIcon} accessibilityElementsHidden>
+            ★
+          </Text>
+        </View>
+      ) : null}
+      {workoutLabel ? (
+        <View style={styles.badgeBottom}>
+          <Text style={styles.workoutBadgeText} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            🏋 {workoutLabel}
+          </Text>
+        </View>
+      ) : null}
+      {multi ? (
+        <View style={styles.badgeTopRight}>
+          <Text style={styles.badgeIcon} accessibilityElementsHidden>
+            ▦
+          </Text>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+});
 
 export function ProfilePostsGrid({
   posts,
@@ -51,55 +130,20 @@ export function ProfilePostsGrid({
             : "Publicación sin texto";
 
         return (
-          <TapSlopPressable
+          <ProfileGridCell
             key={post.id}
-            onPress={() => onSelect(post.id)}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            style={({ pressed }) => [
-              styles.cell,
-              { width: cellSize, height: cellSize, borderRadius: CELL_RADIUS },
-              selected ? styles.cellSelected : null,
-              pressed ? styles.cellPressed : null,
-            ]}
-          >
-            {thumbUri ? (
-              <ProfileGridThumbnail
-                postId={post.id}
-                uri={thumbUri}
-                remountKey={thumbRemountKey}
-                hidden={openPostId === post.id}
-              />
-            ) : (
-              <View style={styles.textOnly}>
-                <View style={styles.textOnlyGlow} />
-                <Text style={styles.textOnlyBody} numberOfLines={5} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {post.content.trim() || "—"}
-                </Text>
-              </View>
-            )}
-            {isPinned ? (
-              <View style={styles.badgeTopLeft}>
-                <Text style={styles.badgeIcon} accessibilityElementsHidden>
-                  ★
-                </Text>
-              </View>
-            ) : null}
-            {workoutLabel ? (
-              <View style={styles.badgeBottom}>
-                <Text style={styles.workoutBadgeText} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  🏋 {workoutLabel}
-                </Text>
-              </View>
-            ) : null}
-            {multi ? (
-              <View style={styles.badgeTopRight}>
-                <Text style={styles.badgeIcon} accessibilityElementsHidden>
-                  ▦
-                </Text>
-              </View>
-            ) : null}
-          </TapSlopPressable>
+            post={post}
+            cellSize={cellSize}
+            selected={selected}
+            isPinned={isPinned}
+            multi={multi}
+            thumbUri={thumbUri}
+            workoutLabel={workoutLabel}
+            label={label}
+            thumbRemountKey={thumbRemountKey}
+            hidden={openPostId === post.id}
+            onSelect={onSelect}
+          />
         );
       })}
     </View>

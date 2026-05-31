@@ -65,7 +65,10 @@ export function EditPostScreen({ postId }: EditPostScreenProps) {
   }, [postId]);
 
   const imageCount = post?.media?.length ?? 0;
-  const validation = useMemo(() => validateCreatePost(content, imageCount), [content, imageCount]);
+  const validation = useMemo(
+    () => validateCreatePost(content, imageCount, post?.format ?? "standard"),
+    [content, imageCount, post?.format]
+  );
   const canSave = validation.canSubmit && !submitting && !loading;
 
   const close = useCallback(() => router.back(), [router]);

@@ -74,6 +74,7 @@ function ThemedRoot() {
             <Stack.Screen name="rutina/nueva" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="rutina/[id]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="entrenar/[workoutId]" options={APP_CARD_STACK_OPTIONS} />
+            <Stack.Screen name="sesion/[id]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="descubrir" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="lista-social" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="notificaciones" options={APP_CARD_STACK_OPTIONS} />

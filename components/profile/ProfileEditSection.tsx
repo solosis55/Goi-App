@@ -1,9 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { DEFAULT_PROFILE_EDIT_SUB_TAB, type ProfileEditSubTab } from "../../constants/profileEditTabs";
+import {
+  DEFAULT_PROFILE_EDIT_SUB_TAB,
+  type ProfileEditSubTab,
+} from "../../constants/profileEditTabs";
 import type { ProfileForm } from "../../constants/profileSchema";
 import type { useProfileEditor } from "../../hooks/useProfileEditor";
+import { useFeedGoldBeamPref } from "../../hooks/useFeedGoldBeamPref";
 import { ProfileAccountSection } from "./ProfileAccountSection";
 import { ProfileAccountSecuritySection } from "./ProfileAccountSecuritySection";
 import { ProfileEditSubTabBar } from "./ProfileEditSubTabBar";
@@ -103,10 +107,17 @@ function ProfileField({
 type ProfileEditSectionProps = {
   editor: ReturnType<typeof useProfileEditor>;
   userId?: string;
+  initialEditSubTab?: ProfileEditSubTab;
 };
 
-export function ProfileEditSection({ editor, userId }: ProfileEditSectionProps) {
-  const [editSubTab, setEditSubTab] = useState<ProfileEditSubTab>(DEFAULT_PROFILE_EDIT_SUB_TAB);
+export function ProfileEditSection({ editor, userId, initialEditSubTab }: ProfileEditSectionProps) {
+  const [editSubTab, setEditSubTab] = useState<ProfileEditSubTab>(
+    initialEditSubTab ?? DEFAULT_PROFILE_EDIT_SUB_TAB
+  );
+
+  useEffect(() => {
+    if (initialEditSubTab) setEditSubTab(initialEditSubTab);
+  }, [initialEditSubTab]);
 
   if (!editor.form) return null;
 
@@ -292,6 +303,8 @@ function ProfileEditPrivateFields({
   privateTabActive: boolean;
   email?: string;
 }) {
+  const { enabled: goldBeamEnabled, setEnabledPref: setGoldBeamEnabled } = useFeedGoldBeamPref();
+
   return (
     <View style={styles.panel}>
       <Text style={styles.panelIntro} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -415,6 +428,27 @@ function ProfileEditPrivateFields({
           accessibilityRole="switch"
         />
       </View>
+
+      <View style={styles.switchRow}>
+        <Text
+          style={styles.switchLabel}
+          maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+          accessibilityRole="text"
+        >
+          Brillo dorado en el feed
+        </Text>
+        <Switch
+          value={goldBeamEnabled}
+          onValueChange={(value) => void setGoldBeamEnabled(value)}
+          trackColor={{ false: AUTH.fieldBorder, true: AUTH.gold }}
+          thumbColor={Platform.OS === "android" ? AUTH.neutral100 : undefined}
+          accessibilityLabel="Brillo dorado en el feed al hacer scroll"
+          accessibilityRole="switch"
+        />
+      </View>
+      <Text style={styles.switchHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        Desactívalo para ahorrar batería o si notas tirones al scrollear.
+      </Text>
 
       {!isDirty && !restricted ? (
         <Text style={styles.hint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -570,6 +604,13 @@ const styles = StyleSheet.create({
     flex: 1,
     color: AUTH.label,
     fontSize: 14,
+  },
+  switchHint: {
+    color: AUTH.faint,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -4,
+    marginBottom: 4,
   },
   hint: {
     color: AUTH.faint,

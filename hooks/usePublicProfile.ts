@@ -171,20 +171,36 @@ export function usePublicProfile({
 
   const handleToggleFollow = useCallback(async () => {
     if (!userId || userId === currentUserId) return;
+    const prevFollowing = following;
+    const prevPending = followPending;
     setFollowBusy(true);
     setError(null);
+    setFollowing(!prevFollowing);
+    setFollowPending(!prevFollowing ? false : prevPending);
+    if (!prevFollowing) {
+      setFollowerCount((c) => (c != null ? c + 1 : c));
+    } else {
+      setFollowerCount((c) => (c != null ? Math.max(0, c - 1) : c));
+    }
     try {
       const res = await toggleFollow(userId);
       setFollowing(res.following);
       setFollowPending(Boolean(res.pending));
       onFollowingChanged?.(userId, res.following);
-      await load();
+      void load();
     } catch (e) {
+      setFollowing(prevFollowing);
+      setFollowPending(prevPending);
+      if (!prevFollowing) {
+        setFollowerCount((c) => (c != null ? Math.max(0, c - 1) : c));
+      } else {
+        setFollowerCount((c) => (c != null ? c + 1 : c));
+      }
       setError(getErrorMessage(e, "No se pudo actualizar el seguimiento"));
     } finally {
       setFollowBusy(false);
     }
-  }, [userId, currentUserId, load, onFollowingChanged]);
+  }, [userId, currentUserId, following, followPending, load, onFollowingChanged]);
 
   return {
     profile,
