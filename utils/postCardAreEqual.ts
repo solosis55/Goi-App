@@ -17,7 +17,12 @@ type PostCardComparable = {
   pinnedPostId?: string | null;
 };
 
+function postMediaSignature(post: Post): string {
+  return (post.media ?? []).map((m) => m.url).join("|");
+}
+
 export function postCardPropsAreEqual(prev: PostCardComparable, next: PostCardComparable): boolean {
+  if (postMediaSignature(prev.post) !== postMediaSignature(next.post)) return false;
   if (prev.post !== next.post) return false;
   if (prev.currentUserId !== next.currentUserId) return false;
   if (prev.sessionAvatarUrl !== next.sessionAvatarUrl) return false;

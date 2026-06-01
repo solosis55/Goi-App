@@ -14,12 +14,18 @@ type UseMentionCandidatesOpts = {
   posts?: Post[];
 };
 
+/** Referencias estables para selectores Zustand (evita bucle infinito con `?? []`). */
+const EMPTY_DISCOVER: { id: string; username: string; avatarUrl?: string }[] = [];
+const EMPTY_PREVIEWS: { id: string; username: string; avatarUrl?: string }[] = [];
+
 export function useMentionCandidates(opts: UseMentionCandidatesOpts = {}) {
   const { user } = useAuth();
   const followingIds = useSocialHubStore((s) => s.followingIds);
-  const discoverUsers = useSocialHubStore((s) => s.hub?.discoverUsers ?? []);
-  const followingPreviews = useSocialHubStore((s) => s.hub?.followingPreviews ?? []);
+  const discoverUsers = useSocialHubStore((s) => s.hub?.discoverUsers ?? EMPTY_DISCOVER);
+  const followingPreviews = useSocialHubStore((s) => s.hub?.followingPreviews ?? EMPTY_PREVIEWS);
   const { recentMentionIds, recordMentionPick } = useMentionRecents(user?.id);
+
+  const posts = opts.posts;
 
   const candidates = useMemo(
     () =>
@@ -31,7 +37,7 @@ export function useMentionCandidates(opts: UseMentionCandidatesOpts = {}) {
         followingPreviews,
         recentMentionIds,
         extra: opts.extra,
-        posts: opts.posts,
+        posts,
       }),
     [
       user?.id,
@@ -41,7 +47,7 @@ export function useMentionCandidates(opts: UseMentionCandidatesOpts = {}) {
       followingPreviews,
       recentMentionIds,
       opts.extra,
-      opts.posts,
+      posts,
     ]
   );
 

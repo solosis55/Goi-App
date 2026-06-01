@@ -147,7 +147,7 @@ export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Prom
   } catch (err) {
     const aborted = err instanceof Error && err.name === "AbortError";
     const hint = aborted
-      ? "La API tardó demasiado en responder (timeout). Comprueba Goi Server (:4000) y Goi Web server (:4001)."
+      ? "La API tardó demasiado en responder (timeout). Comprueba Goi Server (:4000) y Neon; en Goi Server ejecuta npm run db:setup si ves errores de columnas."
       : err instanceof TypeError
         ? "No se pudo conectar con la API (red, URL o servidor apagado)."
         : "No se pudo conectar con la API.";

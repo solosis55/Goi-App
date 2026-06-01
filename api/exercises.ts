@@ -1,5 +1,5 @@
 import type { Exercise } from "../types/exercise";
-import { legacyApiFetch as apiFetch } from "./client";
+import { apiFetch } from "./client";
 
 export function getExercises() {
   return apiFetch<Exercise[]>("/exercises");

@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  InteractionManager,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -12,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getFollowing, toggleBlockUser } from "../../api/auth";
+import { toggleBlockUser } from "../../api/auth";
 import { getStories } from "../../api/stories";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { PublicProfileTab } from "../../constants/publicProfileTabs";
@@ -34,6 +35,7 @@ import { FeedReportModal } from "../feed/FeedReportModal";
 import { ExternalProfileSkeleton } from "./ExternalProfileSkeleton";
 import { socialListHref } from "../../constants/socialListRoutes";
 import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import { goiToast } from "../../context/GoiToastContext";
 import { ProfileMutualFollowersRow } from "./ProfileMutualFollowersRow";
 import { ProfilePublicInfo } from "./ProfilePublicInfo";
@@ -59,8 +61,7 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
   const muteAuthor = useFeedPrefsStore((s) => s.muteAuthor);
   const hydrateFeedLocalPrefs = useFeedPrefsStore((s) => s.hydrateFeedLocalPrefs);
   const mutedUserIds = useFeedPrefsStore((s) => s.mutedUserIds);
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
-  const [followingIdsReady, setFollowingIdsReady] = useState(false);
+  const applyFollowingChange = useSocialHubStore((s) => s.applyFollowingChange);
   const [refreshing, setRefreshing] = useState(false);
   const [profileTab, setProfileTab] = useState<PublicProfileTab>("posts");
   const [stickyVisible, setStickyVisible] = useState(false);
@@ -76,60 +77,34 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setFollowingIdsReady(false);
-    if (!user?.id) {
-      setFollowingIds([]);
-      setFollowingIdsReady(true);
-      return;
-    }
-    void getFollowing(user.id)
-      .then((res) => {
-        if (!cancelled) setFollowingIds(res.followingIds ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setFollowingIds([]);
-      })
-      .finally(() => {
-        if (!cancelled) setFollowingIdsReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const [data, seen] = await Promise.all([getStories(), loadStorySeenMap()]);
-        const row = data.authors?.find((a) => a.userId === userId);
-        if (cancelled) return;
-        setDailyAuthor(row ?? null);
-        setUnseenDaily(
-          Boolean(row?.slides.length && hasUnseenStories(userId, row.slides, seen[userId]))
-        );
-      } catch {
-        if (!cancelled) {
-          setDailyAuthor(null);
-          setUnseenDaily(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      void (async () => {
+        try {
+          const [data, seen] = await Promise.all([getStories(), loadStorySeenMap()]);
+          const row = data.authors?.find((a) => a.userId === userId);
+          if (cancelled) return;
+          setDailyAuthor(row ?? null);
+          setUnseenDaily(
+            Boolean(row?.slides.length && hasUnseenStories(userId, row.slides, seen[userId]))
+          );
+        } catch {
+          if (!cancelled) {
+            setDailyAuthor(null);
+            setUnseenDaily(false);
+          }
         }
-      }
-    })();
+      })();
+    });
     return () => {
       cancelled = true;
+      task.cancel();
     };
   }, [userId]);
 
   const profile = usePublicProfile({
-    userId: followingIdsReady ? userId : null,
+    userId,
     currentUserId: user?.id,
-    initialFollowingIds: followingIds,
-    onFollowingChanged: (targetId, isFollowing) => {
-      setFollowingIds((prev) => {
-        if (isFollowing) return prev.includes(targetId) ? prev : [...prev, targetId];
-        return prev.filter((id) => id !== targetId);
-      });
-    },
+    onFollowingChanged: applyFollowingChange,
   });
 
   const handleToggleFollow = useCallback(() => {
@@ -327,7 +302,7 @@ export function ExternalProfileScreen({ userId }: ExternalProfileScreenProps) {
     return null;
   }
 
-  if (!followingIdsReady || (profile.loading && !profile.profile)) {
+  if (!profile.profile && profile.loading) {
     return (
       <View style={{ paddingTop: insets.top, flex: 1, backgroundColor: AUTH.bg }}>
         <ExternalProfileSkeleton />

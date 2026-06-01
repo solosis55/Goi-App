@@ -9,7 +9,6 @@ import type {
 } from "../types/post";
 
 import { ApiError, apiFetch } from "./client";
-import { getStoredUser } from "./session";
 import { normalizeFeedPage, normalizePost } from "../utils/normalizePost";
 
 export type PostsByUserPageResponse = {
@@ -17,14 +16,6 @@ export type PostsByUserPageResponse = {
   nextCursor: string | null;
   total: number;
 };
-
-async function requireSessionUser() {
-  const user = await getStoredUser();
-  if (!user) {
-    throw new ApiError("Debes iniciar sesión para esta acción.", 401, "AUTH_UNAUTHORIZED");
-  }
-  return user;
-}
 
 /** Lista todas las publicaciones (Goi Server). */
 export async function getPosts() {
@@ -34,7 +25,9 @@ export async function getPosts() {
 
 export async function getPostById(postId: string): Promise<Post | null> {
   try {
-    const post = await apiFetch<Post>(`/posts/${encodeURIComponent(postId)}`);
+    const post = await apiFetch<Post>(`/posts/${encodeURIComponent(postId)}`, {
+      timeoutMs: 60_000,
+    });
     return normalizePost(post);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
@@ -42,12 +35,23 @@ export async function getPostById(postId: string): Promise<Post | null> {
   }
 }
 
+/** Solo imágenes (posts legacy con data URL grande en Neon). */
+export async function getPostMedia(postId: string): Promise<Post["media"]> {
+  const res = await apiFetch<{ media: Post["media"] }>(
+    `/posts/${encodeURIComponent(postId)}/media`,
+    { timeoutMs: 60_000 }
+  );
+  return Array.isArray(res.media) ? res.media : [];
+}
+
 export async function getFeedPage(scope: "all" | "following", limit = 20, cursor?: string | null) {
   const sp = new URLSearchParams();
   sp.set("scope", scope);
   sp.set("limit", String(limit));
   if (cursor) sp.set("cursor", cursor);
-  const page = await apiFetch<FeedPageResponse>(`/posts/feed?${sp.toString()}`);
+  const page = await apiFetch<FeedPageResponse>(`/posts/feed?${sp.toString()}`, {
+    timeoutMs: 30_000,
+  });
   return normalizeFeedPage(page);
 }
 
@@ -66,18 +70,15 @@ export function getPostsByUserPage(
   }));
 }
 
-export async function createPost(input: CreatePostInput) {
-  const user = await requireSessionUser();
+export function createPost(input: CreatePostInput) {
   return apiFetch<Post>("/posts", {
     method: "POST",
     body: JSON.stringify({
-      userId: user.id,
-      username: user.username,
-      avatarUrl: user.avatarUrl,
       content: input.content,
       format: input.format ?? "standard",
       visibility: input.visibility ?? "public",
       sessionId: input.sessionId ?? null,
+      ...(input.media?.length ? { media: input.media } : {}),
     }),
   }).then(normalizePost);
 }
@@ -108,16 +109,10 @@ export function getPostLikes(postId: string) {
   return apiFetch<PostLikesResponse>(`/posts/${encodeURIComponent(postId)}/likes`);
 }
 
-export async function createComment(postId: string, input: CreateCommentInput) {
-  const user = await requireSessionUser();
+export function createComment(postId: string, input: CreateCommentInput) {
   return apiFetch<PostComment>(`/posts/${encodeURIComponent(postId)}/comments`, {
     method: "POST",
-    body: JSON.stringify({
-      userId: user.id,
-      username: user.username,
-      avatarUrl: user.avatarUrl,
-      content: input.content,
-    }),
+    body: JSON.stringify({ content: input.content }),
   });
 }
 
@@ -126,8 +121,8 @@ export function getNotifications() {
 }
 
 export function markNotificationsRead(ids?: string[]) {
-  return apiFetch<{ ok: boolean }>("/posts/notifications/read", {
+  return apiFetch<{ ok: boolean; marked?: number }>("/posts/notifications/read", {
     method: "POST",
-    body: JSON.stringify(ids?.length ? { ids } : {}),
+    body: JSON.stringify(ids?.length ? { keys: ids } : {}),
   });
 }

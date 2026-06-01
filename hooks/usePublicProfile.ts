@@ -12,52 +12,92 @@ import type {
   ProfileRestrictionLevel,
   SocialUserPreview,
 } from "../types/publicProfile";
-import { readPublicProfileCache, writePublicProfileCache } from "../utils/profileCache";
+import {
+  peekPublicProfileCache,
+  readPublicProfileCache,
+  writePublicProfileCache,
+} from "../utils/profileCache";
 import { getErrorMessage } from "../utils/errorMessages";
 
 type UsePublicProfileArgs = {
   userId: string | null;
   currentUserId: string | undefined;
-  initialFollowingIds: string[];
   onFollowingChanged?: (targetUserId: string, following: boolean) => void;
 };
 
 export function usePublicProfile({
   userId,
   currentUserId,
-  initialFollowingIds,
   onFollowingChanged,
 }: UsePublicProfileArgs) {
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [postsTotal, setPostsTotal] = useState(0);
-  const [postsNextCursor, setPostsNextCursor] = useState<string | null>(null);
-  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
-  const [sessions, setSessions] = useState<PublicProfileSession[]>([]);
-  const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>({});
-  const [mutualFollowers, setMutualFollowers] = useState<SocialUserPreview[]>([]);
-  const [followsYou, setFollowsYou] = useState(false);
-  const [following, setFollowing] = useState(() =>
-    Boolean(userId && initialFollowingIds.includes(userId))
+  const [profile, setProfile] = useState<ProfileUser | null>(() =>
+    userId ? peekPublicProfileCache(userId)?.user ?? null : null
   );
-  const [loading, setLoading] = useState(false);
+  const [posts, setPosts] = useState<Post[]>(() =>
+    userId ? peekPublicProfileCache(userId)?.posts.posts ?? [] : []
+  );
+  const [postsTotal, setPostsTotal] = useState(() =>
+    userId ? peekPublicProfileCache(userId)?.posts.total ?? 0 : 0
+  );
+  const [postsNextCursor, setPostsNextCursor] = useState<string | null>(() =>
+    userId ? peekPublicProfileCache(userId)?.posts.nextCursor ?? null : null
+  );
+  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+  const [sessions, setSessions] = useState<PublicProfileSession[]>(() =>
+    userId ? peekPublicProfileCache(userId)?.sessions ?? [] : []
+  );
+  const [workoutTitles, setWorkoutTitles] = useState<Record<string, string>>(() =>
+    userId ? peekPublicProfileCache(userId)?.workoutTitles ?? {} : {}
+  );
+  const [mutualFollowers, setMutualFollowers] = useState<SocialUserPreview[]>(() =>
+    userId ? peekPublicProfileCache(userId)?.mutualFollowers ?? [] : []
+  );
+  const [followsYou, setFollowsYou] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.followsYou) : false
+  );
+  const [following, setFollowing] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.following) : false
+  );
+  const [loading, setLoading] = useState(() => !userId || !peekPublicProfileCache(userId));
   const [error, setError] = useState<string | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
-  const [followerCount, setFollowerCount] = useState<number | null>(null);
-  const [followingCount, setFollowingCount] = useState<number | null>(null);
-  const [restricted, setRestricted] = useState(false);
-  const [restrictionLevel, setRestrictionLevel] = useState<ProfileRestrictionLevel>("none");
-  const [blocked, setBlocked] = useState(false);
-  const [followPending, setFollowPending] = useState(false);
-  const [previewPosts, setPreviewPosts] = useState<PublicProfilePreviewPost[]>([]);
-  const [postCountTotal, setPostCountTotal] = useState(0);
-  const [postsHiddenByVisibility, setPostsHiddenByVisibility] = useState(false);
-  const [sectionAccess, setSectionAccess] = useState<ProfileSectionAccess>({
-    bio: true,
-    stats: true,
-    sessions: true,
-    socialLists: true,
-  });
+  const [followerCount, setFollowerCount] = useState<number | null>(() =>
+    userId ? peekPublicProfileCache(userId)?.followerCount ?? null : null
+  );
+  const [followingCount, setFollowingCount] = useState<number | null>(() =>
+    userId ? peekPublicProfileCache(userId)?.followingCount ?? null : null
+  );
+  const [restricted, setRestricted] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.restricted) : false
+  );
+  const [restrictionLevel, setRestrictionLevel] = useState<ProfileRestrictionLevel>(() =>
+    userId ? peekPublicProfileCache(userId)?.restrictionLevel ?? "none" : "none"
+  );
+  const [blocked, setBlocked] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.blocked) : false
+  );
+  const [followPending, setFollowPending] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.followPending) : false
+  );
+  const [previewPosts, setPreviewPosts] = useState<PublicProfilePreviewPost[]>(() =>
+    userId ? peekPublicProfileCache(userId)?.previewPosts ?? [] : []
+  );
+  const [postCountTotal, setPostCountTotal] = useState(() =>
+    userId ? peekPublicProfileCache(userId)?.postCountTotal ?? 0 : 0
+  );
+  const [postsHiddenByVisibility, setPostsHiddenByVisibility] = useState(() =>
+    userId ? Boolean(peekPublicProfileCache(userId)?.postsHiddenByVisibility) : false
+  );
+  const [sectionAccess, setSectionAccess] = useState<ProfileSectionAccess>(() =>
+    userId
+      ? peekPublicProfileCache(userId)?.sectionAccess ?? {
+          bio: true,
+          stats: true,
+          sessions: true,
+          socialLists: true,
+        }
+      : { bio: true, stats: true, sessions: true, socialLists: true }
+  );
 
   const applyOverview = useCallback((data: Awaited<ReturnType<typeof getPublicProfileOverview>>) => {
     setProfile(data.user);
@@ -85,18 +125,27 @@ export function usePublicProfile({
 
   const load = useCallback(async () => {
     if (!userId || userId === currentUserId) return;
-    setLoading(true);
     setPostsLoadingMore(false);
     setError(null);
+    const hadInstant = Boolean(peekPublicProfileCache(userId));
+    if (!hadInstant) setLoading(true);
+
+    let showedCache = hadInstant;
     try {
       const cached = await readPublicProfileCache(userId);
-      if (cached) applyOverview(cached);
+      if (cached) {
+        applyOverview(cached);
+        showedCache = true;
+        setLoading(false);
+      }
 
       const data = await getPublicProfileOverview(userId);
       applyOverview(data);
       void writePublicProfileCache(userId, data);
     } catch (e) {
-      setError(getErrorMessage(e, "No se pudo cargar el perfil"));
+      if (!showedCache) {
+        setError(getErrorMessage(e, "No se pudo cargar el perfil"));
+      }
     } finally {
       setLoading(false);
     }
@@ -142,15 +191,11 @@ export function usePublicProfile({
       setFollowingCount(null);
       setSessions([]);
       setMutualFollowers([]);
+      setLoading(false);
       return;
     }
     void load();
   }, [userId, currentUserId, load]);
-
-  useEffect(() => {
-    if (!userId) setFollowing(false);
-    else setFollowing(initialFollowingIds.includes(userId));
-  }, [userId, initialFollowingIds]);
 
   const orderedPosts = useMemo(() => {
     const pin = profile?.pinnedPostId?.trim();

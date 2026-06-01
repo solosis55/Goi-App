@@ -136,9 +136,14 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
       if (!first && !stale) return;
       lastProfileFocusAtRef.current = now;
       void fetchMinePage(first ? "initial" : "refresh");
-      void loadTimeline();
-    }, [userId, fetchMinePage, loadTimeline])
+    }, [userId, fetchMinePage])
   );
+
+  useEffect(() => {
+    if (sourceTab !== "saved" || !userId) return;
+    if (timelinePosts.length > 0 || timelineLoading) return;
+    void loadTimeline();
+  }, [sourceTab, userId, timelinePosts.length, timelineLoading, loadTimeline]);
 
   const displayedPosts = useMemo(() => {
     const base = sourceTab === "mine" ? myPosts : savedPosts;

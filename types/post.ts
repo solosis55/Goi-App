@@ -38,6 +38,8 @@ export type Post = {
   authorAvatarUrl: string;
   content: string;
   media?: PostMediaItem[];
+  /** Feed: hay fotos en servidor sin enviar el JSONB. */
+  hasMedia?: boolean;
   format?: PostFormat;
   sessionId: string | null;
   workoutId: string | null;

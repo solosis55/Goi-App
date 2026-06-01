@@ -9,15 +9,13 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { useMentionCandidates } from "../../hooks/useMentionCandidates";
+import { usePostMediaHydration } from "../../hooks/usePostMediaHydration";
+import { postHasDisplayableMedia } from "../../utils/postDisplayMedia";
+import { postForMentionCandidates } from "../../utils/postMentionLite";
 import type { Post } from "../../types/post";
 import { MentionHighlightedText } from "../post/MentionHighlightedText";
 import { PostCardCommentComposer, PostCardCommentsBody } from "./PostCardComments";
@@ -35,6 +33,7 @@ import { PostMediaCarousel } from "./PostMediaCarousel";
 import { PublicationLinkedSessionBody } from "../post/PublicationLinkedSessionBody";
 import { PostSessionAttachment } from "../post/PostSessionAttachment";
 import { buildTrainingPreviewDraft } from "../../utils/postTrainingPreviewDraft";
+import { resolveSessionExercisePreviews } from "../../utils/sessionExercisePreview";
 import {
   trainingFeedInsetHeight,
   trainingFeedInsetWidth,
@@ -113,18 +112,28 @@ function PostCardInner({
   isBeamActive = false,
   guardScrollPresses = false,
 }: PostCardProps) {
+  const displayPost = usePostMediaHydration(post);
   const press = useOptionalPressGuard(guardScrollPresses);
   const feedBeam = useFeedGoldBeam();
   const cardWrapRef = useRef<View>(null);
   const [cardSize, setCardSize] = useState({ w: 0, h: 0 });
   const { width: screenWidth } = useWindowDimensions();
-  const mediaSlideWidth = Math.min(screenWidth, 672);
+  /** Ancho interior de la tarjeta (listContent tiene paddingHorizontal: 16). */
+  const feedCardWidth = Math.min(Math.max(screenWidth - 32, 280), 672);
+  const mediaSlideWidth = feedCardWidth;
   const trainingFeedMediaWidth = trainingFeedInsetWidth(mediaSlideWidth);
   const trainingFeedMediaHeight = trainingFeedInsetHeight(trainingFeedMediaWidth);
   const { showAlert } = useGoiAlert();
   const [commentsSectionOpen, setCommentsSectionOpen] = useState(initialCommentsOpen);
   const [likesSheetOpen, setLikesSheetOpen] = useState(false);
-  const mentionPosts = useMemo(() => [post], [post]);
+  const commentsKey = useMemo(
+    () => displayPost.comments.map((c) => c.id).join(","),
+    [displayPost.comments]
+  );
+  const mentionPosts = useMemo(
+    () => [postForMentionCandidates(displayPost)],
+    [displayPost.id, displayPost.userId, displayPost.authorUsername, displayPost.content, commentsKey]
+  );
   const { candidates: mentionCandidates, mentionDirectory, recordMentionPick } =
     useMentionCandidates({ posts: mentionPosts });
 
@@ -138,21 +147,35 @@ function PostCardInner({
   const [menuOpen, setMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sessionInlineOpen, setSessionInlineOpen] = useState(false);
-  const commentsCount = post.comments?.length ?? 0;
-  const isOwner = currentUserId != null && post.userId === currentUserId;
-  const visibility = post.visibility ?? "public";
+  const commentsCount = displayPost.comments?.length ?? 0;
+  const isOwner = currentUserId != null && displayPost.userId === currentUserId;
+  const visibility = displayPost.visibility ?? "public";
   const visStyle = visibilityBadgeStyle(visibility);
-  const postFormat = post.format ?? "standard";
+  const postFormat = displayPost.format ?? "standard";
   const isTrainingPost = postFormat === "training";
-  const hasMedia = (post.media?.length ?? 0) > 0;
+  const hasMedia = postHasDisplayableMedia(displayPost);
+  const showStandardMedia = !isTrainingPost && hasMedia;
+  const sessionExercisePreviews = useMemo(
+    () =>
+      resolveSessionExercisePreviews({
+        previews: displayPost.sessionExercisePreviews,
+      }),
+    [displayPost.sessionExercisePreviews]
+  );
   const canPreviewLinkedSession =
     !isTrainingPost &&
-    Boolean(post.sessionId) &&
-    Boolean(post.sessionWorkoutTitle || post.sessionExercisePreviews?.length || post.sessionTotalSets);
+    Boolean(displayPost.sessionId) &&
+    Boolean(
+      displayPost.sessionWorkoutTitle ||
+        sessionExercisePreviews.length ||
+        displayPost.sessionTotalSets
+    );
   const authorAvatarSrc =
-    post.authorAvatarUrl?.trim() || (isOwner && sessionAvatarUrl?.trim() ? sessionAvatarUrl : "") || "";
-  const linkedSessionDraft = buildTrainingPreviewDraft(post, {
-    username: post.authorUsername,
+    displayPost.authorAvatarUrl?.trim() ||
+    (isOwner && sessionAvatarUrl?.trim() ? sessionAvatarUrl : "") ||
+    "";
+  const linkedSessionDraft = buildTrainingPreviewDraft(displayPost, {
+    username: displayPost.authorUsername,
     avatarUrl: authorAvatarSrc,
   });
   const showComposer = commentsSectionOpen || commentValue.trim().length > 0;
@@ -163,9 +186,9 @@ function PostCardInner({
 
   const openAuthor = useCallback(
     press(() => {
-      if (canOpenAuthor && onOpenAuthor) onOpenAuthor(post.userId, post.authorUsername);
+      if (canOpenAuthor && onOpenAuthor) onOpenAuthor(displayPost.userId, displayPost.authorUsername);
     }),
-    [press, canOpenAuthor, onOpenAuthor, post.userId, post.authorUsername]
+    [press, canOpenAuthor, onOpenAuthor, displayPost.userId, displayPost.authorUsername]
   );
 
   const openSessionBody = useCallback(
@@ -217,15 +240,16 @@ function PostCardInner({
     }
   }, [highlighted, highlightOpacity]);
 
-  const highlightBorderStyle = useAnimatedStyle(() => ({
-    borderColor: `rgba(212, 175, 55, ${0.15 + highlightOpacity.value * 0.45})`,
-    borderWidth: 1 + highlightOpacity.value,
+  const highlightRingStyle = useAnimatedStyle(() => ({
+    borderColor: `rgba(212, 175, 55, ${0.35 + highlightOpacity.value * 0.45})`,
+    borderWidth: 2 + highlightOpacity.value,
+    opacity: 0.55 + highlightOpacity.value * 0.45,
   }));
 
   const openLikesSheet = useCallback(() => {
-    if (post.likesCount <= 0) return;
+    if (displayPost.likesCount <= 0) return;
     setLikesSheetOpen(true);
-  }, [post.likesCount]);
+  }, [displayPost.likesCount]);
 
   const openMentionProfile = useCallback(
     (userId: string) => {
@@ -246,16 +270,20 @@ function PostCardInner({
         if (width > 0 && height > 0) setCardSize({ w: width, h: height });
       }}
     >
-      <Animated.View
+      <View
         style={[
           styles.card,
           styles.cardClip,
-          !hasMedia ? styles.cardTextOnly : null,
+          !showStandardMedia && !isTrainingPost ? styles.cardTextOnly : null,
           isTrainingPost ? styles.cardTraining : null,
-          highlightBorderStyle,
         ]}
       >
-      <View style={[styles.headerPad, !hasMedia ? styles.headerPadCompact : null]}>
+      <View
+        style={[
+          styles.headerPad,
+          !showStandardMedia && !isTrainingPost ? styles.headerPadCompact : null,
+        ]}
+      >
         <View style={styles.headerRow}>
           <ScrollAwarePressable
             scrollGuarded={guardScrollPresses}
@@ -264,11 +292,11 @@ function PostCardInner({
             style={({ pressed }) => [styles.authorTap, pressed && canOpenAuthor ? styles.hitPressed : null]}
             accessibilityRole={canOpenAuthor ? "button" : undefined}
             accessibilityLabel={
-              canOpenAuthor ? `Ver perfil de ${post.authorUsername}` : undefined
+              canOpenAuthor ? `Ver perfil de ${displayPost.authorUsername}` : undefined
             }
           >
             <View style={styles.avatarSlot}>
-              <UserAvatar src={authorAvatarSrc} username={post.authorUsername} size={46} />
+              <UserAvatar src={authorAvatarSrc} username={displayPost.authorUsername} size={46} />
             </View>
           </ScrollAwarePressable>
           <ScrollAwarePressable
@@ -283,14 +311,14 @@ function PostCardInner({
             <View style={styles.metaBorder}>
               <View style={styles.metaTop}>
                 <Text style={styles.username} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {post.authorUsername}
+                  {displayPost.authorUsername}
                   {isOwner ? <Text style={styles.ownerHint}> (tu)</Text> : null}
                 </Text>
                 <Text style={styles.dot} aria-hidden>
                   ·
                 </Text>
                 <Text style={styles.time} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {formatPostRelative(post.createdAt)}
+                  {formatPostRelative(displayPost.createdAt)}
                 </Text>
               </View>
               {isTrainingPost ? (
@@ -314,7 +342,7 @@ function PostCardInner({
               disabled={deleting}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={canManage ? "Opciones de tu publicación" : `Opciones de la publicación de ${post.authorUsername}`}
+              accessibilityLabel={canManage ? "Opciones de tu publicación" : `Opciones de la publicación de ${displayPost.authorUsername}`}
               style={({ pressed }) => [styles.menuBtn, pressed ? styles.hitPressed : null, deleting ? styles.menuDisabled : null]}
             >
               {deleting ? (
@@ -329,10 +357,12 @@ function PostCardInner({
         </View>
       </View>
 
-      {hasMedia && !isTrainingPost ? (
-        <View style={styles.mediaBleed}>
+      {showStandardMedia ? (
+        <View style={styles.mediaBlock}>
           <PostMediaCarousel
-            media={post.media ?? []}
+            key={`media-${post.id}-${displayPost.media?.[0]?.url ?? ""}`}
+            postId={post.id}
+            media={displayPost.media ?? []}
             onDoubleTapLike={onDoubleTapLike}
             slideWidth={mediaSlideWidth}
             mediaAspect="square"
@@ -343,8 +373,8 @@ function PostCardInner({
 
       <View style={styles.actionBarPad}>
         <PostActionBar
-          liked={!!post.likedByMe}
-          likesCount={post.likesCount}
+          liked={!!displayPost.likedByMe}
+          likesCount={displayPost.likesCount}
           commentsCount={commentsCount}
           onToggleLike={press(onToggleLike)}
           onPressComment={press(onPressComment)}
@@ -373,35 +403,43 @@ function PostCardInner({
         onMentionPick={recordMentionPick}
       />
 
-      <View style={[styles.bodyPad, !hasMedia ? styles.bodyPadCompact : null]}>
+      <View
+        style={[
+          styles.bodyPad,
+          !showStandardMedia && !isTrainingPost ? styles.bodyPadCompact : null,
+        ]}
+      >
         {!isTrainingPost && sessionInlineOpen && canPreviewLinkedSession ? (
           <PublicationLinkedSessionBody
             draft={linkedSessionDraft}
-            onPressViewSession={post.sessionId && onPressSession ? press(onPressSession) : undefined}
+            onPressViewSession={displayPost.sessionId && onPressSession ? press(onPressSession) : undefined}
           />
-        ) : post.content ? (
+        ) : displayPost.content ? (
           <MentionHighlightedText
-            text={post.content}
+            text={displayPost.content}
             userDirectory={mentionDirectory}
             onOpenProfile={canOpenAuthor ? openMentionProfile : undefined}
-            style={[styles.content, !hasMedia ? styles.contentTextOnly : null]}
+            style={[
+              styles.content,
+              !showStandardMedia && !isTrainingPost ? styles.contentTextOnly : null,
+            ]}
           />
         ) : null}
 
-        {isTrainingPost && (post.sessionId || post.sessionWorkoutTitle) ? (
+        {isTrainingPost && displayPost.sessionId ? (
           <PostSessionAttachment
-            workoutTitle={post.sessionWorkoutTitle ?? workoutTitle}
-            performedAt={post.sessionPerformedAt}
+            workoutTitle={displayPost.sessionWorkoutTitle ?? workoutTitle ?? "Entrenamiento"}
+            performedAt={displayPost.sessionPerformedAt}
             metrics={{
-              completedSets: post.sessionCompletedSets,
-              totalSets: post.sessionTotalSets,
-              completedExercises: post.sessionCompletedExercises,
-              totalExercises: post.sessionTotalExercises,
+              completedSets: displayPost.sessionCompletedSets,
+              totalSets: displayPost.sessionTotalSets,
+              completedExercises: displayPost.sessionCompletedExercises,
+              totalExercises: displayPost.sessionTotalExercises,
             }}
-            exercisePreviews={post.sessionExercisePreviews}
-            moreExercisesCount={post.sessionMoreExercisesCount ?? 0}
-            onPress={post.sessionId && onPressSession ? press(onPressSession) : undefined}
-            showViewFullCta={Boolean(post.sessionId && onPressSession)}
+            exercisePreviews={sessionExercisePreviews}
+            moreExercisesCount={displayPost.sessionMoreExercisesCount ?? 0}
+            onPress={displayPost.sessionId && onPressSession ? press(onPressSession) : undefined}
+            showViewFullCta={Boolean(displayPost.sessionId && onPressSession)}
           />
         ) : null}
 
@@ -411,7 +449,8 @@ function PostCardInner({
               Foto del entreno
             </Text>
             <PostMediaCarousel
-              media={post.media ?? []}
+              postId={post.id}
+              media={displayPost.media ?? []}
               onDoubleTapLike={onDoubleTapLike}
               slideWidth={trainingFeedMediaWidth}
               slideHeight={trainingFeedMediaHeight}
@@ -421,7 +460,7 @@ function PostCardInner({
         ) : null}
 
         <PostCardCommentsBody
-          comments={post.comments}
+          comments={displayPost.comments}
           commentsCount={commentsCount}
           commentsSectionOpen={commentsSectionOpen}
           commentsUiVisible={commentsUiVisible}
@@ -447,15 +486,19 @@ function PostCardInner({
       {canOverflow ? (
         <FeedPostOverflowSheet
           visible={overflowOpen}
-          authorUsername={post.authorUsername}
+          authorUsername={displayPost.authorUsername}
           onClose={() => setOverflowOpen(false)}
-          onMuteAuthor={() => onMuteAuthor?.(post.userId)}
+          onMuteAuthor={() => onMuteAuthor?.(displayPost.userId)}
           onReport={onReportPost}
           onShare={onSharePost}
         />
       ) : null}
 
-      </Animated.View>
+      </View>
+
+      {highlighted ? (
+        <Animated.View pointerEvents="none" style={[styles.highlightRing, highlightRingStyle]} />
+      ) : null}
 
       {isBeamActive && feedBeam?.enabled && cardSize.w > 0 && cardSize.h > 0 ? (
         <PostCardGoldBeam width={cardSize.w} height={cardSize.h} />
@@ -464,7 +507,7 @@ function PostCardInner({
       <PostLikesSheet
         visible={likesSheetOpen}
         postId={post.id}
-        likesCount={post.likesCount}
+        likesCount={displayPost.likesCount}
         onClose={() => setLikesSheetOpen(false)}
       />
     </View>
@@ -496,6 +539,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 16,
   },
+  highlightRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    zIndex: 3,
+  },
   cardTextOnly: {
     backgroundColor: "rgba(22, 20, 14, 0.72)",
     borderLeftWidth: 3,
@@ -509,13 +557,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
+    backgroundColor: "#0a0a0c",
   },
   headerPadCompact: {
     paddingTop: 12,
     paddingBottom: 8,
   },
-  mediaBleed: {
-    marginHorizontal: -16,
+  mediaBlock: {
+    width: "100%",
+    overflow: "hidden",
+    backgroundColor: "#1c1c1f",
   },
   mediaInsetPad: {
     paddingHorizontal: 14,
@@ -533,6 +584,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 4,
     paddingBottom: 2,
+    backgroundColor: "#0a0a0c",
   },
   headerRow: {
     flexDirection: "row",
@@ -624,6 +676,7 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 16,
     gap: 12,
+    backgroundColor: "#0a0a0c",
   },
   bodyPadCompact: {
     paddingTop: 8,

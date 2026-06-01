@@ -80,7 +80,6 @@ export function PostMediaLightbox({ visible, urls, initialIndex, onClose }: Post
                     url={url}
                     layoutWidth={width}
                     layoutHeight={height}
-                    recyclingKey={feedPostMediaRecyclingKey(url, `lightbox-${i}`)}
                     contentFit="contain"
                   />
                 ) : (

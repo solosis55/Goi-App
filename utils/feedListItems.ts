@@ -71,7 +71,14 @@ export function reuseFeedListItems(next: FeedListItem[], prev: FeedListItem[] | 
       same = false;
       return item;
     }
-    if (item.kind === "post" && old.kind === "post" && item.post === old.post) return old;
+    if (item.kind === "post" && old.kind === "post") {
+      if (item.post === old.post) return old;
+      if (item.post.id === old.post.id) {
+        const nextUrl = item.post.media?.[0]?.url ?? "";
+        const oldUrl = old.post.media?.[0]?.url ?? "";
+        if (nextUrl === oldUrl && item.post.updatedAt === old.post.updatedAt) return old;
+      }
+    }
     if (item.kind === "workout" && old.kind === "workout" && item.event === old.event) return old;
     if (item.kind === "day" && old.kind === "day" && item.label === old.label) return old;
     if (item.kind === "suggestions" && old.kind === "suggestions") return old;

@@ -50,7 +50,7 @@ export function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, storedAccounts, switchAccount, updateSessionUser } = useAuth();
   const editor = useProfileEditor();
-  const stats = useProfileStats(editor.user?.id);
+  const stats = useProfileStats(user?.id);
   const [activeTab, setActiveTab] = useState<ProfileSectionTab>(
     openPrivateEdit ? "profile" : DEFAULT_PROFILE_SECTION_TAB
   );

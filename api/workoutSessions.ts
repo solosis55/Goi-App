@@ -4,7 +4,7 @@ import type {
   WorkoutSessionDetail,
   WorkoutSessionWithTitle,
 } from "../types/workoutSession";
-import { legacyApiFetch as apiFetch } from "./client";
+import { apiFetch } from "./client";
 
 export function getWorkoutSessions() {
   return apiFetch<WorkoutSessionWithTitle[]>("/workout-sessions");

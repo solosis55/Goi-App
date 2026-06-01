@@ -9,24 +9,49 @@ type CacheEntry = {
   data: PublicProfileOverview;
 };
 
+const memory = new Map<string, CacheEntry>();
+
+function isFresh(entry: CacheEntry): boolean {
+  return Date.now() - entry.savedAt <= TTL_MS;
+}
+
+/** Lectura instantánea (misma sesión / visita reciente). */
+export function peekPublicProfileCache(userId: string): PublicProfileOverview | null {
+  const entry = memory.get(userId);
+  if (!entry || !isFresh(entry)) {
+    if (entry) memory.delete(userId);
+    return null;
+  }
+  return entry.data;
+}
+
 export async function readPublicProfileCache(userId: string): Promise<PublicProfileOverview | null> {
+  const mem = peekPublicProfileCache(userId);
+  if (mem) return mem;
+
   try {
     const raw = await AsyncStorage.getItem(`${PREFIX}${userId}`);
     if (!raw) return null;
     const entry = JSON.parse(raw) as CacheEntry;
-    if (Date.now() - entry.savedAt > TTL_MS) {
+    if (!isFresh(entry)) {
       await AsyncStorage.removeItem(`${PREFIX}${userId}`);
+      memory.delete(userId);
       return null;
     }
+    memory.set(userId, entry);
     return entry.data;
   } catch {
     return null;
   }
 }
 
-export async function writePublicProfileCache(userId: string, data: PublicProfileOverview): Promise<void> {
+export async function writePublicProfileCache(
+  userId: string,
+  data: PublicProfileOverview
+): Promise<void> {
+  const entry: CacheEntry = { savedAt: Date.now(), data };
+  memory.set(userId, entry);
   try {
-    const entry: CacheEntry = { savedAt: Date.now(), data };
     await AsyncStorage.setItem(`${PREFIX}${userId}`, JSON.stringify(entry));
   } catch {
     /* ignore */

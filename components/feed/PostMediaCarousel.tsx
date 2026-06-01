@@ -26,19 +26,17 @@ function heroHeightForWidth(width: number, aspect: PostMediaAspect): number {
 }
 
 type PostMediaCarouselProps = {
+  postId?: string;
   media: PostMediaItem[];
   onDoubleTapLike?: () => void;
-  /** Ancho del carrusel (p. ej. pantalla completa en feed). */
   slideWidth?: number;
-  /** Publicación: 1:1. Training: 4:5 (ignorado si slideHeight está definido). */
   mediaAspect?: PostMediaAspect;
-  /** Altura fija del slide (p. ej. training compacto en feed). */
   slideHeight?: number;
-  /** bleed = ancho completo (publicación). inset = márgenes (training). */
   layout?: PostMediaLayout;
 };
 
 type MediaSlideProps = {
+  postId?: string;
   uri: string;
   width: number;
   height: number;
@@ -48,6 +46,7 @@ type MediaSlideProps = {
 };
 
 const MediaSlide = memo(function MediaSlide({
+  postId,
   uri,
   width,
   height,
@@ -56,8 +55,7 @@ const MediaSlide = memo(function MediaSlide({
   onDoubleTap,
 }: MediaSlideProps) {
   const [failed, setFailed] = useState(false);
-  const resolved = resolveFeedPostMediaUrl(uri);
-  const recyclingKey = feedPostMediaRecyclingKey(uri, String(slideIndex));
+  const canRender = Boolean(uri?.trim());
 
   const openLightbox = useCallback(() => {
     onOpenLightbox(slideIndex);
@@ -81,7 +79,7 @@ const MediaSlide = memo(function MediaSlide({
     return Gesture.Exclusive(doubleTap, singleTap);
   }, [onDoubleTap, openLightbox]);
 
-  if (failed || !resolved) {
+  if (failed || !canRender) {
     return (
       <View style={[styles.slide, styles.placeholder, { width, height }]}>
         <Text style={styles.placeholderText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -99,10 +97,11 @@ const MediaSlide = memo(function MediaSlide({
         accessibilityLabel="Ampliar foto. Doble toque para me gusta."
       >
         <PostFeedImage
+          postId={postId}
+          mediaIndex={slideIndex}
           url={uri}
           layoutWidth={width}
           layoutHeight={height}
-          recyclingKey={recyclingKey}
           contentFit="cover"
           onError={() => setFailed(true)}
         />
@@ -112,6 +111,7 @@ const MediaSlide = memo(function MediaSlide({
 });
 
 export function PostMediaCarousel({
+  postId,
   media,
   onDoubleTapLike,
   slideWidth: slideWidthProp,
@@ -120,10 +120,13 @@ export function PostMediaCarousel({
   layout = "bleed",
 }: PostMediaCarouselProps) {
   const { width: windowWidth } = useWindowDimensions();
-  const slideWidth = slideWidthProp ?? Math.min(windowWidth, MAX_CONTENT_WIDTH);
+  const slideWidth =
+    slideWidthProp ?? Math.min(Math.max(windowWidth - 32, 280), MAX_CONTENT_WIDTH);
   const slideHeight = slideHeightProp ?? heroHeightForWidth(slideWidth, mediaAspect);
-  const images = media.filter((m) => m.type === "image" && m.url?.trim());
-  const urls = useMemo(() => images.map((m) => m.url), [images]);
+  const slides = media.filter(
+    (m) => m.type === "image" && m.url?.trim() && resolveFeedPostMediaUrl(m.url)
+  );
+  const urls = useMemo(() => slides.map((m) => m.url), [slides]);
   const [index, setIndex] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -143,14 +146,15 @@ export function PostMediaCarousel({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = e.nativeEvent.contentOffset.x;
       const next = Math.round(x / slideWidth);
-      setIndex(Math.min(images.length - 1, Math.max(0, next)));
+      setIndex(Math.min(slides.length - 1, Math.max(0, next)));
     },
-    [images.length, slideWidth]
+    [slides.length, slideWidth]
   );
 
-  if (images.length === 0) return null;
+  if (slides.length === 0) return null;
 
   const slideProps = (item: PostMediaItem, i: number) => ({
+    postId,
     uri: item.url,
     width: slideWidth,
     height: slideHeight,
@@ -162,8 +166,8 @@ export function PostMediaCarousel({
   return (
     <>
       <View style={[styles.wrap, layout === "inset" ? styles.wrapInset : styles.wrapBleed]}>
-        {images.length === 1 ? (
-          <MediaSlide {...slideProps(images[0], 0)} />
+        {slides.length === 1 ? (
+          <MediaSlide {...slideProps(slides[0], 0)} />
         ) : (
           <>
             <ScrollView
@@ -176,18 +180,21 @@ export function PostMediaCarousel({
               style={{ height: slideHeight }}
               keyboardShouldPersistTaps="handled"
             >
-              {images.map((item, i) => (
-                <MediaSlide key={feedPostMediaRecyclingKey(item.url, String(i))} {...slideProps(item, i)} />
+              {slides.map((item, i) => (
+                <MediaSlide
+                  key={feedPostMediaRecyclingKey(item.url, String(i))}
+                  {...slideProps(item, i)}
+                />
               ))}
             </ScrollView>
             <View style={styles.dots} pointerEvents="none">
-              {images.map((_, i) => (
+              {slides.map((_, i) => (
                 <View key={i} style={[styles.dot, i === index ? styles.dotActive : null]} />
               ))}
             </View>
             <View style={styles.counter} pointerEvents="none">
               <Text style={styles.counterText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                {index + 1}/{images.length}
+                {index + 1}/{slides.length}
               </Text>
             </View>
           </>
@@ -208,7 +215,8 @@ export function PostMediaCarousel({
 const styles = StyleSheet.create({
   wrap: {
     position: "relative",
-    backgroundColor: "#141416",
+    width: "100%",
+    backgroundColor: "#1c1c1f",
     overflow: "hidden",
   },
   wrapBleed: {

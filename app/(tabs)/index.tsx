@@ -734,6 +734,14 @@ export default function HomeFeedScreen() {
     []
   );
 
+  const feedMediaFingerprint = useMemo(
+    () =>
+      posts
+        .map((p) => `${p.id}:${p.media?.[0]?.url ?? ""}`)
+        .join(";"),
+    [posts]
+  );
+
   const feedListExtraKey = useMemo(
     () =>
       [
@@ -741,8 +749,9 @@ export default function HomeFeedScreen() {
         highlightedPostId ?? "",
         feedScope,
         showFollowingHint ? "1" : "0",
+        feedMediaFingerprint,
       ].join("|"),
-    [activeBeamPostId, highlightedPostId, feedScope, showFollowingHint]
+    [activeBeamPostId, highlightedPostId, feedScope, showFollowingHint, feedMediaFingerprint]
   );
 
   const renderFeedItem = useCallback(
@@ -760,20 +769,22 @@ export default function HomeFeedScreen() {
       const openCommentsFromNotification =
         focusPostId === post.id && Boolean(focusCommentId);
       return (
-        <FeedPostCardRow
-          post={post}
-          currentUserId={user?.id}
-          sessionAvatarUrl={user?.avatarUrl}
-          isBeamActive={
-            goldBeamEnabled && activeBeamPostId === post.id && postEligibleForGoldBeam(post)
-          }
-          initialCommentsOpen={openCommentsFromNotification}
-          highlighted={highlightedPostId === post.id}
-          workoutTitle={
-            post.sessionWorkoutTitle ??
-            (post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null)
-          }
-        />
+        <View style={styles.postRowWrap}>
+          <FeedPostCardRow
+            post={post}
+            currentUserId={user?.id}
+            sessionAvatarUrl={user?.avatarUrl}
+            isBeamActive={
+              goldBeamEnabled && activeBeamPostId === post.id && postEligibleForGoldBeam(post)
+            }
+            initialCommentsOpen={openCommentsFromNotification}
+            highlighted={highlightedPostId === post.id}
+            workoutTitle={
+              post.sessionWorkoutTitle ??
+              (post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null)
+            }
+          />
+        </View>
       );
     },
     [
@@ -877,7 +888,7 @@ export default function HomeFeedScreen() {
             style={styles.list}
             data={feedListItems}
             keyExtractor={(item) => item.key}
-            getItemType={(item) => item.kind}
+            getItemType={(item) => (item.kind === "post" ? `post-${item.post.id}` : item.kind)}
             keyboardShouldPersistTaps="handled"
             drawDistance={720}
             viewabilityConfigCallbackPairs={beamViewabilityPairs}
@@ -958,6 +969,9 @@ const styles = StyleSheet.create({
   },
   listGap: {
     height: 16,
+  },
+  postRowWrap: {
+    overflow: "visible",
   },
   headerBlock: {
     width: "100%",

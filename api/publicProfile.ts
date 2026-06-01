@@ -1,5 +1,5 @@
 import type { ProfileSocialPage, PublicProfileOverview } from "../types/publicProfile";
-import { legacyApiFetch as apiFetch } from "./client";
+import { apiFetch } from "./client";
 
 export function getPublicProfileOverview(userId: string) {
   return apiFetch<PublicProfileOverview>(`/auth/profile/${encodeURIComponent(userId)}/public`);

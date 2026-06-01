@@ -68,6 +68,8 @@ if (-not $metroRule) {
 
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = $ip
 $env:EXPO_PUBLIC_API_URL = "http://${ip}:4000/api"
+# Toda la API en Goi Server; no forzar :4001 legacy
+$env:EXPO_PUBLIC_AUTH_API_URL = $env:EXPO_PUBLIC_API_URL
 
 Write-Host "Metro (QR):  exp://${ip}:8081  [$iface]" -ForegroundColor Cyan
 Write-Host "API:         $env:EXPO_PUBLIC_API_URL" -ForegroundColor Cyan
@@ -75,7 +77,7 @@ Write-Host ""
 Write-Host "Prueba en el movil (Chrome):  http://${ip}:8081" -ForegroundColor Yellow
 Write-Host "  Si no carga, el QR tampoco funcionara." -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "1. Backend: cd '..\Goi Web\server' && npm run dev" -ForegroundColor DarkGray
+Write-Host "1. Backend: cd '..\Goi Server' && npm run dev  (y npm run db:setup si fallan columnas)" -ForegroundColor DarkGray
 Write-Host "2. Escanea el QR con Expo Go (misma Wi-Fi, datos moviles apagados)" -ForegroundColor DarkGray
 Write-Host "3. Debe salir aqui: Android Bundled ..." -ForegroundColor DarkGray
 Write-Host ""

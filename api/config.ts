@@ -59,11 +59,26 @@ function apiBaseFromExpoDevHost(): string | null {
  * - **Móvil físico + Expo Go:** IP de `hostUri` si arrancas con `npm start` / QR en LAN.
  * - **Override:** `EXPO_PUBLIC_API_URL` en `.env` (reinicia Metro).
  */
-function resolveDevApiBase(): string {
-  if (envUrl && envUrl.length > 0) return envUrl.replace(/\/$/, "");
+function envPointsToDeviceLoopback(url: string): boolean {
+  try {
+    const withScheme = url.includes("://") ? url : `http://${url}`;
+    const { hostname } = new URL(withScheme);
+    return DEV_LOOPBACK_HOSTS.has(hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
+function resolveDevApiBase(): string {
   const fromExpoHost = apiBaseFromExpoDevHost();
   if (fromExpoHost) return fromExpoHost;
+
+  if (envUrl && envUrl.length > 0) {
+    const normalized = envUrl.replace(/\/$/, "");
+    if (Platform.OS === "web" || !envPointsToDeviceLoopback(normalized)) {
+      return normalized;
+    }
+  }
 
   if (Platform.OS === "android") {
     return `http://10.0.2.2:${API_PORT}/api`;
@@ -71,16 +86,10 @@ function resolveDevApiBase(): string {
   return `http://127.0.0.1:${API_PORT}/api`;
 }
 
-/** Auth, workouts, social… siguen en Goi Web hasta migrarlos. */
+/** Misma base que la API principal (Goi Server :4000). Override con EXPO_PUBLIC_AUTH_API_URL si hace falta. */
 function resolveDevAuthApiBase(): string {
   if (authEnvUrl && authEnvUrl.length > 0) return authEnvUrl.replace(/\/$/, "");
-
-  const main = resolveDevApiBase();
-  // Migración Fase 7: posts en Goi Server :4000, resto en Express :4001
-  if (main.includes(`:${API_PORT}/`)) {
-    return main.replace(`:${API_PORT}/`, ":4001/");
-  }
-  return main;
+  return resolveDevApiBase();
 }
 
 export const API_BASE_URL = resolveDevApiBase();

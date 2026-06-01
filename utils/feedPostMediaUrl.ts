@@ -1,3 +1,4 @@
+import { Platform } from "react-native";
 import { resolveMediaUrl } from "../api/config";
 
 const DATA_URL_PREFIX = "data:";
@@ -17,14 +18,14 @@ function hashMediaUrl(url: string): string {
 }
 
 /**
- * URL usable en el feed (HTTP, ruta `/uploads` o data URL legacy del store).
+ * URL usable en el feed (HTTP o `/uploads`). En móvil nunca devuelve data URLs (pantalla negra).
  */
 export function resolveFeedPostMediaUrl(url: string): string | null {
   const u = url.trim();
   if (!u) return null;
 
   if (isPostMediaDataUrl(u)) {
-    return u;
+    return Platform.OS === "web" ? u : null;
   }
 
   const resolved = resolveMediaUrl(u);
@@ -38,9 +39,4 @@ export function feedPostMediaRecyclingKey(url: string, suffix = ""): string {
     ? `data-${u.length}-${hashMediaUrl(u)}`
     : (resolveFeedPostMediaUrl(u) ?? u);
   return suffix ? `feed-media-${suffix}-${base}` : `feed-media-${base}`;
-}
-
-/** Si conviene omitir width/height en source (data URLs muy largas). */
-export function feedPostMediaUsesInlineData(url: string): boolean {
-  return isPostMediaDataUrl(url);
 }

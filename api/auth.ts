@@ -9,7 +9,7 @@ import type {
   SafeUser,
   UpdateProfileInput,
 } from "../types/auth";
-import { legacyApiFetch as apiFetch } from "./client";
+import { apiFetch } from "./client";
 
 export function register(input: RegisterInput) {
   return apiFetch<AuthResponse>("/auth/register", {
@@ -41,6 +41,22 @@ export function resetPasswordWithToken(input: ResetPasswordInput) {
 
 export function getProfile(userId: string) {
   return apiFetch<{ user: ProfileUser }>(`/auth/profile/${encodeURIComponent(userId)}`);
+}
+
+export type ProfileStatsResponse = {
+  followersCount: number;
+  followingCount: number;
+  routinesCount: number;
+  totalSessions: number;
+  sessionsThisWeek: number;
+  lastSession: { performedAt: string; workoutId: string; workoutTitle: string } | null;
+  recentRoutineTitles: string[];
+  streakWeeks: number;
+  sparklineCounts: number[];
+};
+
+export function getProfileStats(userId: string) {
+  return apiFetch<ProfileStatsResponse>(`/auth/profile/${encodeURIComponent(userId)}/stats`);
 }
 
 export function updateProfile(userId: string, input: UpdateProfileInput) {
@@ -89,12 +105,16 @@ export function getDiscover(
   sp.set("limit", String(limit));
   sp.set("offset", String(offset));
   if (facet !== "all") sp.set("facet", facet);
-  return apiFetch<import("../types/auth").DiscoverPageResponse>(`/auth/discover?${sp.toString()}`);
+  return apiFetch<import("../types/auth").DiscoverPageResponse>(`/auth/discover?${sp.toString()}`, {
+    timeoutMs: 45_000,
+  });
 }
 
 export function getSocialHub(opts?: { lite?: boolean }) {
   const q = opts?.lite ? "?lite=1" : "";
-  return apiFetch<import("../types/socialHub").SocialHubResponse>(`/auth/social/hub${q}`);
+  return apiFetch<import("../types/socialHub").SocialHubResponse>(`/auth/social/hub${q}`, {
+    timeoutMs: 45_000,
+  });
 }
 
 export function getUsersPreviews(ids: string[]) {

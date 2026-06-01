@@ -160,5 +160,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
     elevation: 50,
+    backgroundColor: "transparent",
   },
 });

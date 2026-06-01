@@ -58,15 +58,25 @@ function formsEqual(a: ProfileForm, b: ProfileForm): boolean {
 
 export { DEFAULT_PROFILE_SECTIONS };
 
+function sessionToProfileUser(user: SafeUser): ProfileUser {
+  return { ...user };
+}
+
 export function useProfileEditor() {
   const { user, updateSessionUser } = useAuth();
   const { showAlert } = useGoiAlert();
 
-  const [profile, setProfile] = useState<ProfileUser | null>(null);
-  const [form, setForm] = useState<ProfileForm | null>(null);
-  const [baseline, setBaseline] = useState<ProfileForm | null>(null);
+  const [profile, setProfile] = useState<ProfileUser | null>(() =>
+    user ? sessionToProfileUser(user) : null
+  );
+  const [form, setForm] = useState<ProfileForm | null>(() =>
+    user ? profileToForm(sessionToProfileUser(user)) : null
+  );
+  const [baseline, setBaseline] = useState<ProfileForm | null>(() =>
+    user ? profileToForm(sessionToProfileUser(user)) : null
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !user);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -75,28 +85,33 @@ export function useProfileEditor() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
 
-  const loadProfile = useCallback(async () => {
-    if (!user?.id) return;
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const res = await getProfile(user.id);
-      setProfile(res.user);
-      const next = profileToForm(res.user);
-      setForm(next);
-      setBaseline(next);
-    } catch (e) {
-      setLoadError(getErrorMessage(e, "No se pudo cargar el perfil."));
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
+  const loadProfile = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!user?.id) return;
+      if (!opts?.silent) setLoading(true);
+      setLoadError(null);
+      try {
+        const res = await getProfile(user.id);
+        setProfile(res.user);
+        const next = profileToForm(res.user);
+        setForm(next);
+        setBaseline(next);
+      } catch (e) {
+        if (!form) {
+          setLoadError(getErrorMessage(e, "No se pudo cargar el perfil."));
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [user?.id, form]
+  );
 
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return;
-      void loadProfile();
-    }, [user?.id, loadProfile])
+      void loadProfile({ silent: Boolean(form) });
+    }, [user?.id, loadProfile, form])
   );
 
   const patchForm = useCallback((patch: Partial<ProfileForm>) => {

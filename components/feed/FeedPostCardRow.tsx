@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "expo-router";
 import { useFeedPostActions } from "../../context/FeedPostActionsContext";
 import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
 import { useFeedInteractionStore } from "../../stores/useFeedInteractionStore";
 import type { Post } from "../../types/post";
+import { sanitizePostMedia } from "../../utils/postDisplayMedia";
 import { sharePost } from "../../utils/sharePost";
 import { PostCard } from "./PostCard";
 
@@ -35,6 +36,7 @@ function FeedPostCardRowInner({
     s.commentFieldError?.postId === post.id ? s.commentFieldError.message : undefined
   );
   const [commentValue, setCommentValue] = useState("");
+  const safePost = useMemo(() => sanitizePostMedia(post), [post]);
 
   useEffect(() => {
     setCommentValue("");
@@ -61,7 +63,7 @@ function FeedPostCardRowInner({
 
   return (
     <PostCard
-      post={post}
+      post={safePost}
       isBeamActive={isBeamActive}
       initialCommentsOpen={initialCommentsOpen}
       onPressWorkout={onPressWorkout}
