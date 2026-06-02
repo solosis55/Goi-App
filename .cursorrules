@@ -1,7 +1,7 @@
 # Goi App — contexto para asistentes de IA (Cursor)
 
 ## Qué es este proyecto
-Cliente móvil de **Goi**: red social centrada en gimnasio y entrenamiento. Convive en el mismo workspace que **Goi Web**; la app debe **alinearse con la API y el dominio** de Goi Web (Express en `Goi Web/server`), no inventar contratos distintos sin acuerdo explícito.
+Cliente móvil de **Goi**: red social centrada en gimnasio y entrenamiento. Convive en el mismo workspace que **Goi Web**; la API de referencia es **Goi Server** (`:4000/api`, Neon + `/uploads`). Alinea tipos y rutas con la web; no inventes contratos distintos sin acuerdo explícito.
 
 ## Materiales de prácticas (nombre del ejemplo)
 En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nombre de proyecto de ejemplo. Aquí el producto es **Goi**: sustituir mentalmente y en código/textos **NoteFlow → Goi** (nombres de app, rutas de ejemplo, títulos, etc.), sin copiar el nombre NoteFlow al entregable.

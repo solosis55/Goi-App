@@ -1,4 +1,3 @@
-import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
 import {
   isMeaningfulWorkoutCreateDraft,
@@ -40,12 +39,6 @@ export function useWorkoutTabBadge(): WorkoutTabBadgeState {
     refresh();
     return subscribeWorkoutDraftChanged(refresh);
   }, [refresh]);
-
-  useFocusEffect(
-    useCallback(() => {
-      refresh();
-    }, [refresh])
-  );
 
   return state;
 }

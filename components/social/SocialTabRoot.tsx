@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { InteractionManager, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppScreenShell } from "../AppScreenShell";
 import { useSocialHub } from "../../context/SocialHubContext";
@@ -59,9 +59,16 @@ export function SocialTabRoot() {
       } else if (activityParam === "1") {
         setSegment("activity");
       }
-      void refreshHub({ silent: true });
-      void refreshBadge();
-      return () => setSocialTabFocused(false);
+
+      const task = InteractionManager.runAfterInteractions(() => {
+        void refreshHub({ silent: true });
+        void refreshBadge();
+      });
+
+      return () => {
+        task.cancel();
+        setSocialTabFocused(false);
+      };
     }, [discoverParam, facetParam, activityParam, refreshHub, refreshBadge, setSocialTabFocused])
   );
 

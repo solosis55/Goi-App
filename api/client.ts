@@ -1,4 +1,4 @@
-import { API_BASE_URL, AUTH_API_BASE_URL } from "./config";
+import { API_BASE_URL } from "./config";
 import { emitAuthExpired } from "./authEvents";
 import { clearStoredAuth, getAuthToken } from "./session";
 
@@ -79,14 +79,9 @@ async function handleSessionExpired(code?: string) {
 }
 
 export type ApiFetchOptions = RequestInit & {
-  /** Override de la URL base (p. ej. auth en Goi Web mientras posts van a Goi Server). */
   baseUrl?: string;
+  timeoutMs?: number;
 };
-
-/** Rutas aún servidas por Goi Web (`server/` Express). */
-export function legacyApiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
-  return apiFetch<T>(path, { ...options, baseUrl: AUTH_API_BASE_URL });
-}
 
 const API_TIMEOUT_MS = 12_000;
 
@@ -115,7 +110,7 @@ function mergeAbortSignal(
  * Añade `Authorization: Bearer` si hay token guardado.
  */
 export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Promise<T> {
-  const { baseUrl, ...fetchOptions } = options ?? {};
+  const { baseUrl, timeoutMs, ...fetchOptions } = options ?? {};
   const token = await getAuthToken();
   const root = baseUrl ?? API_BASE_URL;
   const url = `${root}${path.startsWith("/") ? path : `/${path}`}`;
@@ -137,7 +132,8 @@ export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Prom
   }
 
   let response: Response;
-  const { signal, cleanup } = mergeAbortSignal(fetchOptions?.signal, API_TIMEOUT_MS);
+  const requestTimeout = timeoutMs ?? API_TIMEOUT_MS;
+  const { signal, cleanup } = mergeAbortSignal(fetchOptions?.signal, requestTimeout);
   try {
     response = await fetch(url, {
       ...fetchOptions,

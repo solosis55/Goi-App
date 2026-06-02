@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getPosts, updatePost } from "../../api/posts";
+import { getPostById, updatePost } from "../../api/posts";
 import { resolveMediaUrl } from "../../api/config";
 import { ApiError } from "../../api/client";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
@@ -46,8 +46,7 @@ export function EditPostScreen({ postId }: EditPostScreenProps) {
     let cancelled = false;
     void (async () => {
       try {
-        const all = await getPosts();
-        const found = all.find((p) => p.id === postId) ?? null;
+        const found = await getPostById(postId);
         if (cancelled) return;
         if (!found) {
           setNotFound(true);

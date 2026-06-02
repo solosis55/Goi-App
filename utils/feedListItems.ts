@@ -61,6 +61,19 @@ export function countPostsInList(items: FeedListItem[]): number {
   return items.filter((i) => i.kind === "post").length;
 }
 
+/** Firma para no reutilizar filas tras like, comentarios u otros cambios sin `updatedAt`. */
+export function postFeedRowReuseSignature(post: Post): string {
+  const commentTail = post.comments[post.comments.length - 1]?.id ?? "";
+  return [
+    post.likedByMe ? "1" : "0",
+    post.likesCount,
+    post.comments.length,
+    commentTail,
+    post.updatedAt,
+    post.media?.[0]?.url ?? "",
+  ].join("|");
+}
+
 /** Reutiliza ítems de lista cuyo contenido no cambió (misma ref de post/evento). */
 export function reuseFeedListItems(next: FeedListItem[], prev: FeedListItem[] | null): FeedListItem[] {
   if (!prev || prev.length !== next.length) return next;
@@ -73,10 +86,11 @@ export function reuseFeedListItems(next: FeedListItem[], prev: FeedListItem[] | 
     }
     if (item.kind === "post" && old.kind === "post") {
       if (item.post === old.post) return old;
-      if (item.post.id === old.post.id) {
-        const nextUrl = item.post.media?.[0]?.url ?? "";
-        const oldUrl = old.post.media?.[0]?.url ?? "";
-        if (nextUrl === oldUrl && item.post.updatedAt === old.post.updatedAt) return old;
+      if (
+        item.post.id === old.post.id &&
+        postFeedRowReuseSignature(item.post) === postFeedRowReuseSignature(old.post)
+      ) {
+        return old;
       }
     }
     if (item.kind === "workout" && old.kind === "workout" && item.event === old.event) return old;

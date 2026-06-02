@@ -10,6 +10,7 @@ import type {
 
 import { ApiError, apiFetch } from "./client";
 import { normalizeFeedPage, normalizePost } from "../utils/normalizePost";
+import type { PostImageUploadFile } from "../utils/postImage";
 
 export type PostsByUserPageResponse = {
   posts: Post[];
@@ -17,10 +18,23 @@ export type PostsByUserPageResponse = {
   total: number;
 };
 
-/** Lista todas las publicaciones (Goi Server). */
-export async function getPosts() {
-  const rows = await apiFetch<Post[]>("/posts");
-  return rows.map(normalizePost);
+export type CreatePostPayload = CreatePostInput & {
+  /** Archivos locales (multipart); preferido frente a `media` en base64. */
+  uploadFiles?: PostImageUploadFile[];
+};
+
+export async function getPostsByIds(ids: string[]): Promise<Post[]> {
+  if (ids.length === 0) return [];
+  const sp = new URLSearchParams();
+  sp.set("ids", ids.slice(0, 50).join(","));
+  const res = await apiFetch<{ posts: Post[] }>(`/posts/by-ids?${sp.toString()}`);
+  return Array.isArray(res.posts) ? res.posts.map(normalizePost) : [];
+}
+
+export function getLinkedSessionIds() {
+  return apiFetch<{ sessionIds: string[] }>("/posts/linked-session-ids").then(
+    (r) => r.sessionIds ?? []
+  );
 }
 
 export async function getPostById(postId: string): Promise<Post | null> {
@@ -70,7 +84,27 @@ export function getPostsByUserPage(
   }));
 }
 
-export function createPost(input: CreatePostInput) {
+function appendCreatePostFields(form: FormData, input: CreatePostInput) {
+  form.append("content", input.content);
+  form.append("format", input.format ?? "standard");
+  form.append("visibility", input.visibility ?? "public");
+  form.append("sessionId", input.sessionId ?? "");
+}
+
+export function createPost(input: CreatePostPayload) {
+  if (input.uploadFiles && input.uploadFiles.length > 0) {
+    const form = new FormData();
+    appendCreatePostFields(form, input);
+    for (const file of input.uploadFiles) {
+      form.append("files", { uri: file.uri, name: file.name, type: file.type } as unknown as Blob);
+    }
+    return apiFetch<Post>("/posts", {
+      method: "POST",
+      body: form,
+      timeoutMs: 120_000,
+    }).then(normalizePost);
+  }
+
   return apiFetch<Post>("/posts", {
     method: "POST",
     body: JSON.stringify({
@@ -80,6 +114,7 @@ export function createPost(input: CreatePostInput) {
       sessionId: input.sessionId ?? null,
       ...(input.media?.length ? { media: input.media } : {}),
     }),
+    timeoutMs: 120_000,
   }).then(normalizePost);
 }
 

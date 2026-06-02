@@ -1,5 +1,8 @@
 import "react-native-gesture-handler";
+import { configureNativeScreens } from "../utils/nativeScreens";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+
+configureNativeScreens();
 import { GluestackUIProvider } from "@gluestack-ui/themed";
 import { config } from "@gluestack-ui/config";
 import { Stack } from "expo-router";

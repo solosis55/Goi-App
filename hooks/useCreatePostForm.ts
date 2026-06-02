@@ -17,7 +17,9 @@ import {
   pickPostImages,
   takePostPhoto,
   uriToPostImageDataUrl,
+  uriToPostImageFile,
   type PickPostImagesResult,
+  type PostImageUploadFile,
 } from "../utils/postImage";
 import { validateCreatePost } from "../utils/createPostValidation";
 import { getWorkoutSession, getWorkoutSessions } from "../api/workoutSessions";
@@ -76,6 +78,7 @@ export type PendingPostImage = {
   dataUrl: string;
   sourceUri: string;
   cropSquare: boolean;
+  uploadFile?: PostImageUploadFile;
 };
 
 function newImageId() {
@@ -86,8 +89,15 @@ async function imagesFromUris(uris: string[], cropSquare: boolean): Promise<Pend
   const out: PendingPostImage[] = [];
   for (const uri of uris) {
     try {
-      const dataUrl = await uriToPostImageDataUrl(uri, { cropSquare });
-      out.push({ id: newImageId(), uri: dataUrl, dataUrl, sourceUri: uri, cropSquare });
+      const uploadFile = await uriToPostImageFile(uri, { cropSquare });
+      out.push({
+        id: newImageId(),
+        uri: uploadFile.uri,
+        dataUrl: "",
+        sourceUri: uri,
+        cropSquare,
+        uploadFile,
+      });
     } catch {
       /* URI caducada o inaccesible */
     }
@@ -406,10 +416,12 @@ export function useCreatePostForm(
       setSubmitError(null);
       try {
         const nextCrop = !img.cropSquare;
-        const dataUrl = await uriToPostImageDataUrl(img.sourceUri, { cropSquare: nextCrop });
+        const uploadFile = await uriToPostImageFile(img.sourceUri, { cropSquare: nextCrop });
         setImages((prev) =>
           prev.map((i) =>
-            i.id === id ? { ...i, cropSquare: nextCrop, dataUrl, uri: dataUrl } : i
+            i.id === id
+              ? { ...i, cropSquare: nextCrop, uri: uploadFile.uri, dataUrl: "", uploadFile }
+              : i
           )
         );
       } catch {
@@ -574,14 +586,23 @@ export function useCreatePostForm(
     setSubmitError(null);
     try {
       const trimmed = content.trim();
+      const uploadFiles = images
+        .map((img) => img.uploadFile)
+        .filter((f): f is PostImageUploadFile => Boolean(f));
       await createPost({
         content: trimmed,
         format: postFormat,
         sessionId,
         visibility,
-        ...(images.length > 0
-          ? { media: images.map((img) => ({ type: "image" as const, url: img.dataUrl })) }
-          : {}),
+        ...(uploadFiles.length > 0
+          ? { uploadFiles }
+          : images.some((img) => img.dataUrl)
+            ? {
+                media: images
+                  .filter((img) => img.dataUrl)
+                  .map((img) => ({ type: "image" as const, url: img.dataUrl })),
+              }
+            : {}),
       });
       if (userId) {
         await Promise.all([clearPostCreateDraft(userId, postFormat), clearPendingPostPublish(userId)]);

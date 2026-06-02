@@ -1,6 +1,6 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getPosts, getPostsByUserPage } from "../api/posts";
+import { getPostsByIds, getPostsByUserPage } from "../api/posts";
 import {
   PROFILE_POSTS_PAGE_SIZE,
   type ProfilePostsFilter,
@@ -16,7 +16,6 @@ import { applyProfilePostsFilter } from "../utils/profilePostsDisplay";
 
 export function useProfilePosts(userId: string | undefined, pinnedPostId?: string | null) {
   const [myPosts, setMyPosts] = useState<Post[]>([]);
-  const [timelinePosts, setTimelinePosts] = useState<Post[]>([]);
   const [savedPosts, setSavedPosts] = useState<Post[]>([]);
   const [savedRevision, setSavedRevision] = useState(0);
   const [orphansCount, setOrphansCount] = useState(0);
@@ -25,7 +24,7 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
   const [sourceTab, setSourceTab] = useState<ProfilePostsSourceTab>("mine");
   const [filter, setFilter] = useState<ProfilePostsFilter>("all");
   const [loading, setLoading] = useState(true);
-  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [savedLoading, setSavedLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,44 +37,45 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
     setSavedRevision((n) => n + 1);
   }, []);
 
-  const rebuildSavedPosts = useCallback(async () => {
+  const loadSavedPosts = useCallback(async () => {
     if (!userId) {
       setSavedPosts([]);
       setOrphansCount(0);
       return;
     }
-    const ids = await loadSavedPostIds(userId);
-    const byId = new Map(timelinePosts.map((p) => [p.id, p]));
-    const out: Post[] = [];
-    for (const id of ids) {
-      const p = byId.get(id);
-      if (p) out.push(p);
+    setSavedLoading(true);
+    try {
+      const ids = await loadSavedPostIds(userId);
+      if (ids.length === 0) {
+        setSavedPosts([]);
+        setOrphansCount(0);
+        return;
+      }
+      const posts = await getPostsByIds(ids);
+      const byId = new Map(posts.map((p) => [p.id, p]));
+      const ordered: Post[] = [];
+      for (const id of ids) {
+        const p = byId.get(id);
+        if (p) ordered.push(p);
+      }
+      setSavedPosts(ordered);
+      const orphans = ids.length - ordered.length;
+      setOrphansCount(orphans);
+      if (orphans > 0) {
+        await pruneSavedPostIdsToExisting(userId, new Set(ordered.map((p) => p.id)));
+      }
+    } catch {
+      setSavedPosts([]);
+    } finally {
+      setSavedLoading(false);
     }
-    setSavedPosts(out);
-    const timelineIds = new Set(timelinePosts.map((p) => p.id));
-    setOrphansCount(ids.filter((id) => !timelineIds.has(id)).length);
-  }, [userId, timelinePosts]);
+  }, [userId]);
 
   useEffect(() => {
-    void rebuildSavedPosts();
-  }, [rebuildSavedPosts, savedRevision]);
-
-  const loadTimeline = useCallback(async () => {
-    if (!userId) return;
-    setTimelineLoading(true);
-    try {
-      const data = await getPosts();
-      const list = Array.isArray(data) ? data : [];
-      setTimelinePosts(list);
-      const idSet = new Set(list.map((p) => p.id));
-      await pruneSavedPostIdsToExisting(userId, idSet);
-      refreshSavedLocal();
-    } catch {
-      /* guardados locales siguen disponibles */
-    } finally {
-      setTimelineLoading(false);
+    if (sourceTab === "saved") {
+      void loadSavedPosts();
     }
-  }, [userId, refreshSavedLocal]);
+  }, [sourceTab, loadSavedPosts, savedRevision]);
 
   const fetchMinePage = useCallback(
     async (mode: "initial" | "refresh" | "more", cursor?: string | null) => {
@@ -118,8 +118,11 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
   );
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchMinePage("refresh"), loadTimeline()]);
-  }, [fetchMinePage, loadTimeline]);
+    await Promise.all([
+      fetchMinePage("refresh"),
+      sourceTab === "saved" ? loadSavedPosts() : Promise.resolve(),
+    ]);
+  }, [fetchMinePage, loadSavedPosts, sourceTab]);
 
   const loadMore = useCallback(() => {
     if (sourceTab !== "mine" || !nextCursor || loadingMore || loading) return;
@@ -139,30 +142,24 @@ export function useProfilePosts(userId: string | undefined, pinnedPostId?: strin
     }, [userId, fetchMinePage])
   );
 
-  useEffect(() => {
-    if (sourceTab !== "saved" || !userId) return;
-    if (timelinePosts.length > 0 || timelineLoading) return;
-    void loadTimeline();
-  }, [sourceTab, userId, timelinePosts.length, timelineLoading, loadTimeline]);
-
   const displayedPosts = useMemo(() => {
     const base = sourceTab === "mine" ? myPosts : savedPosts;
     return applyProfilePostsFilter(base, filter, sourceTab === "mine" ? pinnedPostId : null);
   }, [sourceTab, myPosts, savedPosts, filter, pinnedPostId]);
 
-  const listLoading = sourceTab === "mine" ? loading : timelineLoading || loading;
+  const listLoading = sourceTab === "mine" ? loading : savedLoading;
 
   const removePost = useCallback((postId: string) => {
     setMyPosts((prev) => prev.filter((p) => p.id !== postId));
+    setSavedPosts((prev) => prev.filter((p) => p.id !== postId));
     setTotal((t) => Math.max(0, t - 1));
   }, []);
 
   const pruneSavedOrphans = useCallback(async () => {
     if (!userId) return;
-    const idSet = new Set(timelinePosts.map((p) => p.id));
-    await pruneSavedPostIdsToExisting(userId, idSet);
+    await loadSavedPosts();
     refreshSavedLocal();
-  }, [userId, timelinePosts, refreshSavedLocal]);
+  }, [userId, loadSavedPosts, refreshSavedLocal]);
 
   return {
     myPosts,

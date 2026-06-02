@@ -173,6 +173,13 @@ export function useFeed(userId: string | undefined) {
     setTimeline((prev) => patchTimelinePost(prev, postId, updater));
   }, []);
 
+  const isFeedCacheFresh = useCallback(() => {
+    return (
+      timelineLengthRef.current > 0 &&
+      Date.now() - lastFetchAtRef.current < STALE_MS
+    );
+  }, []);
+
   return {
     timeline: filteredTimeline,
     posts,
@@ -196,5 +203,6 @@ export function useFeed(userId: string | undefined) {
     buildListItems,
     patchTimeline,
     patchPost,
+    isFeedCacheFresh,
   };
 }

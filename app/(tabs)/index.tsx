@@ -4,6 +4,7 @@ import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  InteractionManager,
   RefreshControl,
   StyleSheet,
   View,
@@ -136,6 +137,7 @@ export default function HomeFeedScreen() {
     buildListItems,
     patchTimeline,
     patchPost,
+    isFeedCacheFresh,
   } = feed;
   const { enabled: goldBeamEnabled } = useFeedGoldBeamPref();
   const feedFocusCountRef = useRef(0);
@@ -630,10 +632,7 @@ export default function HomeFeedScreen() {
     useCallback(() => {
       if (!isHydrated || !isAuthenticated) return;
 
-      const now = Date.now();
       const afterPublish = feedRefreshParam === "1" && !feedRefreshHandledRef.current;
-      const auxStale = now - feedAuxRefreshAtRef.current > FEED_AUX_REFRESH_STALE_MS;
-
       if (afterPublish) {
         feedRefreshHandledRef.current = true;
         requestAnimationFrame(() => scrollFeedToTop());
@@ -642,30 +641,38 @@ export default function HomeFeedScreen() {
         feedFocusCountRef.current += 1;
       }
 
-      const mode = afterPublish ? "refresh" : feedFocusCountRef.current === 1 ? "initial" : "refresh";
+      const task = InteractionManager.runAfterInteractions(() => {
+        const now = Date.now();
+        const auxStale = now - feedAuxRefreshAtRef.current > FEED_AUX_REFRESH_STALE_MS;
+        const firstFocus = feedFocusCountRef.current === 1;
+        const feedFresh = !afterPublish && !firstFocus && isFeedCacheFresh();
 
-      void (async () => {
-        if (!feedScopeReady) {
-          // No bloquear el feed si el hub social (:4001) tarda o no responde
-          void refreshFollowing();
-          const scope = await initScope(followingIds.length);
-          void fetchFeed(mode, scope, afterPublish ? { force: true } : undefined);
-          return;
+        if (!feedFresh) {
+          const mode = afterPublish ? "refresh" : firstFocus ? "initial" : "refresh";
+          void (async () => {
+            if (!feedScopeReady) {
+              void refreshFollowing();
+              const scope = await initScope(followingIds.length);
+              void fetchFeed(mode, scope, afterPublish ? { force: true } : undefined);
+              return;
+            }
+            if (afterPublish || auxStale) void refreshFollowing();
+            void fetchFeed(mode, feedScope, afterPublish ? { force: true } : undefined);
+          })();
         }
-        void refreshFollowing();
-        void fetchFeed(mode, feedScope, afterPublish ? { force: true } : undefined);
-      })();
 
-      void refreshStories();
-      void refreshFeedLocalPrefs();
-      if (auxStale || afterPublish) {
-        feedAuxRefreshAtRef.current = now;
-        void refreshDiscover();
-        void refreshWorkoutTitles();
-      }
-      void refreshBadge();
+        refreshFeedLocalPrefs();
+        if (auxStale || afterPublish) {
+          feedAuxRefreshAtRef.current = now;
+          void refreshDiscover();
+          void refreshWorkoutTitles();
+        }
+        if (afterPublish || auxStale) void refreshStories();
+        void refreshBadge();
+      });
 
       return () => {
+        task.cancel();
         if (feedRefreshParam !== "1") {
           feedRefreshHandledRef.current = false;
         }
@@ -678,6 +685,7 @@ export default function HomeFeedScreen() {
       feedScopeReady,
       initScope,
       fetchFeed,
+      isFeedCacheFresh,
       refreshStories,
       refreshFeedLocalPrefs,
       refreshFollowing,
@@ -742,6 +750,14 @@ export default function HomeFeedScreen() {
     [posts]
   );
 
+  const feedInteractionFingerprint = useMemo(
+    () =>
+      posts
+        .map((p) => `${p.id}:${p.likedByMe ? 1 : 0}:${p.likesCount}:${p.comments.length}`)
+        .join(";"),
+    [posts]
+  );
+
   const feedListExtraKey = useMemo(
     () =>
       [
@@ -750,8 +766,16 @@ export default function HomeFeedScreen() {
         feedScope,
         showFollowingHint ? "1" : "0",
         feedMediaFingerprint,
+        feedInteractionFingerprint,
       ].join("|"),
-    [activeBeamPostId, highlightedPostId, feedScope, showFollowingHint, feedMediaFingerprint]
+    [
+      activeBeamPostId,
+      highlightedPostId,
+      feedScope,
+      showFollowingHint,
+      feedMediaFingerprint,
+      feedInteractionFingerprint,
+    ]
   );
 
   const renderFeedItem = useCallback(

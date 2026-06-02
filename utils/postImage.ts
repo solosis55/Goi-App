@@ -49,6 +49,52 @@ export async function uriToPostImageDataUrl(
   return `data:image/jpeg;base64,${result.base64}`;
 }
 
+export type PostImageUploadFile = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+/** Redimensiona y deja un JPEG en disco (multipart, sin base64 en JSON). */
+export async function uriToPostImageFile(
+  uri: string,
+  opts?: { cropSquare?: boolean }
+): Promise<PostImageUploadFile> {
+  const { width, height } = await imageSize(uri);
+  const actions: ImageManipulator.Action[] = [];
+
+  if (opts?.cropSquare) {
+    const side = Math.min(width, height);
+    const originX = Math.floor((width - side) / 2);
+    const originY = Math.floor((height - side) / 2);
+    actions.push({ crop: { originX, originY, width: side, height: side } });
+  }
+
+  const w = opts?.cropSquare ? Math.min(width, height) : width;
+  const h = opts?.cropSquare ? Math.min(width, height) : height;
+  const scale = Math.min(1, MAX_DIMENSION / Math.max(w, h));
+  const targetWidth = Math.max(1, Math.round(w * scale));
+
+  if (scale < 1) {
+    actions.push({ resize: { width: targetWidth } });
+  }
+
+  const result = await ImageManipulator.manipulateAsync(uri, actions, {
+    compress: JPEG_QUALITY,
+    format: ImageManipulator.SaveFormat.JPEG,
+  });
+
+  if (!result.uri) {
+    throw new Error("No se pudo preparar la imagen");
+  }
+
+  return {
+    uri: result.uri,
+    name: `post-${Date.now()}.jpg`,
+    type: "image/jpeg",
+  };
+}
+
 export type PickPostImagesResult =
   | { ok: true; uris: string[] }
   | { ok: false; cancelled: true }

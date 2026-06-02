@@ -1,9 +1,11 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import { useWorkoutTabBadge } from "../../hooks/useWorkoutTabBadge";
+import { TabBarBadgePolling } from "./TabBarBadgePolling";
 import { TabDumbbellIcon, TabHomeIcon, TabProfileIcon, TabSocialIcon } from "./TabBarIcons";
 
 const ACTIVE = AUTH.gold;
@@ -30,14 +32,17 @@ function routeLabel(name: TabRouteName): string {
   }
 }
 
-export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) {
+function GoiTabBarInner({ state, navigation, onCreatePress }: GoiTabBarProps) {
   const insets = useSafeAreaInsets();
   const workoutBadge = useWorkoutTabBadge();
   const socialTabBadgeCount = useSocialHubStore(
     (s) => s.pendingFollowRequests + s.unreadNotifications
   );
+  const socialTabActive = state.routes[state.index]?.name === "social";
 
   return (
+    <>
+      <TabBarBadgePolling socialTabActive={socialTabActive} />
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>
       {state.routes.map((route, index) => {
         const name = route.name as TabRouteName;
@@ -65,12 +70,13 @@ export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) 
         const label = routeLabel(name);
 
         const onPress = () => {
+          if (focused) return;
           const event = navigation.emit({
             type: "tabPress",
             target: route.key,
             canPreventDefault: true,
           });
-          if (!focused && !event.defaultPrevented) {
+          if (!event.defaultPrevented) {
             navigation.navigate(route.name);
           }
         };
@@ -123,8 +129,11 @@ export function GoiTabBar({ state, navigation, onCreatePress }: GoiTabBarProps) 
         );
       })}
     </View>
+    </>
   );
 }
+
+export const GoiTabBar = memo(GoiTabBarInner);
 
 const styles = StyleSheet.create({
   bar: {

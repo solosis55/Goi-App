@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getPosts } from "../api/posts";
+import { getLinkedSessionIds } from "../api/posts";
 import { getWorkoutSessions } from "../api/workoutSessions";
 import type { WorkoutSessionWithTitle } from "../types/workoutSession";
 
@@ -17,11 +17,8 @@ export function usePostSessionPicker(userId: string | undefined) {
     }
     setLoading(true);
     try {
-      const [list, posts] = await Promise.all([getWorkoutSessions(), getPosts()]);
-      const linked = new Set(
-        posts.filter((p) => p.userId === userId && p.sessionId).map((p) => p.sessionId as string)
-      );
-      setLinkedSessionIds(linked);
+      const [list, linked] = await Promise.all([getWorkoutSessions(), getLinkedSessionIds()]);
+      setLinkedSessionIds(new Set(linked));
       setSessions(
         list
           .filter((s) => s.userId === userId)

@@ -121,7 +121,7 @@ export default function LoginScreen() {
           message: "El servidor no devolvió token. Revisa la API.",
           detail: __DEV__ ? "Respuesta sin `token`" : undefined,
           hint:
-            "Comprueba la conexión y que el servidor Goi Web esté en marcha (URL en EXPO_PUBLIC_API_URL).",
+            "Comprueba la conexión y que Goi Server esté en marcha (EXPO_PUBLIC_API_URL, puerto 4000).",
         });
         return;
       }
