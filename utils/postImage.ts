@@ -12,43 +12,6 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
   });
 }
 
-/** Redimensiona y devuelve data URL JPEG para `POST /posts`. */
-export async function uriToPostImageDataUrl(
-  uri: string,
-  opts?: { cropSquare?: boolean }
-): Promise<string> {
-  const { width, height } = await imageSize(uri);
-  const actions: ImageManipulator.Action[] = [];
-
-  if (opts?.cropSquare) {
-    const side = Math.min(width, height);
-    const originX = Math.floor((width - side) / 2);
-    const originY = Math.floor((height - side) / 2);
-    actions.push({ crop: { originX, originY, width: side, height: side } });
-  }
-
-  const w = opts?.cropSquare ? Math.min(width, height) : width;
-  const h = opts?.cropSquare ? Math.min(width, height) : height;
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(w, h));
-  const targetWidth = Math.max(1, Math.round(w * scale));
-
-  if (scale < 1) {
-    actions.push({ resize: { width: targetWidth } });
-  }
-
-  const result = await ImageManipulator.manipulateAsync(uri, actions, {
-    compress: JPEG_QUALITY,
-    format: ImageManipulator.SaveFormat.JPEG,
-    base64: true,
-  });
-
-  if (!result.base64) {
-    throw new Error("No se pudo codificar la imagen");
-  }
-
-  return `data:image/jpeg;base64,${result.base64}`;
-}
-
 export type PostImageUploadFile = {
   uri: string;
   name: string;

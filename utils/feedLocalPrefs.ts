@@ -112,12 +112,6 @@ export async function loadSuggestionsDismiss(userId: string): Promise<Suggestion
   return { mode: "none" };
 }
 
-/** @deprecated Usar loadSuggestionsDismiss */
-export async function loadSuggestionsDismissed(userId: string): Promise<boolean> {
-  const state = await loadSuggestionsDismiss(userId);
-  return isSuggestionsDismissed(state);
-}
-
 export async function saveSuggestionsDismiss(
   userId: string,
   state: SuggestionsDismissState
@@ -128,11 +122,6 @@ export async function saveSuggestionsDismiss(
   } else if (state.mode === "none") {
     await writeJson(suggestionsDismissedKey(userId), false);
   }
-}
-
-/** @deprecated Usar saveSuggestionsDismiss */
-export async function setSuggestionsDismissed(userId: string, dismissed: boolean): Promise<void> {
-  await saveSuggestionsDismiss(userId, dismissed ? { mode: "permanent" } : { mode: "none" });
 }
 
 export async function appendLocalReport(

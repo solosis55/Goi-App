@@ -12,7 +12,7 @@ import { Gesture, GestureDetector, ScrollView } from "react-native-gesture-handl
 import { runOnJS } from "react-native-reanimated";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { PostMediaItem } from "../../types/post";
-import { feedPostMediaRecyclingKey, resolveFeedPostMediaUrl } from "../../utils/feedPostMediaUrl";
+import { recyclingKey, resolveUrl } from "../../utils/postMedia/url";
 import { PostFeedImage } from "./PostFeedImage";
 import { PostMediaLightbox } from "./PostMediaLightbox";
 
@@ -124,7 +124,7 @@ export function PostMediaCarousel({
     slideWidthProp ?? Math.min(Math.max(windowWidth - 32, 280), MAX_CONTENT_WIDTH);
   const slideHeight = slideHeightProp ?? heroHeightForWidth(slideWidth, mediaAspect);
   const slides = media.filter(
-    (m) => m.type === "image" && m.url?.trim() && resolveFeedPostMediaUrl(m.url)
+    (m) => m.type === "image" && m.url?.trim() && resolveUrl(m.url)
   );
   const urls = useMemo(() => slides.map((m) => m.url), [slides]);
   const [index, setIndex] = useState(0);
@@ -182,7 +182,7 @@ export function PostMediaCarousel({
             >
               {slides.map((item, i) => (
                 <MediaSlide
-                  key={feedPostMediaRecyclingKey(item.url, String(i))}
+                  key={recyclingKey(item.url, String(i))}
                   {...slideProps(item, i)}
                 />
               ))}

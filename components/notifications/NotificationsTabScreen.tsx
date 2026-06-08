@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppScreenShell } from "../AppScreenShell";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { useSocialHub } from "../../context/SocialHubContext";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import { navigateToPostDetail } from "../../utils/notificationNavigation";
 import { NotificationsList } from "./NotificationsList";
 
@@ -17,7 +17,7 @@ type NotificationsTabScreenProps = {
 export function NotificationsTabScreen({ showBack = false, embedded = false }: NotificationsTabScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { refreshBadge } = useSocialHub();
+  const refreshBadge = useSocialHubStore((s) => s.refreshBadge);
 
   useFocusEffect(
     useCallback(() => {

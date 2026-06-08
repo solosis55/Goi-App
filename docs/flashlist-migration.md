@@ -11,7 +11,7 @@ Plan por fases para sustituir `FlatList` / `SectionList` por `@shopify/flash-lis
 - Sustituir import: `FlatList` → `FlashList` from `@shopify/flash-list`.
 - FlashList **v2** mide alturas automáticamente; usar `getItemType` si hay filas heterogéneas (feed).
 - Mantener `keyExtractor`, `renderItem`, `extraData`; `drawDistance` opcional en listas largas.
-- Tras cada fase: scroll manual, pull-to-refresh, paginación/load-more si aplica, `npm run verify:fluidity`.
+- Tras cada fase: scroll manual, pull-to-refresh, paginación/load-more si aplica, `npm run verify` (o `verify:fluidity` solo tsc).
 - Referencia de tuning feed: `docs/performance-fluidity.md`.
 - Teoría: `docs/react-native-teoria.md` § FlashList.
 
@@ -33,7 +33,7 @@ Comprobar: `ref`, `onScroll` / `useAnimatedScrollHandler`, `viewabilityConfigCal
 
 | Archivo | Lista | Estado |
 |---------|-------|--------|
-| `app/(tabs)/index.tsx` | `FeedAnimatedFlashList` | ✅ |
+| `components/feed/FeedScreenContent.tsx` | `FeedAnimatedFlashList` | ✅ |
 | `components/social/SocialDiscoverScreen.tsx` | `FlashList` | ✅ |
 | `components/profile/ProfileSocialList.tsx` | `FlashList` | ✅ |
 | `components/workouts/WorkoutsListScreen.tsx` | `FlashList` | ✅ |

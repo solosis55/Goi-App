@@ -25,8 +25,3 @@ export function applySetsTemplate(block: WorkoutExerciseBlock, templateId: SetTe
   if (!tpl) return block;
   return { ...block, sets: tpl.sets() };
 }
-
-/** @deprecated Usa applySetsTemplate(block, "3x10") */
-export function applySetsTemplate3x10(block: WorkoutExerciseBlock): WorkoutExerciseBlock {
-  return applySetsTemplate(block, "3x10");
-}

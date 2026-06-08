@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, AUTH_PAD, authScreenStyles } from "../../constants/authUi";
 import { CATALOG_EQUIPMENT_OPTIONS } from "../../constants/exerciseEquipment";
-import { exerciseCatalogStyles as catalogStyles } from "../../constants/exerciseCatalogUi";
+import { exerciseCatalogStyles as catalogStyles } from "./styles/exerciseCatalogUi";
 import { CATALOG_MUSCLE_OPTIONS } from "../../constants/exerciseMuscleFilters";
 import { WORKOUT_EXERCISES_MAX } from "../../constants/workoutFormLimits";
 import type { Exercise } from "../../types/exercise";

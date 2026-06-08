@@ -4,7 +4,7 @@ import { useFeedPostActions } from "../../context/FeedPostActionsContext";
 import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
 import { useFeedInteractionStore } from "../../stores/useFeedInteractionStore";
 import type { Post } from "../../types/post";
-import { sanitizePostMedia } from "../../utils/postDisplayMedia";
+import { sanitizeForFeed } from "../../utils/postMedia/display";
 import { sharePost } from "../../utils/sharePost";
 import { PostCard } from "./PostCard";
 
@@ -36,7 +36,7 @@ function FeedPostCardRowInner({
     s.commentFieldError?.postId === post.id ? s.commentFieldError.message : undefined
   );
   const [commentValue, setCommentValue] = useState("");
-  const safePost = useMemo(() => sanitizePostMedia(post), [post]);
+  const safePost = useMemo(() => sanitizeForFeed(post), [post]);
 
   useEffect(() => {
     setCommentValue("");

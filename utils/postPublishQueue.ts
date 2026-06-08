@@ -4,12 +4,20 @@ import type { PostVisibility } from "../constants/createPost";
 import type { PostFormat } from "../constants/postFormat";
 import { parsePostFormat } from "../constants/postFormat";
 
+export type PendingPostImageEntry = {
+  localUri: string;
+  cropSquare: boolean;
+};
+
 export type PendingPostPublish = {
   format: PostFormat;
   content: string;
   visibility: PostVisibility;
   sessionId: string | null;
   sessionWorkoutTitle: string | null;
+  /** URIs locales para re-subir vía multipart al reintentar. */
+  imageEntries?: PendingPostImageEntry[];
+  /** Legacy: data URLs cuando el flujo JSON aún tenía base64. */
   imageDataUrls: string[];
   failedAt: string;
   errorMessage: string;
@@ -40,6 +48,20 @@ export async function loadPendingPostPublish(userId: string): Promise<PendingPos
           : typeof parsed.workoutTitle === "string"
             ? parsed.workoutTitle
             : null,
+      imageEntries: Array.isArray(parsed.imageEntries)
+        ? parsed.imageEntries
+            .filter(
+              (e): e is PendingPostImageEntry =>
+                Boolean(e) &&
+                typeof e === "object" &&
+                typeof (e as PendingPostImageEntry).localUri === "string" &&
+                (e as PendingPostImageEntry).localUri.trim().length > 0
+            )
+            .map((e) => ({
+              localUri: e.localUri.trim(),
+              cropSquare: e.cropSquare !== false,
+            }))
+        : undefined,
       imageDataUrls: Array.isArray(parsed.imageDataUrls) ? parsed.imageDataUrls : [],
       failedAt: parsed.failedAt,
       errorMessage: parsed.errorMessage,

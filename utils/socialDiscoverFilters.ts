@@ -1,4 +1,5 @@
 import type { DiscoverUser } from "../types/auth";
+import type { GeoPoint } from "./geoNearby";
 import { isNearbyUser } from "./socialDiscoverSort";
 
 export type DiscoverFacetFilter = "all" | "active" | "trained" | "sameGoal" | "nearby";
@@ -19,7 +20,7 @@ export function applyDiscoverFacet(
   users: DiscoverUser[],
   facet: DiscoverFacetFilter,
   viewerGoal: string | undefined,
-  viewerLocation: string | undefined
+  viewer: GeoPoint | undefined
 ): DiscoverUser[] {
   switch (facet) {
     case "active":
@@ -32,7 +33,7 @@ export function applyDiscoverFacet(
       return users.filter((u) => norm(u.goal) === g);
     }
     case "nearby":
-      return users.filter((u) => isNearbyUser(viewerLocation, u));
+      return users.filter((u) => isNearbyUser(viewer, u));
     default:
       return users;
   }

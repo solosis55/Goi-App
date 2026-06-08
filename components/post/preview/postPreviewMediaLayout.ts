@@ -1,5 +1,4 @@
-import type { PostFormat } from "../../../constants/postFormat";
-import { POST_PREVIEW_LAYOUT, previewMediaHeight } from "./postPreviewTheme";
+import { previewMediaHeight } from "./postPreviewTheme";
 
 /** Training: foto insertada (no full-bleed), para no parecer publicación clásica. */
 export const TRAINING_INSET_MEDIA = {
@@ -35,20 +34,4 @@ export function trainingFeedInsetWidth(cardWidth: number): number {
 export function trainingFeedInsetHeight(insetWidth: number): number {
   const natural = Math.round(insetWidth * 0.85);
   return Math.min(natural, TRAINING_FEED_INSET.maxHeight);
-}
-
-export function standardMediaWidth(cardWidth: number): number {
-  return cardWidth;
-}
-
-export function standardMediaHeight(
-  width: number,
-  compact: boolean,
-  options?: { maxHeight?: number }
-): number {
-  return previewMediaHeight(width, "standard", compact, options);
-}
-
-export function usesInsetTrainingMedia(format: PostFormat, hasMedia: boolean): boolean {
-  return format === "training" && hasMedia;
 }

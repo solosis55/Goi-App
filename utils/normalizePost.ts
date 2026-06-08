@@ -1,5 +1,5 @@
 import type { Post, PostComment } from "../types/post";
-import { sanitizePostMedia } from "./postDisplayMedia";
+import { sanitizeForFeed } from "./postMedia/display";
 
 /** Asegura campos que la UI del feed exige (p. ej. respuesta parcial de Goi Server). */
 export function normalizePost(raw: Post): Post {
@@ -16,9 +16,10 @@ export function normalizePost(raw: Post): Post {
     comments: Array.isArray(raw.comments) ? raw.comments.map(normalizeComment) : [],
     hasMedia:
       raw.hasMedia === true ||
-      (raw as { has_media?: boolean }).has_media === true,
+      (raw as { has_media?: boolean }).has_media === true ||
+      (raw.media?.length ?? 0) > 0,
   };
-  return sanitizePostMedia(base);
+  return sanitizeForFeed(base);
 }
 
 function normalizeComment(raw: PostComment): PostComment {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { exerciseCatalogStyles as s } from "../../constants/exerciseCatalogUi";
+import { exerciseCatalogStyles as s } from "./styles/exerciseCatalogUi";
 import { workoutScreenStyles } from "../../constants/workoutScreenUi";
 import { ExerciseCatalogFilterChips } from "./ExerciseCatalogFilterChips";
 

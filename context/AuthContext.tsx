@@ -166,6 +166,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const remaining = await clearStoredAuth();
     if (!remaining.token || !remaining.user) {
+      const { clearWorkoutTrainingReminderSchedule } = await import("../utils/localNotifications");
+      await clearWorkoutTrainingReminderSchedule();
       const { clearAllWorkoutDrafts } = await import("../utils/workoutDrafts");
       await clearAllWorkoutDrafts();
       await setBiometricUnlockEnabled(false);

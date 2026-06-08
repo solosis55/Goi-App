@@ -10,7 +10,11 @@ type SocialSectionEmptyProps = {
 
 export function SocialSectionEmpty({ title, body, actionLabel, onAction }: SocialSectionEmptyProps) {
   return (
-    <View style={styles.wrap}>
+    <View
+      style={styles.wrap}
+      accessibilityRole="text"
+      accessibilityLabel={`${title}. ${body}`}
+    >
       <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
         {title}
       </Text>
@@ -22,6 +26,7 @@ export function SocialSectionEmpty({ title, body, actionLabel, onAction }: Socia
           onPress={onAction}
           style={({ pressed }) => [styles.btn, pressed ? styles.pressed : null]}
           accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={styles.btnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             {actionLabel}

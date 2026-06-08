@@ -1,34 +1,62 @@
-import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
+import {
+  GeoPermissionHint,
+  ProfileGeoLocationButton,
+} from "../profile/ProfileGeoLocationButton";
 
-export function SocialLocationCta() {
-  const router = useRouter();
+type SocialLocationCtaProps = {
+  geoBusy?: boolean;
+  geoError?: string | null;
+  canOpenSettings?: boolean;
+  onUseLocation: () => void;
+  onOpenDeviceSettings: () => void;
+  onEditProfile: () => void;
+};
 
+export function SocialLocationCta({
+  geoBusy,
+  geoError,
+  canOpenSettings,
+  onUseLocation,
+  onOpenDeviceSettings,
+  onEditProfile,
+}: SocialLocationCtaProps) {
   return (
-    <Pressable
-      onPress={() => router.push({ pathname: "/(tabs)/perfil", params: { editPrivate: "1" } })}
-      style={({ pressed }) => [styles.wrap, pressed ? styles.pressed : null]}
-    >
+    <View style={styles.wrap}>
       <Text style={styles.text} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Añade tu ubicación en el perfil para ver atletas cerca de ti.
+        Activa tu ubicación para descubrir atletas cerca con GPS (hasta 50 km).
       </Text>
-      <Text style={styles.link} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Ir a privacidad del perfil →
-      </Text>
-    </Pressable>
+      <ProfileGeoLocationButton busy={geoBusy} onPress={onUseLocation} compact />
+      {geoError ? (
+        <GeoPermissionHint
+          message={geoError}
+          onOpenSettings={canOpenSettings ? onOpenDeviceSettings : undefined}
+        />
+      ) : null}
+      <Pressable
+        onPress={onEditProfile}
+        style={({ pressed }) => [pressed ? styles.pressed : null]}
+        accessibilityRole="button"
+        accessibilityLabel="Editar ubicación manualmente en el perfil"
+      >
+        <Text style={styles.link} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          O escribe tu ciudad en el perfil →
+        </Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
     paddingVertical: 10,
-    gap: 4,
+    gap: 10,
   },
   text: {
     color: AUTH.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
   },
   link: {
     color: AUTH.gold,

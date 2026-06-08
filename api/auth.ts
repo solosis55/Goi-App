@@ -88,14 +88,6 @@ export function getFollowing(userId: string) {
   return apiFetch<{ followingIds: string[] }>(`/auth/following/${encodeURIComponent(userId)}`);
 }
 
-export function getFollowers(userId: string) {
-  return apiFetch<{ followerIds: string[] }>(`/auth/followers/${encodeURIComponent(userId)}`);
-}
-
-export function getUsers() {
-  return apiFetch<{ users: DiscoverUser[] }>("/auth/users");
-}
-
 export function getDiscover(
   limit = 24,
   offset = 0,
@@ -180,20 +172,10 @@ export function getPendingFollowRequests() {
   );
 }
 
-export function getSentFollowRequests() {
-  return apiFetch<{ requests: import("../types/publicProfile").SentFollowRequestPreview[] }>(
-    "/auth/follow-requests/sent"
-  );
-}
-
 export function toggleBlockUser(targetUserId: string) {
   return apiFetch<{ blocked: boolean }>(`/auth/block/${encodeURIComponent(targetUserId)}`, {
     method: "POST",
   });
-}
-
-export function getBlockedUserIds() {
-  return apiFetch<{ blockedIds: string[] }>("/auth/blocks");
 }
 
 export function uploadProfileBanner(userId: string, uri: string, mimeType = "image/jpeg") {

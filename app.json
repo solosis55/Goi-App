@@ -15,19 +15,28 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.goi.app",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Goi usa Face ID para proteger el acceso a tu cuenta en este dispositivo.",
-        "NSCameraUsageDescription": "Goi usa la cámara para publicar GoI Daily."
+        "NSCameraUsageDescription": "Goi usa la cámara para publicar GoI Daily.",
+        "NSLocationWhenInUseUsageDescription": "Goi usa tu ubicación para mostrarte atletas cerca en Descubrir.",
+        "NSUserNotificationsUsageDescription": "Goi puede enviarte recordatorios locales de entreno."
       }
     },
     "android": {
+      "package": "com.goi.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "usesCleartextTraffic": true,
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -47,6 +56,19 @@
         {
           "cameraPermission": "Goi necesita la cámara para publicar GoI Daily.",
           "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Goi usa tu ubicación para mostrarte atletas cerca en Descubrir."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#D4AF37"
         }
       ]
     ]

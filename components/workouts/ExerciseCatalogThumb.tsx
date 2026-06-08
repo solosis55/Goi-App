@@ -1,6 +1,6 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { CATALOG_UI } from "../../constants/exerciseCatalogUi";
+import { CATALOG_UI } from "./styles/exerciseCatalogUi";
 import { exerciseCatalogInitials } from "../../utils/catalogExerciseDisplay";
 
 type ExerciseCatalogThumbProps = {

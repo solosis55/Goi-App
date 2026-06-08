@@ -145,7 +145,6 @@ export function NotificationsList({
   const notifPrefs = useNotificationPrefsStore((s) => s.prefs);
   const applyRemotePrefs = useNotificationPrefsStore((s) => s.applyRemotePrefs);
   const setNotifPrefs = useNotificationPrefsStore((s) => s.setPrefs);
-  const hydrateNotifPrefs = useNotificationPrefsStore((s) => s.hydrate);
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -222,10 +221,6 @@ export function NotificationsList({
     },
     [markAllReadOnLoad, onUnreadChange, user?.id, applyRemotePrefs]
   );
-
-  useEffect(() => {
-    void hydrateNotifPrefs();
-  }, [hydrateNotifPrefs]);
 
   useEffect(() => {
     void load("initial");

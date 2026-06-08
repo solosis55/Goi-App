@@ -1,7 +1,7 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
 import { AppState, type AppStateStatus } from "react-native";
-import { useSocialHub } from "../context/SocialHubContext";
+import { useSocialHubStore } from "../stores/useSocialHubStore";
 
 const POLL_FAST_MS = 90_000;
 const POLL_SLOW_MS = 180_000;
@@ -16,7 +16,7 @@ type SocialBadgePollingOptions = {
  * Refresca badges de Social/Actividad periódicamente con la app activa.
  */
 export function useSocialBadgePolling(enabled = true, options?: SocialBadgePollingOptions) {
-  const { refreshBadge } = useSocialHub();
+  const refreshBadge = useSocialHubStore((s) => s.refreshBadge);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fastRef = useRef(options?.fast ?? false);
   const lastFocusRefreshRef = useRef(0);

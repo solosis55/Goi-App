@@ -1,50 +1,34 @@
 import * as Haptics from "expo-haptics";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Platform, View, useWindowDimensions } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
-import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { useMentionCandidates } from "../../hooks/useMentionCandidates";
 import { usePostMediaHydration } from "../../hooks/usePostMediaHydration";
-import { postHasDisplayableMedia } from "../../utils/postDisplayMedia";
+import { hasDisplayableMedia } from "../../utils/postMedia/display";
 import { postForMentionCandidates } from "../../utils/postMentionLite";
 import type { Post } from "../../types/post";
-import { MentionHighlightedText } from "../post/MentionHighlightedText";
-import { PostCardCommentComposer, PostCardCommentsBody } from "./PostCardComments";
+import { PostCardCommentComposer } from "./PostCardComments";
 import { postCardPropsAreEqual } from "../../utils/postCardAreEqual";
-import { formatPostRelative } from "../../utils/feedPostDate";
-import { visibilityBadgeStyle, visibilityLabel } from "../../utils/visibilityStyles";
+import { PostCardHeader } from "./PostCardHeader";
 import { useFeedGoldBeam } from "../../context/FeedGoldBeamContext";
 import { PostCardGoldBeam } from "./PostCardGoldBeam";
-import { UserAvatar } from "../ui/UserAvatar";
 import { PostActionBar } from "./PostActionBar";
-import { PostLikesSheet } from "./PostLikesSheet";
 import { useOptionalPressGuard } from "../../hooks/usePressGuard";
-import { ScrollAwarePressable } from "../ui/ScrollAwarePressable";
-import { PostMediaCarousel } from "./PostMediaCarousel";
-import { PublicationLinkedSessionBody } from "../post/PublicationLinkedSessionBody";
-import { PostSessionAttachment } from "../post/PostSessionAttachment";
 import { buildTrainingPreviewDraft } from "../../utils/postTrainingPreviewDraft";
 import { resolveSessionExercisePreviews } from "../../utils/sessionExercisePreview";
 import {
   trainingFeedInsetHeight,
   trainingFeedInsetWidth,
 } from "../post/preview/postPreviewMediaLayout";
-import { FeedPostOverflowSheet } from "./FeedPostOverflowSheet";
-import { PostOwnerMenuSheet } from "./PostOwnerMenuSheet";
+import { PostCardBody } from "./PostCardBody";
+import { PostCardSheets } from "./PostCardSheets";
+import { PostCardStandardMedia } from "./PostCardStandardMedia";
+import { postCardStyles as styles } from "./postCardStyles";
 
 type PostCardProps = {
   post: Post;
   currentUserId: string | undefined;
-  /** Avatar del usuario en sesión (fallback en posts propios si la API no lo envía). */
   sessionAvatarUrl?: string | null;
   commentValue: string;
   onChangeComment: (value: string) => void;
@@ -68,9 +52,7 @@ type PostCardProps = {
   onPressSession?: () => void;
   highlighted?: boolean;
   initialCommentsOpen?: boolean;
-  /** Tarjeta central del feed: muestra el brillo dorado al hacer scroll. */
   isBeamActive?: boolean;
-  /** Dentro de un ScrollView con scroll vertical (detalle desde perfil). */
   guardScrollPresses?: boolean;
 };
 
@@ -105,7 +87,6 @@ function PostCardInner({
   onSharePost,
   onReportPost,
   workoutTitle,
-  onPressWorkout,
   onPressSession,
   highlighted,
   initialCommentsOpen = false,
@@ -118,7 +99,6 @@ function PostCardInner({
   const cardWrapRef = useRef<View>(null);
   const [cardSize, setCardSize] = useState({ w: 0, h: 0 });
   const { width: screenWidth } = useWindowDimensions();
-  /** Ancho interior de la tarjeta (listContent tiene paddingHorizontal: 16). */
   const feedCardWidth = Math.min(Math.max(screenWidth - 32, 280), 672);
   const mediaSlideWidth = feedCardWidth;
   const trainingFeedMediaWidth = trainingFeedInsetWidth(mediaSlideWidth);
@@ -144,16 +124,17 @@ function PostCardInner({
   useEffect(() => {
     setSessionInlineOpen(false);
   }, [post.id]);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [sessionInlineOpen, setSessionInlineOpen] = useState(false);
+
   const commentsCount = displayPost.comments?.length ?? 0;
   const isOwner = currentUserId != null && displayPost.userId === currentUserId;
   const visibility = displayPost.visibility ?? "public";
-  const visStyle = visibilityBadgeStyle(visibility);
   const postFormat = displayPost.format ?? "standard";
   const isTrainingPost = postFormat === "training";
-  const hasMedia = postHasDisplayableMedia(displayPost);
+  const hasMedia = hasDisplayableMedia(displayPost);
   const showStandardMedia = !isTrainingPost && hasMedia;
   const sessionExercisePreviews = useMemo(
     () =>
@@ -225,7 +206,6 @@ function PostCardInner({
     });
   }, [onDelete, post.id, showAlert]);
 
-  const showVisBadge = visibility !== "public";
   const highlightOpacity = useSharedValue(0);
 
   useEffect(() => {
@@ -278,222 +258,112 @@ function PostCardInner({
           isTrainingPost ? styles.cardTraining : null,
         ]}
       >
-      <View
-        style={[
-          styles.headerPad,
-          !showStandardMedia && !isTrainingPost ? styles.headerPadCompact : null,
-        ]}
-      >
-        <View style={styles.headerRow}>
-          <ScrollAwarePressable
-            scrollGuarded={guardScrollPresses}
-            onPress={openAuthor}
-            disabled={!canOpenAuthor}
-            style={({ pressed }) => [styles.authorTap, pressed && canOpenAuthor ? styles.hitPressed : null]}
-            accessibilityRole={canOpenAuthor ? "button" : undefined}
-            accessibilityLabel={
-              canOpenAuthor ? `Ver perfil de ${displayPost.authorUsername}` : undefined
-            }
-          >
-            <View style={styles.avatarSlot}>
-              <UserAvatar src={authorAvatarSrc} username={displayPost.authorUsername} size={46} />
-            </View>
-          </ScrollAwarePressable>
-          <ScrollAwarePressable
-            scrollGuarded={guardScrollPresses}
-            onPress={openAuthor}
-            disabled={!canOpenAuthor}
-            style={({ pressed }) => [
-              styles.metaCol,
-              pressed && canOpenAuthor ? styles.hitPressed : null,
-            ]}
-          >
-            <View style={styles.metaBorder}>
-              <View style={styles.metaTop}>
-                <Text style={styles.username} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {displayPost.authorUsername}
-                  {isOwner ? <Text style={styles.ownerHint}> (tu)</Text> : null}
-                </Text>
-                <Text style={styles.dot} aria-hidden>
-                  ·
-                </Text>
-                <Text style={styles.time} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {formatPostRelative(displayPost.createdAt)}
-                </Text>
-              </View>
-              {isTrainingPost ? (
-                <Text style={styles.trainingTag} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  Training
-                </Text>
-              ) : null}
-              {showVisBadge ? (
-                <View style={[styles.visBadge, { borderColor: visStyle.borderColor, backgroundColor: visStyle.backgroundColor }]}>
-                  <Text style={[styles.visText, { color: visStyle.color }]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                    {visibilityLabel(visibility)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </ScrollAwarePressable>
-          {canManage || canOverflow ? (
-            <ScrollAwarePressable
-              scrollGuarded={guardScrollPresses}
-              onPress={press(() => (canManage ? setMenuOpen(true) : setOverflowOpen(true)))}
-              disabled={deleting}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={canManage ? "Opciones de tu publicación" : `Opciones de la publicación de ${displayPost.authorUsername}`}
-              style={({ pressed }) => [styles.menuBtn, pressed ? styles.hitPressed : null, deleting ? styles.menuDisabled : null]}
-            >
-              {deleting ? (
-                <ActivityIndicator size="small" color={AUTH.muted} />
-              ) : (
-                <Text style={styles.menuIcon}>⋯</Text>
-              )}
-            </ScrollAwarePressable>
-          ) : (
-            <View style={styles.menuSpacer} />
-          )}
-        </View>
-      </View>
-
-      {showStandardMedia ? (
-        <View style={styles.mediaBlock}>
-          <PostMediaCarousel
-            key={`media-${post.id}-${displayPost.media?.[0]?.url ?? ""}`}
-            postId={post.id}
-            media={displayPost.media ?? []}
-            onDoubleTapLike={onDoubleTapLike}
-            slideWidth={mediaSlideWidth}
-            mediaAspect="square"
-            layout="bleed"
-          />
-        </View>
-      ) : null}
-
-      <View style={styles.actionBarPad}>
-        <PostActionBar
-          liked={!!displayPost.likedByMe}
-          likesCount={displayPost.likesCount}
-          commentsCount={commentsCount}
-          onToggleLike={press(onToggleLike)}
-          onPressComment={press(onPressComment)}
-          commentsExpanded={commentsExpanded}
-          onPressLikesCount={press(openLikesSheet)}
-          onPressCommentsCount={press(onPressComment)}
-          saved={saved}
-          onToggleSave={onToggleSave ? press(onToggleSave) : undefined}
-          onPressSessionPreview={canPreviewLinkedSession ? openSessionBody : undefined}
-          sessionPreviewActive={!isTrainingPost && sessionInlineOpen}
+        <PostCardHeader
+          authorUsername={displayPost.authorUsername}
+          authorAvatarSrc={authorAvatarSrc}
+          createdAt={displayPost.createdAt}
+          isOwner={isOwner}
+          isTrainingPost={isTrainingPost}
+          visibility={visibility}
+          canOpenAuthor={canOpenAuthor}
+          canManage={canManage}
+          canOverflow={canOverflow}
+          deleting={deleting}
           guardScrollPresses={guardScrollPresses}
+          onOpenAuthor={openAuthor}
+          onOpenMenu={press(() => (canManage ? setMenuOpen(true) : setOverflowOpen(true)))}
+          compact={!showStandardMedia && !isTrainingPost}
         />
-      </View>
 
-      <PostCardCommentComposer
-        visible={showComposer && commentsUiVisible}
-        commentValue={commentValue}
-        onChangeComment={onChangeComment}
-        onSubmitComment={onSubmitComment}
-        commenting={commenting}
-        commentError={commentError}
-        onFocusComposer={() => setCommentsSectionOpen(true)}
-        guardScrollPresses={guardScrollPresses}
-        wrapPress={press}
-        mentionCandidates={mentionCandidates}
-        onMentionPick={recordMentionPick}
-      />
-
-      <View
-        style={[
-          styles.bodyPad,
-          !showStandardMedia && !isTrainingPost ? styles.bodyPadCompact : null,
-        ]}
-      >
-        {!isTrainingPost && sessionInlineOpen && canPreviewLinkedSession ? (
-          <PublicationLinkedSessionBody
-            draft={linkedSessionDraft}
-            onPressViewSession={displayPost.sessionId && onPressSession ? press(onPressSession) : undefined}
-          />
-        ) : displayPost.content ? (
-          <MentionHighlightedText
-            text={displayPost.content}
-            userDirectory={mentionDirectory}
-            onOpenProfile={canOpenAuthor ? openMentionProfile : undefined}
-            style={[
-              styles.content,
-              !showStandardMedia && !isTrainingPost ? styles.contentTextOnly : null,
-            ]}
+        {showStandardMedia ? (
+          <PostCardStandardMedia
+            postId={post.id}
+            media={displayPost.media}
+            mediaKey={`media-${post.id}-${displayPost.media?.[0]?.url ?? ""}`}
+            slideWidth={mediaSlideWidth}
+            onDoubleTapLike={onDoubleTapLike}
           />
         ) : null}
 
-        {isTrainingPost && displayPost.sessionId ? (
-          <PostSessionAttachment
-            workoutTitle={displayPost.sessionWorkoutTitle ?? workoutTitle ?? "Entrenamiento"}
-            performedAt={displayPost.sessionPerformedAt}
-            metrics={{
-              completedSets: displayPost.sessionCompletedSets,
-              totalSets: displayPost.sessionTotalSets,
-              completedExercises: displayPost.sessionCompletedExercises,
-              totalExercises: displayPost.sessionTotalExercises,
-            }}
-            exercisePreviews={sessionExercisePreviews}
-            moreExercisesCount={displayPost.sessionMoreExercisesCount ?? 0}
-            onPress={displayPost.sessionId && onPressSession ? press(onPressSession) : undefined}
-            showViewFullCta={Boolean(displayPost.sessionId && onPressSession)}
+        <View style={styles.actionBarPad}>
+          <PostActionBar
+            liked={!!displayPost.likedByMe}
+            likesCount={displayPost.likesCount}
+            commentsCount={commentsCount}
+            onToggleLike={press(onToggleLike)}
+            onPressComment={press(onPressComment)}
+            commentsExpanded={commentsExpanded}
+            onPressLikesCount={press(openLikesSheet)}
+            onPressCommentsCount={press(onPressComment)}
+            saved={saved}
+            onToggleSave={onToggleSave ? press(onToggleSave) : undefined}
+            onPressSessionPreview={canPreviewLinkedSession ? openSessionBody : undefined}
+            sessionPreviewActive={!isTrainingPost && sessionInlineOpen}
+            guardScrollPresses={guardScrollPresses}
           />
-        ) : null}
+        </View>
 
-        {hasMedia && isTrainingPost ? (
-          <View style={styles.mediaInsetPad}>
-            <Text style={styles.mediaInsetLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Foto del entreno
-            </Text>
-            <PostMediaCarousel
-              postId={post.id}
-              media={displayPost.media ?? []}
-              onDoubleTapLike={onDoubleTapLike}
-              slideWidth={trainingFeedMediaWidth}
-              slideHeight={trainingFeedMediaHeight}
-              layout="inset"
-            />
-          </View>
-        ) : null}
+        <PostCardCommentComposer
+          visible={showComposer && commentsUiVisible}
+          commentValue={commentValue}
+          onChangeComment={onChangeComment}
+          onSubmitComment={onSubmitComment}
+          commenting={commenting}
+          commentError={commentError}
+          onFocusComposer={() => setCommentsSectionOpen(true)}
+          guardScrollPresses={guardScrollPresses}
+          wrapPress={press}
+          mentionCandidates={mentionCandidates}
+          onMentionPick={recordMentionPick}
+        />
 
-        <PostCardCommentsBody
-          comments={displayPost.comments}
+        <PostCardBody
+          postId={post.id}
+          displayPost={displayPost}
+          isTrainingPost={isTrainingPost}
+          showStandardMedia={showStandardMedia}
+          hasMedia={hasMedia}
+          sessionInlineOpen={sessionInlineOpen}
+          canPreviewLinkedSession={canPreviewLinkedSession}
+          linkedSessionDraft={linkedSessionDraft}
+          sessionExercisePreviews={sessionExercisePreviews}
+          workoutTitle={workoutTitle}
           commentsCount={commentsCount}
           commentsSectionOpen={commentsSectionOpen}
           commentsUiVisible={commentsUiVisible}
           currentUserId={currentUserId}
           canOpenAuthor={canOpenAuthor}
-          onOpenAuthor={onOpenAuthor}
-          onToggleComments={onPressComment}
           mentionDirectory={mentionDirectory}
+          trainingFeedMediaWidth={trainingFeedMediaWidth}
+          trainingFeedMediaHeight={trainingFeedMediaHeight}
+          onPressSession={onPressSession}
+          onPressComment={onPressComment}
+          onOpenAuthor={onOpenAuthor}
+          onOpenMentionProfile={openMentionProfile}
+          onDoubleTapLike={onDoubleTapLike}
+          wrapPress={press}
         />
 
-      </View>
-
-      <PostOwnerMenuSheet
-        visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        onEdit={onEdit ? () => onEdit(post.id) : undefined}
-        onDelete={confirmDelete}
-        isPinned={isPinned}
-        onPin={onSetPinned ? () => onSetPinned(post.id) : undefined}
-        onUnpin={onSetPinned ? () => onSetPinned(null) : undefined}
-      />
-
-      {canOverflow ? (
-        <FeedPostOverflowSheet
-          visible={overflowOpen}
+        <PostCardSheets
+          postId={post.id}
           authorUsername={displayPost.authorUsername}
-          onClose={() => setOverflowOpen(false)}
+          likesCount={displayPost.likesCount}
+          menuOpen={menuOpen}
+          overflowOpen={overflowOpen}
+          likesSheetOpen={likesSheetOpen}
+          canOverflow={canOverflow}
+          isPinned={isPinned}
+          onCloseMenu={() => setMenuOpen(false)}
+          onCloseOverflow={() => setOverflowOpen(false)}
+          onCloseLikes={() => setLikesSheetOpen(false)}
+          onEdit={onEdit ? () => onEdit(post.id) : undefined}
+          onConfirmDelete={confirmDelete}
+          onPin={onSetPinned ? () => onSetPinned(post.id) : undefined}
+          onUnpin={onSetPinned ? () => onSetPinned(null) : undefined}
           onMuteAuthor={() => onMuteAuthor?.(displayPost.userId)}
           onReport={onReportPost}
           onShare={onSharePost}
         />
-      ) : null}
-
       </View>
 
       {highlighted ? (
@@ -503,196 +373,8 @@ function PostCardInner({
       {isBeamActive && feedBeam?.enabled && cardSize.w > 0 && cardSize.h > 0 ? (
         <PostCardGoldBeam width={cardSize.w} height={cardSize.h} />
       ) : null}
-
-      <PostLikesSheet
-        visible={likesSheetOpen}
-        postId={post.id}
-        likesCount={displayPost.likesCount}
-        onClose={() => setLikesSheetOpen(false)}
-      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  cardWrap: {
-    position: "relative",
-    overflow: "visible",
-  },
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.14)",
-    backgroundColor: "#0a0a0c",
-    ...Platform.select({
-      ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.42,
-        shadowRadius: 18,
-      },
-      android: { elevation: 6 },
-      default: {},
-    }),
-  },
-  cardClip: {
-    overflow: "hidden",
-    borderRadius: 16,
-  },
-  highlightRing: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 16,
-    zIndex: 3,
-  },
-  cardTextOnly: {
-    backgroundColor: "rgba(22, 20, 14, 0.72)",
-    borderLeftWidth: 3,
-    borderLeftColor: "rgba(212, 175, 55, 0.42)",
-  },
-  cardTraining: {
-    borderLeftWidth: 3,
-    borderLeftColor: "rgba(212, 175, 55, 0.55)",
-  },
-  headerPad: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: "#0a0a0c",
-  },
-  headerPadCompact: {
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  mediaBlock: {
-    width: "100%",
-    overflow: "hidden",
-    backgroundColor: "#1c1c1f",
-  },
-  mediaInsetPad: {
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 6,
-    alignItems: "center",
-  },
-  mediaInsetLabel: {
-    color: AUTH.faint,
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  actionBarPad: {
-    paddingHorizontal: 14,
-    paddingTop: 4,
-    paddingBottom: 2,
-    backgroundColor: "#0a0a0c",
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-  },
-  authorTap: {
-    flexShrink: 0,
-  },
-  avatarSlot: {
-    marginTop: 2,
-    flexShrink: 0,
-  },
-  metaCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  metaBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(38, 38, 38, 0.55)",
-    paddingBottom: 10,
-  },
-  metaTop: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 8,
-  },
-  username: {
-    color: AUTH.neutral100,
-    fontSize: 15,
-    fontWeight: "600",
-    letterSpacing: -0.2,
-  },
-  ownerHint: {
-    color: AUTH.muted,
-    fontWeight: "400",
-  },
-  dot: {
-    color: AUTH.faint,
-    fontSize: 13,
-  },
-  time: {
-    color: AUTH.muted,
-    fontSize: 13,
-  },
-  trainingTag: {
-    color: AUTH.gold,
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  visBadge: {
-    alignSelf: "flex-start",
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  visText: {
-    fontSize: 10,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  menuBtn: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  menuSpacer: {
-    width: 36,
-  },
-  menuIcon: {
-    color: AUTH.neutral100,
-    fontSize: 22,
-    lineHeight: 24,
-    marginTop: -4,
-    fontWeight: "600",
-  },
-  menuDisabled: {
-    opacity: 0.5,
-  },
-  bodyPad: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
-    gap: 12,
-    backgroundColor: "#0a0a0c",
-  },
-  bodyPadCompact: {
-    paddingTop: 8,
-  },
-  content: {
-    color: AUTH.neutral100,
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  contentTextOnly: {
-    fontSize: 17,
-    lineHeight: 26,
-  },
-  hitPressed: {
-    opacity: 0.85,
-  },
-});
 
 export const PostCard = memo(PostCardInner, postCardPropsAreEqual);

@@ -63,3 +63,6 @@ export const MENTION_RECENTS_KEY_PREFIX = "goi:mentionRecents:v1";
 
 /** "1" = brillo dorado en feed; "0" = desactivado (ahorro batería / dispositivos lentos). */
 export const FEED_GOLD_BEAM_ENABLED_KEY = "goi:feedGoldBeamEnabled:v1";
+
+/** Recordatorio local semanal de entreno (expo-notifications). */
+export const WORKOUT_TRAINING_REMINDER_KEY = "goi:workoutTrainingReminder:v1";

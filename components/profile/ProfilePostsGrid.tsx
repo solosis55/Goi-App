@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, useWindowDimensions, Pressable } from "react-na
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { Post } from "../../types/post";
-import { postThumbnailUrl } from "../../utils/postThumbnail";
+import { thumbnailUrl } from "../../utils/postMedia/thumbnail";
 import { ProfileGridThumbnail } from "./ProfileGridThumbnail";
 
 const COLS = 3;
@@ -117,7 +117,7 @@ export function ProfilePostsGrid({
   return (
     <View style={[styles.grid, { paddingHorizontal: 16 }]}>
       {posts.map((post) => {
-        const thumb = postThumbnailUrl(post);
+        const thumb = thumbnailUrl(post);
         const thumbUri = thumb ? resolveMediaUrl(thumb) : "";
         const multi = (post.media?.length ?? 0) > 1;
         const selected = selectedId === post.id;

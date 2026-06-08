@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { getFeedPage } from "../api/posts";
 import { ApiError } from "../api/client";
-import { FEED_PAGE_SIZE, type FeedScope } from "../constants/feed";
+import { FEED_PAGE_SIZE, FEED_STALE_MS, type FeedScope } from "../constants/feed";
 import { FEED_SUGGESTIONS_INSERT_AFTER_POSTS } from "../constants/feedSuggestions";
 import type { FeedTimelineItemDto, Post } from "../types/post";
 import { buildFeedListItems, reuseFeedListItems, type FeedListItem } from "../utils/feedListItems";
@@ -36,7 +36,6 @@ export function useFeed(userId: string | undefined) {
   const listItemsCacheRef = useRef<FeedListItem[]>([]);
   const timelineLengthRef = useRef(0);
   timelineLengthRef.current = timeline.length;
-  const STALE_MS = 30_000;
 
   const initScope = useCallback(
     async (followingCount: number) => initFeedScope(followingCount),
@@ -59,7 +58,7 @@ export function useFeed(userId: string | undefined) {
       if (
         mode === "refresh" &&
         !opts?.force &&
-        Date.now() - lastFetchAtRef.current < STALE_MS &&
+        Date.now() - lastFetchAtRef.current < FEED_STALE_MS &&
         timelineLengthRef.current > 0
       ) {
         return;
@@ -176,7 +175,7 @@ export function useFeed(userId: string | undefined) {
   const isFeedCacheFresh = useCallback(() => {
     return (
       timelineLengthRef.current > 0 &&
-      Date.now() - lastFetchAtRef.current < STALE_MS
+      Date.now() - lastFetchAtRef.current < FEED_STALE_MS
     );
   }, []);
 

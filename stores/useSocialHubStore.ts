@@ -36,12 +36,9 @@ type SocialHubState = {
   hub: SocialHubResponse | null;
   hubLoading: boolean;
   followingIds: string[];
-  socialTabFocused: boolean;
 
   reset: () => void;
-  setUserId: (userId: string | null) => void;
   hydrateForUser: (userId: string) => void;
-  setSocialTabFocused: (focused: boolean) => void;
   refreshBadge: (opts?: { force?: boolean }) => Promise<void>;
   refreshHub: (opts?: { silent?: boolean; force?: boolean }) => Promise<void>;
   invalidateHub: () => void;
@@ -56,7 +53,6 @@ export const useSocialHubStore = create<SocialHubState>((set, get) => ({
   hub: null,
   hubLoading: false,
   followingIds: [],
-  socialTabFocused: false,
 
   reset: () => {
     set({
@@ -66,11 +62,8 @@ export const useSocialHubStore = create<SocialHubState>((set, get) => ({
       hub: null,
       hubLoading: false,
       followingIds: [],
-      socialTabFocused: false,
     });
   },
-
-  setUserId: (userId) => set({ userId }),
 
   hydrateForUser: (userId) => {
     set({ userId });
@@ -79,8 +72,6 @@ export const useSocialHubStore = create<SocialHubState>((set, get) => ({
     void get().refreshHub({ silent: Boolean(cached) });
     void get().refreshBadge({ force: true });
   },
-
-  setSocialTabFocused: (focused) => set({ socialTabFocused: focused }),
 
   refreshBadge: async (opts) => {
     const userId = get().userId;

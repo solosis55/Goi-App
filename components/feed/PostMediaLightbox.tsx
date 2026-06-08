@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { feedPostMediaRecyclingKey, resolveFeedPostMediaUrl } from "../../utils/feedPostMediaUrl";
+import { recyclingKey, resolveUrl } from "../../utils/postMedia/url";
 import { PostFeedImage } from "./PostFeedImage";
 
 type PostMediaLightboxProps = {
@@ -72,9 +72,9 @@ export function PostMediaLightbox({ visible, urls, initialIndex, onClose }: Post
           style={styles.scroller}
         >
           {urls.map((url, i) => {
-            const resolved = resolveFeedPostMediaUrl(url);
+            const resolved = resolveUrl(url);
             return (
-              <View key={feedPostMediaRecyclingKey(url, `lightbox-${i}`)} style={[styles.page, { width, height }]}>
+              <View key={recyclingKey(url, `lightbox-${i}`)} style={[styles.page, { width, height }]}>
                 {resolved ? (
                   <PostFeedImage
                     url={url}

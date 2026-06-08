@@ -20,16 +20,8 @@ export type FeedPostActionsHandlers = {
   clearCommentError: () => void;
 };
 
-export type FeedPostActionsSnapshot = {
-  getCommentError: (postId: string) => string | undefined;
-  isCommenting: (postId: string) => boolean;
-  isDeleting: (postId: string) => boolean;
-  isSaved: (postId: string) => boolean;
-};
-
 type FeedPostActionsContextValue = {
   invoke: FeedPostActionsHandlers;
-  snapshot: FeedPostActionsSnapshot;
 };
 
 const FeedPostActionsContext = createContext<FeedPostActionsContextValue | null>(null);
@@ -37,17 +29,12 @@ const FeedPostActionsContext = createContext<FeedPostActionsContextValue | null>
 export function FeedPostActionsProvider({
   children,
   handlers,
-  snapshot,
 }: {
   children: ReactNode;
   handlers: FeedPostActionsHandlers;
-  snapshot: FeedPostActionsSnapshot;
 }) {
   const handlersRef = useRef(handlers);
   handlersRef.current = handlers;
-
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
 
   const value = useMemo<FeedPostActionsContextValue>(
     () => ({
@@ -62,12 +49,6 @@ export function FeedPostActionsProvider({
         openWorkoutForPost: (post) => handlersRef.current.openWorkoutForPost(post),
         openSession: (sessionId, postId) => handlersRef.current.openSession(sessionId, postId),
         clearCommentError: () => handlersRef.current.clearCommentError(),
-      },
-      snapshot: {
-        getCommentError: (postId) => snapshotRef.current.getCommentError(postId),
-        isCommenting: (postId) => snapshotRef.current.isCommenting(postId),
-        isDeleting: (postId) => snapshotRef.current.isDeleting(postId),
-        isSaved: (postId) => snapshotRef.current.isSaved(postId),
       },
     }),
     []

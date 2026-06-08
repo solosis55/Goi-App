@@ -13,6 +13,7 @@ import { useGoiAlert } from "../context/GoiAlertContext";
 import type { ProfileUser, SafeUser } from "../types/auth";
 import { getErrorMessage } from "../utils/errorMessages";
 import { pickProfileImage } from "../utils/profileImagePick";
+import { openDeviceSettings, readDeviceLocation } from "../utils/deviceLocation";
 
 export function profileToForm(user: ProfileUser): ProfileForm {
   return {
@@ -80,6 +81,8 @@ export function useProfileEditor() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [syncingGeo, setSyncingGeo] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -126,7 +129,7 @@ export function useProfileEditor() {
   }, [form, baseline]);
 
   const restricted = profile?.restrictedToFollowers === true;
-  const busy = saving || uploadingAvatar || uploadingBanner;
+  const busy = saving || uploadingAvatar || uploadingBanner || syncingGeo;
 
   const applyProfile = useCallback(
     async (nextUser: SafeUser) => {
@@ -227,6 +230,37 @@ export function useProfileEditor() {
     [user?.id, restricted, busy, applyProfile, profile?.email, showAlert]
   );
 
+  const syncGeoFromDevice = useCallback(async () => {
+    if (!user?.id || restricted || busy) return false;
+    setGeoError(null);
+    setSyncingGeo(true);
+    try {
+      const result = await readDeviceLocation();
+      if (!result.ok) {
+        setGeoError(result.error);
+        return false;
+      }
+      const res = await updateProfile(user.id, {
+        location: result.location,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      });
+      patchForm({ location: result.location });
+      await applyProfile(res.user);
+      showAlert({
+        title: "Goi",
+        message: "Ubicación actualizada para descubrir atletas cerca.",
+        buttons: [{ text: "Entendido", style: "cancel" }],
+      });
+      return true;
+    } catch (e) {
+      setGeoError(e instanceof ApiError ? getErrorMessage(e, "No se pudo guardar la ubicación.") : "No se pudo guardar la ubicación.");
+      return false;
+    } finally {
+      setSyncingGeo(false);
+    }
+  }, [user?.id, restricted, busy, applyProfile, patchForm, showAlert]);
+
   return {
     user,
     profile,
@@ -240,13 +274,18 @@ export function useProfileEditor() {
     submitError,
     successMessage,
     imageError,
+    geoError,
     isDirty,
     restricted,
     busy,
+    syncingGeo,
     patchForm,
     onSave,
     loadProfile,
     changeAvatar: () => void uploadImage("avatar"),
     changeBanner: () => void uploadImage("banner"),
+    syncGeoFromDevice,
+    openGeoSettings: openDeviceSettings,
+    clearGeoError: () => setGeoError(null),
   };
 }

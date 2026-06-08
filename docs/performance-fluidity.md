@@ -93,6 +93,7 @@ Política: feed = `Pressable` + RNGH en media; detalle perfil (`GuardedScrollVie
 - [x] `InteractionManager.runAfterInteractions` tras publicar antes de navegar al feed
 - [x] Beam dorado: toggle en Perfil → Privacidad («Brillo dorado en el feed»); viewability off si desactivado
 - [x] Beam por viewability sin trabajo extra cuando está desactivado (pairs vacíos)
+- [x] Elegibilidad beam ampliada (training, `hasMedia`) + prioridad post superior con scroll en top (jun 2026)
 
 ---
 
@@ -103,7 +104,8 @@ Documento detallado: [`performance-fluidity-verification.md`](./performance-flui
 **Automatizado (local / CI):**
 
 ```bash
-npm run verify:fluidity
+npm run verify          # Jest + tsc (recomendado)
+npm run verify:fluidity # Solo tsc (alias histórico)
 ```
 
 - [x] Checklist manual documentado (feed, like, comentar, sesión inline, crear post, entreno, social)

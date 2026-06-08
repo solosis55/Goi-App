@@ -33,3 +33,4 @@ Las versiones recientes de Cursor recomiendan también reglas en `.cursor/rules/
 | 2026-05-12  | Creación inicial de `.cursorrules` y este documento. |
 | 2026-05-12  | Setup Expo (SDK 54): plantilla `blank-typescript`, Expo Router y dependencias del enunciado; estructura de carpetas recomendada. El nombre de carpeta del workspace es `Goi App` (con espacio); el paquete npm usa el identificador `goi` por compatibilidad con Expo. |
 | 2026-05     | Documentación tutorial: `docs/README.md`, `react-native-teoria.md` (FlashList, Zustand, fluidez), migraciones y checklist de verificación. |
+| 2026-06     | Refactor estructural documentado; `npm run verify`; actualización docs (Social Hub sin facade, feed hooks, postMedia, beam). |

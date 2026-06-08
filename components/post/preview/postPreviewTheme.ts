@@ -6,7 +6,6 @@ export const POST_PREVIEW_CARD = {
   border: "rgba(82, 82, 82, 0.55)",
   background: "#0a0a0c",
   fadeEnd: "#0a0a0c",
-  chooserClipBg: "#0a0a0c",
   metaColor: AUTH.faint,
   placeholder: {
     gradStart: "#161618",

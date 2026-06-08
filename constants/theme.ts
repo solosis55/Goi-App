@@ -70,12 +70,6 @@ export const goiAppPalette = {
 
 export type GoiPalette = typeof goiAppPalette;
 
-/** @deprecated Solo referencia histórica; la app usa siempre `goiAppPalette`. */
-export const colors = {
-  light: goiAppPalette,
-  dark: goiAppPalette,
-} as const;
-
 export type GoiColorScheme = "dark";
 
 /**

@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { exerciseCatalogStyles as s } from "../../constants/exerciseCatalogUi";
+import { exerciseCatalogStyles as s } from "./styles/exerciseCatalogUi";
 
 type ExerciseCatalogSearchBarProps = {
   value: string;

@@ -37,16 +37,12 @@ function ThemedRoot() {
           >
             <Stack.Screen name="index" options={{ animation: "fade_from_bottom", animationDuration: 420 }} />
             <Stack.Screen name="(tabs)" options={{ animation: "fade_from_bottom", animationDuration: 420 }} />
-            <Stack.Screen name="feed" options={{ animation: "none" }} />
+            <Stack.Screen name="(legacy)" options={{ animation: "none" }} />
             <Stack.Screen
               name="nueva-publicacion"
               options={{ animation: "fade", presentation: "fullScreenModal" }}
             />
             <Stack.Screen name="editar-publicacion" options={{ animation: "fade", presentation: "modal" }} />
-            <Stack.Screen
-              name="nueva-historia"
-              options={{ animation: "fade_from_bottom", animationDuration: 420, presentation: "modal" }}
-            />
             <Stack.Screen
               name="camara-historia"
               options={{ animation: "fade", presentation: "fullScreenModal" }}
@@ -79,15 +75,12 @@ function ThemedRoot() {
                 animationDuration: 420,
               }}
             />
-            <Stack.Screen name="perfil" options={{ animation: "none" }} />
             <Stack.Screen name="usuario/[id]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="rutina/nueva" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="rutina/[id]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="entrenar/[workoutId]" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="sesion/[id]" options={APP_CARD_STACK_OPTIONS} />
-            <Stack.Screen name="descubrir" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="lista-social" options={APP_CARD_STACK_OPTIONS} />
-            <Stack.Screen name="notificaciones" options={APP_CARD_STACK_OPTIONS} />
             <Stack.Screen name="publicacion/[id]" options={APP_PROFILE_POST_STACK_OPTIONS} />
               </Stack>
             </GoiToastProvider>

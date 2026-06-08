@@ -6,16 +6,15 @@ import {
   loadMutedUserIds,
   loadSavedPostIds,
   loadSuggestionsDismiss,
-  muteUser as persistMuteUser,
+  saveMutedUserIds,
+  saveSavedPostIds,
   saveSuggestionsDismiss,
-  toggleSavedPost,
   type SuggestionsDismissState,
 } from "../utils/feedLocalPrefs";
 import { resolveInitialFeedScope, writeStoredFeedScope } from "../utils/feedScopeStorage";
 
 type FeedPrefsState = {
   goldBeamEnabled: boolean;
-  goldBeamHydrated: boolean;
   feedScope: FeedScope;
   feedScopeReady: boolean;
   feedPrefsUserId: string | null;
@@ -32,7 +31,9 @@ type FeedPrefsState = {
   initFeedScope: (followingCount: number) => Promise<FeedScope>;
   setFeedScope: (scope: FeedScope) => Promise<void>;
   muteAuthor: (userId: string, targetUserId: string) => Promise<void>;
+  unmuteAuthor: (userId: string, targetUserId: string) => Promise<void>;
   toggleSavedPostForUser: (userId: string, postId: string) => boolean;
+  pruneSavedPostsToExisting: (userId: string, existingPostIds: Set<string>) => Promise<number>;
   snoozeSuggestions: (userId: string) => Promise<void>;
   dismissSuggestionsPermanent: (userId: string) => Promise<void>;
   setSuggestionsDismissState: (userId: string, state: SuggestionsDismissState) => Promise<void>;
@@ -43,7 +44,6 @@ const LOCAL_PREFS_STALE_MS = 60_000;
 
 export const useFeedPrefsStore = create<FeedPrefsState>((set, get) => ({
   goldBeamEnabled: true,
-  goldBeamHydrated: false,
   feedScope: "following",
   feedScopeReady: false,
   feedPrefsUserId: null,
@@ -54,11 +54,11 @@ export const useFeedPrefsStore = create<FeedPrefsState>((set, get) => ({
 
   hydrateGoldBeam: async () => {
     const enabled = await loadFeedGoldBeamEnabled();
-    set({ goldBeamEnabled: enabled, goldBeamHydrated: true });
+    set({ goldBeamEnabled: enabled });
   },
 
   setGoldBeamEnabled: async (value: boolean) => {
-    set({ goldBeamEnabled: value, goldBeamHydrated: true });
+    set({ goldBeamEnabled: value });
     await saveFeedGoldBeamEnabled(value);
   },
 
@@ -116,9 +116,22 @@ export const useFeedPrefsStore = create<FeedPrefsState>((set, get) => ({
   muteAuthor: async (userId: string, targetUserId: string) => {
     const prev = get().mutedUserIds;
     if (targetUserId === userId || prev.includes(targetUserId)) return;
-    set({ mutedUserIds: [...prev, targetUserId], feedPrefsUserId: userId });
+    const next = [...prev, targetUserId];
+    set({ mutedUserIds: next, feedPrefsUserId: userId });
     try {
-      await persistMuteUser(userId, targetUserId);
+      await saveMutedUserIds(userId, next);
+    } catch {
+      set({ mutedUserIds: prev });
+    }
+  },
+
+  unmuteAuthor: async (userId: string, targetUserId: string) => {
+    const prev = get().mutedUserIds;
+    if (!prev.includes(targetUserId)) return;
+    const next = prev.filter((id) => id !== targetUserId);
+    set({ mutedUserIds: next, feedPrefsUserId: userId });
+    try {
+      await saveMutedUserIds(userId, next);
     } catch {
       set({ mutedUserIds: prev });
     }
@@ -127,20 +140,36 @@ export const useFeedPrefsStore = create<FeedPrefsState>((set, get) => ({
   toggleSavedPostForUser: (userId: string, postId: string) => {
     const prev = get().savedPostIds;
     const had = prev.includes(postId);
-    const optimistic = had ? prev.filter((id) => id !== postId) : [postId, ...prev.filter((id) => id !== postId)];
-    set({ savedPostIds: optimistic.slice(0, 500), feedPrefsUserId: userId });
+    const next = had
+      ? prev.filter((id) => id !== postId)
+      : [postId, ...prev.filter((id) => id !== postId)];
+    const optimistic = next.slice(0, 500);
+    set({ savedPostIds: optimistic, feedPrefsUserId: userId });
 
     void (async () => {
       try {
-        await toggleSavedPost(userId, postId);
-        const ids = await loadSavedPostIds(userId);
-        set({ savedPostIds: ids, feedPrefsUserId: userId });
+        await saveSavedPostIds(userId, optimistic);
       } catch {
         set({ savedPostIds: prev, feedPrefsUserId: userId });
       }
     })();
 
     return !had;
+  },
+
+  pruneSavedPostsToExisting: async (userId: string, existingPostIds: Set<string>) => {
+    const prev = get().savedPostIds;
+    const next = prev.filter((id) => existingPostIds.has(id));
+    const removed = prev.length - next.length;
+    if (removed === 0) return 0;
+    set({ savedPostIds: next, feedPrefsUserId: userId });
+    try {
+      await saveSavedPostIds(userId, next);
+    } catch {
+      set({ savedPostIds: prev, feedPrefsUserId: userId });
+      return 0;
+    }
+    return removed;
   },
 
   snoozeSuggestions: async (userId: string) => {

@@ -5,7 +5,36 @@ import { clearStoredAuth, getAuthToken } from "./session";
 type ApiErrorBody = {
   code?: string;
   message?: string;
+  details?: unknown;
 };
+
+function messageFromValidationDetails(details: unknown): string | null {
+  if (!details) return null;
+  if (Array.isArray(details)) {
+    const parts = details
+      .map((item) => {
+        if (item && typeof item === "object" && "message" in item) {
+          const msg = (item as { message?: unknown }).message;
+          return typeof msg === "string" ? msg.trim() : "";
+        }
+        return "";
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return parts.join(" ");
+  }
+  if (typeof details === "object") {
+    const flat = details as {
+      formErrors?: string[];
+      fieldErrors?: Record<string, string[]>;
+    };
+    const parts = [
+      ...(flat.formErrors ?? []),
+      ...Object.values(flat.fieldErrors ?? {}).flat(),
+    ].filter(Boolean);
+    if (parts.length > 0) return parts.join(" ");
+  }
+  return null;
+}
 
 export class ApiError extends Error {
   code: string;
@@ -65,9 +94,17 @@ function fallbackMessageForErrorCode(code: string, status: number): string | nul
   }
 }
 
-function resolveErrorMessage(status: number, code: string, serverMessage: string | undefined): string {
+function resolveErrorMessage(
+  status: number,
+  code: string,
+  serverMessage: string | undefined,
+  details?: unknown
+): string {
+  const fromDetails = messageFromValidationDetails(details);
+  if (fromDetails) return fromDetails;
+
   const trimmed = typeof serverMessage === "string" ? serverMessage.trim() : "";
-  if (trimmed.length > 0) return trimmed;
+  if (trimmed.length > 0 && trimmed !== "Datos no válidos") return trimmed;
   const byCode = fallbackMessageForErrorCode(code, status);
   if (byCode) return byCode;
   return fallbackMessageForFailedRequest(status);
@@ -167,7 +204,7 @@ export async function apiFetch<T>(path: string, options?: ApiFetchOptions): Prom
   if (!response.ok) {
     const hasServerCode = typeof data.code === "string" && data.code.trim().length > 0;
     const code = hasServerCode ? data.code!.trim() : "API_ERROR";
-    const message = resolveErrorMessage(response.status, code, data.message);
+    const message = resolveErrorMessage(response.status, code, data.message, data.details);
     const apiError = new ApiError(message, response.status, code);
     if (shouldExpireSession(apiError.status, apiError.code)) {
       await handleSessionExpired(apiError.code);

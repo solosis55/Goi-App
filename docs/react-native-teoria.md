@@ -11,7 +11,8 @@ Documentación teórica del apartado de **setup y prácticas** del proyecto. Res
 5. [FlashList](#4-flashlist--listas-de-alto-rendimiento)
 6. [Zustand](#5-zustand--estado-compartido)
 7. [Fluidez y rendimiento](#6-fluidez-y-rendimiento)
-8. [Documentación relacionada](#7-documentación-relacionada)
+8. [Arquitectura de capas (jun 2026)](#7-arquitectura-de-capas-jun-2026)
+9. [Documentación relacionada](#8-documentación-relacionada)
 
 ---
 
@@ -72,7 +73,7 @@ FlashList reutiliza vistas de forma más agresiva y, en la **v2** del paquete, *
 | Patrón | Dónde | Para qué |
 |--------|-------|----------|
 | `FlashList` directo | Discover, rutinas, perfil social, notificaciones, catálogo | Scroll vertical estándar |
-| `FeedAnimatedFlashList` | Feed (`app/(tabs)/index.tsx`) | `useAnimatedScrollHandler` + beam dorado + `viewabilityConfigCallbackPairs` |
+| `FeedAnimatedFlashList` | Feed (`FeedScreenContent.tsx`) | `useAnimatedScrollHandler` + beam dorado + `viewabilityConfigCallbackPairs` |
 | `getItemType` | Feed, notificaciones, catálogo | Filas heterogéneas (post vs día vs sugerencias; header vs notificación; músculo vs ejercicio) |
 | Lista aplanada | Notificaciones, catálogo | Sustituir `SectionList`: headers de sección como ítems `{ kind: 'sectionHeader' }` |
 | `extraData` | Todas las listas con estado en fila | Forzar re-render al cambiar like, follow, selección, etc. |
@@ -132,15 +133,35 @@ import { useSocialHubStore } from "../stores/useSocialHubStore";
 const badge = useSocialHubStore((s) => s.pendingFollowRequests + s.unreadNotifications);
 ```
 
-**Varios campos** — `useShallow` de `zustand/react/shallow` o facade existente (`useSocialHub()`).
+**Varios campos** — `useShallow` de `zustand/react/shallow` o selectores separados.
 
 **Persistencia** — utils AsyncStorage + `hydrate()` en el store (no middleware `persist` para tokens; auth sigue en SecureStore).
 
 **Optimistic UI** — `set()` inmediato; persistencia/API en `void (async () => { ... })()` con rollback en catch.
 
-### Facades
+### Facades y hooks de hidratación
 
-`context/SocialHubContext.tsx` y `hooks/useFeedGoldBeamPref.ts` delegan al store para no romper imports legacy. Código nuevo: importar desde `stores/` directamente cuando solo haga falta un slice.
+- **`SocialHubProvider`** (`context/SocialHubContext.tsx`) — solo hidrata `useSocialHubStore` al login; **no** hay `useSocialHub()`.
+- **`useHydrateGoldBeamPref`** — hidrata `goldBeamEnabled` desde AsyncStorage al montar pantallas de prefs.
+- Código nuevo: importar **`stores/`** directamente con selectores finos.
+
+### Refresh al volver a una pantalla
+
+Patrón unificado en **`hooks/useFocusStaleRefresh.ts`**: stale TTL, `hasData`, refresh forzado (p. ej. tras publicar), defer con `InteractionManager`.
+
+Usado en: `useProfilePosts`, `useProfileStats`, `WorkoutsListScreen`, `SocialDiscoverScreen`, y el feed vía **`useFeedFocusEffects`** (aux 45 s + stories/discover).
+
+Constantes feed: `FEED_STALE_MS` (30 s), `FEED_AUX_REFRESH_STALE_MS` (45 s) en `constants/feed.ts`.
+
+### Interacciones de posts
+
+**`hooks/usePostInteractions.ts`** centraliza like, comentar y borrar (optimista + guards). El feed lo expone vía `useFeedPostActions` → `FeedPostActionsContext`; perfil y detalle reutilizan el mismo hook.
+
+### Media de publicaciones
+
+**`utils/postMedia/`** — API única: `resolveUrl`, `sanitizeForFeed`, `hasDisplayableMedia`, `resolveImageSource`, `thumbnailUrl`. Los módulos antiguos (`postDisplayMedia.ts`, etc.) reexportan por compatibilidad.
+
+Cuerpo training compartido: **`components/post/PostTrainingBody.tsx`** (feed + preview del editor).
 
 ## 6. Fluidez y rendimiento
 
@@ -152,7 +173,7 @@ Más allá de virtualizar listas y repartir estado, la app prioriza **respuesta 
 |------|---------|
 | **Listas** | FlashList + filas memoizadas; `extraData` mínimo; estado por fila vía Zustand cuando conviene |
 | **Interacciones** | Updates optimistas; AsyncStorage/API en segundo plano |
-| **Focus de tabs** | Stale-while-revalidate: mostrar cache, refrescar en background con throttle |
+| **Focus de tabs** | `useFocusStaleRefresh` — cache + refresh en background con TTL |
 | **Animaciones** | Reanimated en hilo UI (beam, FAB); sin `LayoutAnimation` en listas |
 | **Imágenes** | `expo-image` con cache y decode acotado en feed |
 
@@ -160,9 +181,25 @@ Más allá de virtualizar listas y repartir estado, la app prioriza **respuesta 
 
 - Plan y fases: [`performance-fluidity.md`](./performance-fluidity.md)
 - Checklist manual (Android/iOS): [`performance-fluidity-verification.md`](./performance-fluidity-verification.md)
-- Comprobación automática local: `npm run verify:fluidity` (typecheck)
+- Automático local: `npm run verify` (Jest + typecheck) o `npm run verify:fluidity` (solo typecheck)
 
-## 7. Documentación relacionada
+## 7. Arquitectura de capas (jun 2026)
+
+Tras el refactor estructural, la app sigue esta separación:
+
+| Capa | Responsabilidad | Ejemplos |
+|------|-----------------|----------|
+| `app/` | Rutas Expo Router, composición mínima | `(tabs)/index.tsx` |
+| `components/` | UI por dominio, memo donde importa | `feed/FeedScreenContent`, `post/PostTrainingBody` |
+| `hooks/` | Estado de pantalla, orquestación, efectos | `useFeed`, `usePostInteractions`, `useFocusStaleRefresh` |
+| `stores/` | Prefs e identidad social compartidas | `useFeedPrefsStore`, `useSocialHubStore` |
+| `context/` | Auth, UI imperativa, Reanimated, handlers inyectados | `AuthContext`, `FeedPostActionsContext` |
+| `api/` + `utils/` | Red, normalización, lógica pura | `normalizePost`, `postMedia/`, `feedTimeline` |
+| `__tests__/` | Regresión en lógica pura y stores | `feedTimeline.test.ts`, `useFeedPrefsStore.test.ts` |
+
+Detalle del refactor: [`refactoring-suggestions.md`](./refactoring-suggestions.md).
+
+## 8. Documentación relacionada
 
 | Documento | Contenido |
 |-----------|-----------|
@@ -171,8 +208,10 @@ Más allá de virtualizar listas y repartir estado, la app prioriza **respuesta 
 | [`comparativa-ui-gluestack-vs-paper.md`](./comparativa-ui-gluestack-vs-paper.md) | Elección de Gluestack UI |
 | [`flashlist-migration.md`](./flashlist-migration.md) | Plan FlashList (completado) |
 | [`zustand-migration.md`](./zustand-migration.md) | Plan Zustand (completado) |
+| [`refactoring-suggestions.md`](./refactoring-suggestions.md) | Refactor estructural (estado jun 2026) |
 | [`performance-fluidity.md`](./performance-fluidity.md) | Plan de fluidez por fases |
 | [`performance-fluidity-verification.md`](./performance-fluidity-verification.md) | Checklist manual de pruebas |
+| [`flujo-subida-imagenes.md`](./flujo-subida-imagenes.md) | Subida avatar/banner/posts |
 
 **Entregable teórico principal:** este archivo (`react-native-teoria.md`). Los demás son planes de trabajo y verificación que respaldan las decisiones descritas aquí.
 

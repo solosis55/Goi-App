@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import {
   Pressable,
   RefreshControl,
@@ -13,7 +14,7 @@ import { AppScreenShell } from "../AppScreenShell";
 import { FeedSuggestionsRow } from "../feed/FeedSuggestionsRow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useAuth } from "../../context/AuthContext";
-import { useSocialHub } from "../../context/SocialHubContext";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import type { DiscoverUser } from "../../types/auth";
 import type { DiscoverFacetFilter } from "../../utils/socialDiscoverFilters";
 import { groupDiscoverUsers } from "../../utils/socialDiscoverGroups";
@@ -64,7 +65,17 @@ export function SocialHubScreen({
     refreshHub,
     invalidateHub,
     applyFollowingChange,
-  } = useSocialHub();
+  } = useSocialHubStore(
+    useShallow((s) => ({
+      hub: s.hub,
+      hubLoading: s.hubLoading,
+      followingIds: s.followingIds,
+      refreshBadge: s.refreshBadge,
+      refreshHub: s.refreshHub,
+      invalidateHub: s.invalidateHub,
+      applyFollowingChange: s.applyFollowingChange,
+    }))
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [requestsLoading, setRequestsLoading] = useState(false);

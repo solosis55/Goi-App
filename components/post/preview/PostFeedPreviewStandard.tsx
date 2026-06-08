@@ -2,13 +2,13 @@ import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-na
 import { POST_IMAGE_MAX_FILES } from "../../../constants/createPost";
 import { CreatePostPreviewMedia } from "./CreatePostPreviewMedia";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../../constants/authUi";
-import { visibilityLabel } from "../../../utils/visibilityStyles";
-import { UserAvatar } from "../../ui/UserAvatar";
 import { PostActionBar } from "../../feed/PostActionBar";
 import { PublicationLinkedSessionBody } from "../PublicationLinkedSessionBody";
 import { PostPreviewMediaPlaceholder } from "./PostPreviewMediaPlaceholder";
+import { PostPreviewCardHeader } from "./PostPreviewCardHeader";
+import { postPreviewCardStyles, previewCardShellStyle } from "./postPreviewCardStyles";
+import { resolvePreviewCardWidth } from "./postPreviewLayout";
 import {
-  POST_PREVIEW_CARD,
   previewMediaHeight,
   shouldShowPreviewMediaPlaceholder,
 } from "./postPreviewTheme";
@@ -52,8 +52,8 @@ export function PostFeedPreviewStandard({
 }: PostFeedPreviewStandardProps) {
   const { width: windowWidth } = useWindowDimensions();
   const isEmbedded = embedded || layoutWidth != null;
-  const cardW = layoutWidth ?? (fullBleed ? windowWidth : windowWidth - 32);
-  const mediaW = layoutWidth ?? (fullBleed ? windowWidth : windowWidth - 32);
+  const cardW = resolvePreviewCardWidth(windowWidth, { fullBleed, layoutWidth });
+  const mediaW = cardW;
   const hasMedia = draft.imageUris.length > 0;
   const avatarSize = compact ? 28 : 40;
   const showPlaceholder =
@@ -69,33 +69,21 @@ export function PostFeedPreviewStandard({
 
   return (
     <View
-      style={[
-        styles.card,
-        {
-          width: cardW,
-          borderColor: POST_PREVIEW_CARD.border,
-          backgroundColor: POST_PREVIEW_CARD.background,
-        },
-        fullBleed && !isEmbedded ? styles.cardBleed : null,
-        isEmbedded && !embedded ? styles.cardEmbedded : null,
-        embedded ? styles.cardFrameless : null,
-      ]}
+      style={previewCardShellStyle({
+        cardWidth: cardW,
+        fullBleed,
+        isEmbedded,
+        embedded,
+      })}
     >
-      <View style={[styles.head, compact ? styles.headCompact : null]}>
-        <UserAvatar src={draft.avatarUrl} username={draft.username} size={avatarSize} />
-        <View style={styles.headMeta}>
-          <Text
-            style={[styles.user, compact ? styles.userCompact : null]}
-            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-            numberOfLines={1}
-          >
-            @{draft.username}
-          </Text>
-          <Text style={[styles.meta, compact ? styles.metaCompact : null]} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {visibilityLabel(draft.visibility)} · ahora
-          </Text>
-        </View>
-      </View>
+      <PostPreviewCardHeader
+        draft={draft}
+        compact={compact}
+        avatarSize={avatarSize}
+        metaSuffix=" · ahora"
+        headVariant="roomy"
+        userFontSize={compact ? undefined : 15}
+      />
 
       {hasMedia ? (
         <CreatePostPreviewMedia
@@ -198,40 +186,6 @@ export function PostFeedPreviewStandard({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderRadius: 0,
-    overflow: "hidden",
-  },
-  cardBleed: {
-    marginHorizontal: 0,
-    borderLeftWidth: 1,
-    borderRightWidth: 0,
-  },
-  cardEmbedded: {
-    borderRadius: 12,
-  },
-  cardFrameless: {
-    borderWidth: 0,
-    backgroundColor: "transparent",
-  },
-  head: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  headCompact: {
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  headMeta: { flex: 1, gap: 2 },
-  user: { color: AUTH.neutral100, fontSize: 15, fontWeight: "700" },
-  userCompact: { fontSize: 13 },
-  meta: { color: POST_PREVIEW_CARD.metaColor, fontSize: 11, fontWeight: "500" },
-  metaCompact: { fontSize: 10 },
   body: { paddingHorizontal: 14, paddingVertical: 10, paddingBottom: 16 },
   bodyCompact: { paddingHorizontal: 10, paddingVertical: 6, paddingBottom: 12 },
   caption: { color: AUTH.neutral100, fontSize: 14, lineHeight: 20 },
@@ -244,12 +198,7 @@ const styles = StyleSheet.create({
   },
   actionBarDim: { opacity: 0.42 },
   previewHint: {
-    color: AUTH.faint,
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-    textTransform: "uppercase",
-    textAlign: "center",
+    ...postPreviewCardStyles.previewHint,
     paddingTop: 4,
   },
   bodyEditable: {

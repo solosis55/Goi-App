@@ -1,5 +1,6 @@
 import type { FeedScope } from "../constants/feed";
 import type { FeedWorkoutEvent, Post } from "../types/post";
+import { hasDisplayableMedia } from "./postMedia/display";
 
 export function filterMutedTimeline<T extends { kind: "post"; post: Post } | { kind: "workout"; event: FeedWorkoutEvent }>(
   timeline: T[],
@@ -30,6 +31,10 @@ export function feedScopeEmptyMessage(scope: FeedScope): { title: string; body: 
   };
 }
 
+/** Posts con tarjeta visual rica (training, media, rutina vinculada). */
 export function postEligibleForGoldBeam(post: Post): boolean {
-  return Boolean(post.workoutId) || (post.media?.length ?? 0) > 0;
+  if (post.format === "training") return true;
+  if (Boolean(post.workoutId)) return true;
+  if (post.hasMedia === true) return true;
+  return hasDisplayableMedia(post);
 }

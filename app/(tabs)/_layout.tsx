@@ -5,10 +5,14 @@ import { CreateContentSheet } from "../../components/navigation/CreateContentShe
 import { GoiTabBar } from "../../components/navigation/GoiTabBar";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
+import { useLocalNotificationsInit } from "../../hooks/useLocalNotificationsInit";
+import { useLocalNotificationsSync } from "../../hooks/useLocalNotificationsSync";
 
 export default function TabsLayout() {
   const { palette } = useGoiTheme();
-  const { isHydrated, isAuthenticated } = useAuth();
+  const { isHydrated, isAuthenticated, user } = useAuth();
+  useLocalNotificationsInit();
+  useLocalNotificationsSync(user?.id);
   const [createOpen, setCreateOpen] = useState(false);
 
   if (!isHydrated) {

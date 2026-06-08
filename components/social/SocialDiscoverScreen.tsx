@@ -1,5 +1,6 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { FlashList } from "@shopify/flash-list";
 import {
   ActivityIndicator,
@@ -12,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getDiscover, searchUsers } from "../../api/auth";
+import { getDiscover, searchUsers, updateProfile } from "../../api/auth";
 import { AppScreenShell } from "../AppScreenShell";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import {
@@ -22,10 +23,13 @@ import {
 } from "../../utils/discoverRecentSearches";
 import { readRecentProfileVisits, type RecentProfileVisit } from "../../utils/profileRecentVisits";
 import { useAuth } from "../../context/AuthContext";
-import { useSocialHub } from "../../context/SocialHubContext";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
+import { useFocusStaleRefresh } from "../../hooks/useFocusStaleRefresh";
 import type { DiscoverUser } from "../../types/auth";
 import { formatRelativeMinutes } from "../../utils/formatRelativeMinutes";
+import { openDeviceSettings, readDeviceLocation } from "../../utils/deviceLocation";
+import { viewerHasDiscoverLocation } from "../../utils/geoNearby";
 import { groupDiscoverUsers, pickNearbyUsers } from "../../utils/socialDiscoverGroups";
 import { DISCOVER_FACET_OPTIONS, type DiscoverFacetFilter } from "../../utils/socialDiscoverFilters";
 import {
@@ -66,9 +70,17 @@ export function SocialDiscoverScreen({
 }: SocialDiscoverScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, updateSessionUser } = useAuth();
   const { followingIds, applyFollowingChange, toggleFollowFor, invalidateHub, refreshHub } =
-    useSocialHub();
+    useSocialHubStore(
+      useShallow((s) => ({
+        followingIds: s.followingIds,
+        applyFollowingChange: s.applyFollowingChange,
+        toggleFollowFor: s.toggleFollowFor,
+        invalidateHub: s.invalidateHub,
+        refreshHub: s.refreshHub,
+      }))
+    );
 
   const [discoverUsers, setDiscoverUsers] = useState<DiscoverUser[]>([]);
   const discoverUsersRef = useRef<DiscoverUser[]>([]);
@@ -91,8 +103,9 @@ export function SocialDiscoverScreen({
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
   const [recentVisits, setRecentVisits] = useState<RecentProfileVisit[]>([]);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  const discoverFocusAtRef = useRef(0);
-  const DISCOVER_FOCUS_STALE_MS = 45_000;
+  const [geoBusy, setGeoBusy] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
+  const [geoCanOpenSettings, setGeoCanOpenSettings] = useState(false);
 
   const debouncedQuery = useDebouncedValue(query.trim(), 350);
 
@@ -155,24 +168,23 @@ export function SocialDiscoverScreen({
     setLoadingMore(false);
   }, [nextOffset, loadingMore, query, load]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const hasData = discoverUsersRef.current.length > 0;
-      const stale = Date.now() - discoverFocusAtRef.current > DISCOVER_FOCUS_STALE_MS;
-      if (!hasData || stale) {
-        const showLoading = !hasData;
-        if (showLoading) setLoading(true);
-        void load(false, 0).finally(() => {
-          discoverFocusAtRef.current = Date.now();
-          if (showLoading) setLoading(false);
-        });
-      }
+  useFocusStaleRefresh({
+    staleMs: 45_000,
+    hasData: () => discoverUsersRef.current.length > 0,
+    onEveryFocus: () => {
       if (user?.id) {
         void readRecentProfileVisits(user.id).then(setRecentVisits);
         void loadDiscoverRecentSearches(user.id).then(setRecentSearches);
       }
-    }, [load, user?.id])
-  );
+    },
+    onRefresh: () => {
+      const showLoading = discoverUsersRef.current.length === 0;
+      if (showLoading) setLoading(true);
+      return load(false, 0).finally(() => {
+        if (showLoading) setLoading(false);
+      });
+    },
+  });
 
   const followingSet = useMemo(() => new Set(followingIds), [followingIds]);
 
@@ -194,11 +206,11 @@ export function SocialDiscoverScreen({
     const q = query.trim();
     const source = q ? searchResults : discoverUsers;
     const sorted = sortDiscoverUsers(source, sortMode, {
-      viewerLocation: user?.location,
+      viewer: user ?? undefined,
       viewerGoal: user?.goal,
     });
     return sorted;
-  }, [discoverUsers, searchResults, query, sortMode, user?.location, user?.goal]);
+  }, [discoverUsers, searchResults, query, sortMode, user]);
 
   const groups = useMemo(
     () => groupDiscoverUsers(baseUsers, user?.id, followingIds),
@@ -209,8 +221,8 @@ export function SocialDiscoverScreen({
     showDiscoverExtras && hasMutualConnections && groups.mutuals.length === 0;
 
   const nearbyUsers = useMemo(
-    () => (query.trim() ? [] : pickNearbyUsers(baseUsers, user?.location, 12)),
-    [baseUsers, query, user?.location]
+    () => (query.trim() ? [] : pickNearbyUsers(baseUsers, user ?? undefined, 12)),
+    [baseUsers, query, user]
   );
 
   const listUsers = useMemo(() => {
@@ -227,7 +239,36 @@ export function SocialDiscoverScreen({
   );
 
   const showLocationCta =
-    !query.trim() && (facet === "nearby" || sortMode === "nearby") && !user?.location?.trim();
+    !query.trim() &&
+    (facet === "nearby" || sortMode === "nearby") &&
+    !viewerHasDiscoverLocation(user ?? undefined);
+
+  const handleUseDeviceLocation = useCallback(async () => {
+    if (!user?.id || geoBusy) return;
+    setGeoBusy(true);
+    setGeoError(null);
+    setGeoCanOpenSettings(false);
+    const result = await readDeviceLocation();
+    if (!result.ok) {
+      setGeoError(result.error);
+      setGeoCanOpenSettings(!!result.canOpenSettings);
+      setGeoBusy(false);
+      return;
+    }
+    try {
+      const res = await updateProfile(user.id, {
+        location: result.location,
+        latitude: result.latitude,
+        longitude: result.longitude,
+      });
+      await updateSessionUser(res.user);
+      void load(false, 0, facet);
+    } catch {
+      setGeoError("No se pudo guardar tu ubicación en el servidor.");
+    } finally {
+      setGeoBusy(false);
+    }
+  }, [user?.id, geoBusy, updateSessionUser, load, facet]);
 
   const onPressFollow = useCallback(
     (targetId: string) => {
@@ -286,7 +327,16 @@ export function SocialDiscoverScreen({
 
         {showLocationCta ? (
           <View style={styles.sectionPad}>
-            <SocialLocationCta />
+            <SocialLocationCta
+              geoBusy={geoBusy}
+              geoError={geoError}
+              canOpenSettings={geoCanOpenSettings}
+              onUseLocation={() => void handleUseDeviceLocation()}
+              onOpenDeviceSettings={openDeviceSettings}
+              onEditProfile={() =>
+                router.push({ pathname: "/(tabs)/perfil", params: { editPrivate: "1" } })
+              }
+            />
           </View>
         ) : null}
 

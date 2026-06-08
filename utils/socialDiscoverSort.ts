@@ -1,4 +1,5 @@
 import type { DiscoverUser } from "../types/auth";
+import { NEARBY_MAX_KM, viewerHasDiscoverLocation, type GeoPoint } from "./geoNearby";
 
 export type DiscoverSortMode = "recommended" | "mutuals" | "active" | "nearby" | "sameGoal";
 
@@ -10,7 +11,7 @@ export const DISCOVER_SORT_OPTIONS: { id: DiscoverSortMode; label: string }[] = 
   { id: "nearby", label: "Cerca" },
 ];
 
-function normLocation(value: string | undefined): string {
+function normLocation(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
@@ -18,21 +19,25 @@ function normGoal(value: string | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-export function isNearbyUser(viewerLocation: string | undefined, user: DiscoverUser): boolean {
-  const vl = normLocation(viewerLocation);
+export function isNearbyUser(viewer: GeoPoint | undefined, user: DiscoverUser): boolean {
+  if (!viewerHasDiscoverLocation(viewer)) return false;
+  if (user.nearby) return true;
+  if (typeof user.distanceKm === "number" && user.distanceKm <= NEARBY_MAX_KM) return true;
+  const vl = normLocation(viewer?.location);
   if (!vl) return false;
   const ul = normLocation(user.location);
-  if (ul && ul === vl) return true;
-  return (user.reason ?? "").toLowerCase().includes("cerca");
+  if (ul && (ul === vl || ul.includes(vl) || vl.includes(ul))) return true;
+  const reason = (user.reason ?? "").toLowerCase();
+  return reason.includes(" km") || reason.includes("cerca");
 }
 
 export function sortDiscoverUsers(
   users: DiscoverUser[],
   mode: DiscoverSortMode,
-  opts?: { viewerLocation?: string; viewerGoal?: string }
+  opts?: { viewer?: GeoPoint; viewerGoal?: string }
 ): DiscoverUser[] {
   const list = [...users];
-  const viewerLocation = opts?.viewerLocation;
+  const viewer = opts?.viewer;
   const viewerGoal = opts?.viewerGoal;
 
   switch (mode) {
@@ -47,8 +52,13 @@ export function sortDiscoverUsers(
       });
     case "nearby":
       return list
-        .filter((u) => isNearbyUser(viewerLocation, u))
-        .sort((a, b) => (b.mutualCount ?? 0) - (a.mutualCount ?? 0));
+        .filter((u) => isNearbyUser(viewer, u))
+        .sort((a, b) => {
+          const da = a.distanceKm ?? 9999;
+          const db = b.distanceKm ?? 9999;
+          if (da !== db) return da - db;
+          return (b.mutualCount ?? 0) - (a.mutualCount ?? 0);
+        });
     case "sameGoal": {
       const g = normGoal(viewerGoal);
       if (!g) return [];

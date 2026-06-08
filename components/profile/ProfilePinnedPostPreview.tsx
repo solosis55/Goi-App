@@ -2,7 +2,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { resolveMediaUrl } from "../../api/config";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import type { Post } from "../../types/post";
-import { postThumbnailUrl } from "../../utils/postThumbnail";
+import { thumbnailUrl } from "../../utils/postMedia/thumbnail";
 
 type ProfilePinnedPostPreviewProps = {
   post: Post;
@@ -10,7 +10,7 @@ type ProfilePinnedPostPreviewProps = {
 };
 
 export function ProfilePinnedPostPreview({ post, onPress }: ProfilePinnedPostPreviewProps) {
-  const thumb = postThumbnailUrl(post);
+  const thumb = thumbnailUrl(post);
   const thumbUri = thumb ? resolveMediaUrl(thumb) : "";
   const preview = post.content.trim();
 

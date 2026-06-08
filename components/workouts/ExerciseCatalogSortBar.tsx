@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, Text } from "react-native";
 import { AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { exerciseCatalogStyles as s } from "../../constants/exerciseCatalogUi";
+import { exerciseCatalogStyles as s } from "./styles/exerciseCatalogUi";
 import { CATALOG_SORT_OPTIONS, type CatalogSortMode } from "../../utils/catalogExerciseSort";
 
 type ExerciseCatalogSortBarProps = {

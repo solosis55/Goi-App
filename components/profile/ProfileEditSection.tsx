@@ -7,7 +7,8 @@ import {
 } from "../../constants/profileEditTabs";
 import type { ProfileForm } from "../../constants/profileSchema";
 import type { useProfileEditor } from "../../hooks/useProfileEditor";
-import { useFeedGoldBeamPref } from "../../hooks/useFeedGoldBeamPref";
+import { useFeedPrefsStore } from "../../stores/useFeedPrefsStore";
+import { useHydrateGoldBeamPref } from "../../hooks/useHydrateGoldBeamPref";
 import { ProfileAccountSection } from "./ProfileAccountSection";
 import { ProfileAccountSecuritySection } from "./ProfileAccountSecuritySection";
 import { ProfileEditSubTabBar } from "./ProfileEditSubTabBar";
@@ -19,6 +20,7 @@ import {
 } from "../../constants/profileVisibility";
 import { ProfileFollowRequestsSection } from "./ProfileFollowRequestsSection";
 import { ProfileMutedSection } from "./ProfileMutedSection";
+import { GeoPermissionHint, ProfileGeoLocationButton } from "./ProfileGeoLocationButton";
 
 const PAD = 16;
 
@@ -159,6 +161,11 @@ export function ProfileEditSection({ editor, userId, initialEditSubTab }: Profil
           fieldsDisabled={fieldsDisabled}
           restricted={editor.restricted}
           isDirty={editor.isDirty}
+          geoBusy={editor.syncingGeo}
+          hasGeo={!!editor.user?.hasGeoLocation}
+          geoError={editor.geoError}
+          onSyncGeo={() => void editor.syncGeoFromDevice()}
+          onOpenGeoSettings={editor.openGeoSettings}
         />
       ) : (
         <ProfileEditPrivateFields
@@ -183,6 +190,11 @@ function ProfileEditPublicFields({
   fieldsDisabled,
   restricted,
   isDirty,
+  geoBusy,
+  hasGeo,
+  geoError,
+  onSyncGeo,
+  onOpenGeoSettings,
 }: {
   form: ProfileForm;
   patch: (p: Partial<ProfileForm>) => void;
@@ -190,6 +202,11 @@ function ProfileEditPublicFields({
   fieldsDisabled: boolean;
   restricted: boolean;
   isDirty: boolean;
+  geoBusy?: boolean;
+  hasGeo?: boolean;
+  geoError?: string | null;
+  onSyncGeo?: () => void;
+  onOpenGeoSettings?: () => void;
 }) {
   return (
     <View style={styles.panel}>
@@ -240,6 +257,23 @@ function ProfileEditPublicFields({
         maxLength={80}
         placeholder="Ciudad, país"
       />
+
+      {!restricted ? (
+        <View style={styles.geoBlock}>
+          <ProfileGeoLocationButton
+            busy={geoBusy}
+            disabled={fieldsDisabled}
+            hasGeo={hasGeo}
+            onPress={() => onSyncGeo?.()}
+          />
+          {geoError ? (
+            <GeoPermissionHint message={geoError} onOpenSettings={onOpenGeoSettings} />
+          ) : null}
+          <Text style={styles.geoHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            GPS mejora «Cerca» en Descubrir (radio 50 km). También puedes escribir la ciudad a mano.
+          </Text>
+        </View>
+      ) : null}
 
       <SectionTitle>Enlaces</SectionTitle>
 
@@ -303,7 +337,9 @@ function ProfileEditPrivateFields({
   privateTabActive: boolean;
   email?: string;
 }) {
-  const { enabled: goldBeamEnabled, setEnabledPref: setGoldBeamEnabled } = useFeedGoldBeamPref();
+  const goldBeamEnabled = useFeedPrefsStore((s) => s.goldBeamEnabled);
+  const setGoldBeamEnabled = useFeedPrefsStore((s) => s.setGoldBeamEnabled);
+  useHydrateGoldBeamPref();
 
   return (
     <View style={styles.panel}>
@@ -636,5 +672,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(251, 191, 36, 0.35)",
     backgroundColor: "rgba(40, 32, 16, 0.45)",
+  },
+  geoBlock: {
+    gap: 8,
+    marginTop: -4,
+  },
+  geoHint: {
+    color: AUTH.faint,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

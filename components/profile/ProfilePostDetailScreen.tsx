@@ -3,12 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { GuardedScrollView } from "../../context/ScrollInteractionGuard";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { createComment, deletePost, getPostById, toggleLike } from "../../api/posts";
+import { getPostById } from "../../api/posts";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { commentFormSchema } from "../../constants/commentSchema";
 import { useAuth } from "../../context/AuthContext";
+import { usePostInteractions } from "../../hooks/usePostInteractions";
 import type { Post } from "../../types/post";
-import { getErrorMessage } from "../../utils/errorMessages";
 import {
   commitProfilePostDetailSync,
   consumeOpeningProfileMeta,
@@ -30,7 +29,6 @@ export function ProfilePostDetailScreen({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const likeInFlightRef = useRef(new Set<string>());
 
   const [openingMeta] = useState(() => consumeOpeningProfileMeta());
   const initialPostRef = useRef<Post | null | undefined>(undefined);
@@ -40,6 +38,9 @@ export function ProfilePostDetailScreen({
   const initialPost = initialPostRef.current;
 
   const [post, setPost] = useState<Post | null>(initialPost);
+  const postRef = useRef(post);
+  postRef.current = post;
+
   const [loadState, setLoadState] = useState<"idle" | "loading" | "missing" | "error">(() =>
     initialPost ? "idle" : "loading"
   );
@@ -86,74 +87,51 @@ export function ProfilePostDetailScreen({
     };
   }, [postId, post]);
 
-  const handleToggleLike = useCallback(async () => {
-    if (!post || likeInFlightRef.current.has(post.id)) return;
-    likeInFlightRef.current.add(post.id);
-    const liked = !post.likedByMe;
-    const delta = liked ? 1 : -1;
-    setPost((p) =>
-      p
-        ? { ...p, likedByMe: liked, likesCount: Math.max(0, p.likesCount + delta) }
-        : p
-    );
-    try {
-      await toggleLike(post.id);
-    } catch {
-      setPost((p) =>
-        p ? { ...p, likedByMe: post.likedByMe, likesCount: post.likesCount } : p
-      );
-    } finally {
-      likeInFlightRef.current.delete(post.id);
-    }
-  }, [post]);
+  const patchPost = useCallback((id: string, updater: (p: Post) => Post) => {
+    setPost((current) => (current && current.id === id ? updater(current) : current));
+  }, []);
 
-  const handleSubmitComment = useCallback(async () => {
-    if (!post || commenting) return;
-    const parsed = commentFormSchema.safeParse({ content: commentValue });
-    if (!parsed.success) {
-      setCommentError(parsed.error.issues[0]?.message ?? "Comentario no válido");
-      return;
-    }
-    setCommentError(null);
-    setCommenting(true);
-    try {
-      const newComment = await createComment(post.id, { content: parsed.data.content });
-      setCommentValue("");
-      setPost((p) =>
-        p
-          ? {
-              ...p,
-              comments: [...p.comments, newComment].sort((a, b) =>
-                a.createdAt < b.createdAt ? -1 : 1
-              ),
-            }
-          : p
-      );
-    } catch (e) {
-      setCommentError(getErrorMessage(e, "No se pudo publicar el comentario"));
-    } finally {
-      setCommenting(false);
-    }
-  }, [post, commentValue, commenting]);
+  const resolvePost = useCallback(
+    (id: string) => (postRef.current?.id === id ? postRef.current : undefined),
+    []
+  );
+
+  const { toggleLikeForPost, submitComment, deletePostById } = usePostInteractions({
+    actor: user ? { id: user.id, username: user.username, avatarUrl: user.avatarUrl } : null,
+    resolvePost,
+    patchPost,
+    isCommenting: () => commenting,
+    setCommentingPostId: (id) => setCommenting(id === postRef.current?.id),
+    isDeleting: () => deleting,
+    setDeletingPostId: (id) => setDeleting(id === postRef.current?.id),
+    onCommentValidated: () => setCommentError(null),
+    onCommentError: (_postId, msg) => setCommentError(msg),
+    onCommentSuccess: () => setCommentValue(""),
+    onDeleteSuccess: async (id) => {
+      if (pinnedPostId === id) await onSetPinned?.(null);
+      if (!syncedRef.current) {
+        syncedRef.current = true;
+        commitProfilePostDetailSync(postRef.current, true);
+      }
+      if (router.canGoBack()) router.back();
+      else router.replace("/(tabs)/perfil");
+    },
+  });
+
+  const handleToggleLike = useCallback(() => {
+    if (postRef.current) void toggleLikeForPost(postRef.current.id);
+  }, [toggleLikeForPost]);
+
+  const handleSubmitComment = useCallback(() => {
+    if (!postRef.current) return;
+    void submitComment(postRef.current.id, commentValue);
+  }, [commentValue, submitComment]);
 
   const handleDelete = useCallback(
-    async (id: string) => {
-      if (!user?.id || deleting) return;
-      setDeleting(true);
-      try {
-        await deletePost(id);
-        if (pinnedPostId === id) await onSetPinned?.(null);
-        if (!syncedRef.current) {
-          syncedRef.current = true;
-          commitProfilePostDetailSync(post, true);
-        }
-        if (router.canGoBack()) router.back();
-        else router.replace("/(tabs)/perfil");
-      } catch {
-        setDeleting(false);
-      }
+    (id: string) => {
+      void deletePostById(id);
     },
-    [user?.id, deleting, pinnedPostId, onSetPinned, goBack]
+    [deletePostById]
   );
 
   const handleEdit = useCallback(

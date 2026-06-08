@@ -1,46 +1,51 @@
 # Goi App — contexto para asistentes de IA (Cursor)
 
 ## Qué es este proyecto
-Cliente móvil de **Goi**: red social centrada en gimnasio y entrenamiento. Convive en el mismo workspace que **Goi Web**; la API de referencia es **Goi Server** (`:4000/api`, Neon + `/uploads`). Alinea tipos y rutas con la web; no inventes contratos distintos sin acuerdo explícito.
+Cliente móvil de **Goi**: red social centrada en gimnasio y entrenamiento. Convive en el mismo workspace que **Goi Web**; la API de referencia es el **servidor Express** de Goi Web (`Goi Web/server`, `:4000/api`, Neon + `/uploads`). Alinea tipos y rutas con la web; no inventes contratos distintos sin acuerdo explícito.
 
 ## Materiales de prácticas (nombre del ejemplo)
-En enunciados, imágenes o pasos del curso puede aparecer **NoteFlow** como nombre de proyecto de ejemplo. Aquí el producto es **Goi**: sustituir mentalmente y en código/textos **NoteFlow → Goi** (nombres de app, rutas de ejemplo, títulos, etc.), sin copiar el nombre NoteFlow al entregable.
+En enunciados puede aparecer **NoteFlow** como nombre de ejemplo. Aquí el producto es **Goi**: sustituir **NoteFlow → Goi** en nombres, rutas y textos.
 
 ## Stack y dependencias
-- **Base ya instalada (setup prácticas):** Expo (SDK del proyecto), **Expo Router**, dependencias del enunciado (safe area, screens, linking, constants, status-bar) y **vista web** (`react-dom`, `react-native-web`).
-- **UI:** **Gluestack UI** (`@gluestack-ui/themed`, `@gluestack-ui/config`, `@gluestack-style/react`, `react-native-svg`) con `GluestackUIProvider` en `app/_layout.tsx`.
-- **Sesión:** `context/AuthContext.tsx` — hidrata desde `goi-auth`, `signIn` / `signOut`, escucha `onAuthExpired` (401 desde `api/client`).
-- **Red / API:** `api/` (`client`, `config` con `resolveMediaUrl`, `session`, `auth`, `health`, **`posts`**).
-- **Tipos alineados con la web:** `types/post.ts` (mismo contrato que `Goi Web/src/types/post.ts` para `GET /posts`).
-- **Pantallas:** `/` inicio (landing) → `/login` → `/feed` (protegida); `/nueva-publicacion` (protegida).
-- **Listas:** **FlashList** en listas verticales principales — ver `docs/flashlist-migration.md`.
-- **Estado global compartido:** **Zustand** en `stores/` (prefs feed, social hub, notificaciones, UI hub). Migración cerrada — ver `docs/zustand-migration.md`. **Context** solo para auth, toasts/alertas, handlers por pantalla (`FeedPostActionsContext`), beam Reanimated y scroll guard.
-- **AsyncStorage** en prefs/borradores locales.
+- **Expo** (SDK del proyecto), **Expo Router**, safe area, screens, linking.
+- **UI:** **Gluestack UI** con `GluestackUIProvider` en `app/_layout.tsx`.
+- **Sesión:** `context/AuthContext.tsx` — JWT en SecureStore, `onAuthExpired` desde `api/client`.
+- **Red / API:** `api/` (`client`, `config`, `session`, `auth`, `posts`); `utils/normalizePost.ts`.
+- **Tipos:** `types/post.ts` alineado con Goi Web.
+- **Navegación principal:** `app/(tabs)/` (feed, social, rutinas, perfil); rutas legacy con redirect en `app/feed.tsx`, etc. — ver `constants/appRoutes.ts`.
+- **Listas:** **FlashList** — `docs/flashlist-migration.md`.
+- **Estado compartido:** **Zustand** en `stores/` — migración cerrada; `docs/zustand-migration.md`. **Context** para auth, toasts, `FeedPostActionsContext`, beam Reanimated, scroll guard.
+- **Feed:** composición en `app/(tabs)/index.tsx`; UI en `components/feed/FeedScreenContent.tsx`; lógica en `hooks/useFeed*.ts`, `hooks/usePostInteractions.ts`.
+- **Media posts:** `utils/postMedia/` (no duplicar lógica en utils sueltos).
+- **Tests:** Jest en `__tests__/`; `npm run verify` = tests + tsc.
 - **TypeScript** en todo el código de app.
-- **Validación / formularios:** Zod (`constants/loginSchema.ts`, `constants/publicacionSchema.ts`).
 
-## Prioridad de plataforma (app vs web)
-- **Referencia principal:** diseño, animaciones y detalles visuales pensados para **Expo Go / iOS / Android** (lo que el usuario ve en dispositivo o emulador).
-- **No** mantener ramas o estilos **solo** para la vista web de Expo (`expo start --web`) salvo lo imprescindible para que no rompa; si la web de Expo muestra lo mismo que el móvil, correcto.
-- La web de **Goi Web** sirve de **inspiración y contrato de API**, no como obligación de replicar pixel a pixel su CSS, SVG o animaciones en la app.
+## Prioridad de plataforma
+- **Referencia principal:** diseño y UX en **Expo Go / iOS / Android**.
+- **No** optimizar la vista web de Expo salvo que no rompa.
+- Goi Web = contrato de API e inspiración, no réplica pixel a pixel.
 
 ## Convenciones de código
-- Componentes **funcionales** y hooks; sin clases salvo requisito del enunciado.
-- **TypeScript**: tipar props, estado y respuestas de API; evitar `any`; usar `unknown` y acotar si hace falta.
-- **Expo Router**: seguir la estructura y convenciones oficiales (rutas, `_layout`, grupos, etc.).
-- **UI** coherente con **Gluestack UI** (`@gluestack-ui/themed`); evitar mezclar otros sistemas de diseño globales salvo requisito del enunciado.
-- Cadenas visibles al usuario en **español** salvo que las prácticas pidan otro idioma.
+- Componentes funcionales + hooks; TypeScript estricto (evitar `any`).
+- Expo Router: `app/`, `_layout`, grupos `(tabs)`.
+- UI con Gluestack; cadenas al usuario en **español**.
+- Cambios **acotados**; seguir patrones existentes (`hooks/`, `stores/`, `components/<dominio>/`).
 
 ## Integración con Goi Web
-- Antes de definir endpoints, DTOs o flujos de auth, **revisar** `Goi Web` (cliente y `server/src`) para respetar rutas, códigos de error y modelos existentes.
-- JWT, subidas (`multipart`) y límites de payload deben ser **compatibles** con lo que ya implementa el backend.
+- Revisar `Goi Web/server/src` antes de nuevos endpoints o DTOs.
+- JWT, multipart y límites compatibles con el backend existente.
 
-## Restricciones importantes
-- **No añadir** dependencias, scripts ni tooling nuevos si el apartado de prácticas aún no lo autoriza.
-- Cambios **acotados** a lo pedido: nada de refactors masivos ni archivos no relacionados.
-- Si hace falta una excepción al stack o a estas reglas, documentarla brevemente en `docs/ai-setup.md`.
+## Documentación
+- Índice: `docs/README.md`
+- Teoría: `docs/react-native-teoria.md`
+- Refactor (estado): `docs/refactoring-suggestions.md`
+- Subida imágenes: `docs/flujo-subida-imagenes.md`
 
-## React Native + TypeScript (recordatorios útiles)
-- No usar APIs exclusivas de navegador en pantallas móviles.
-- Código específico por plataforma solo con sufijos `.android` / `.ios` (o `.native`) cuando sea necesario.
-- Rendimiento: listas largas con **FlashList**; estado compartido con **Zustand** (`stores/`, selectores finos). Context para auth y UI imperativa — tabla en `docs/react-native-teoria.md` § Zustand.
+## Restricciones
+- No añadir dependencias no autorizadas por el enunciado de prácticas.
+- Excepciones al stack: documentar en `docs/ai-setup.md`.
+
+## React Native — recordatorios
+- Sin APIs de navegador en pantallas móviles.
+- Listas largas: FlashList; estado compartido: Zustand con selectores finos.
+- Refresh al foco: `hooks/useFocusStaleRefresh.ts` cuando aplique el patrón stale.

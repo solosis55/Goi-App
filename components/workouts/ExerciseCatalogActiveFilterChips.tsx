@@ -1,6 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { exerciseCatalogStyles as s } from "../../constants/exerciseCatalogUi";
+import { exerciseCatalogStyles as s } from "./styles/exerciseCatalogUi";
 
 export type ActiveFilterChip = {
   key: string;

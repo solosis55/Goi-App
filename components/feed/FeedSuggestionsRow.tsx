@@ -1,35 +1,24 @@
 import { useRouter } from "expo-router";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  ActivityIndicator,
-  Animated,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Animated, ScrollView, View } from "react-native";
 import { toggleFollow } from "../../api/auth";
 import type { DiscoverUser } from "../../types/auth";
-import { discoverDisplayReason } from "../../utils/discoverDisplayReason";
-import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import {
   FEED_SUGGESTIONS_CAROUSEL_MAX,
   FEED_SUGGESTIONS_SNOOZE_DAYS,
 } from "../../constants/feedSuggestions";
 import type { FeedScope } from "../../constants/feed";
 import { useGoiAlert } from "../../context/GoiAlertContext";
-import { profileFollowButtonStyles as followStyles } from "../profile/profileFollowButtonStyles";
 import { ProfileSectionSurface } from "../profile/ProfileSectionSurface";
-import { UserAvatar } from "../ui/UserAvatar";
+import { FeedSuggestionCard } from "./FeedSuggestionCard";
+import { FeedSuggestionsSectionHeader } from "./FeedSuggestionsSectionHeader";
 import { FeedSuggestionsSkeleton } from "./FeedSuggestionsSkeleton";
+import { feedSuggestionsHeaderCopy, type FeedSuggestionsVariant } from "./feedSuggestionsCopy";
+import { feedSuggestionsStyles as styles } from "./feedSuggestionsStyles";
 
-const CARD_WIDTH = 92;
-const SECTION_INSET = 14;
+export type { FeedSuggestionsVariant } from "./feedSuggestionsCopy";
+
 const FOLLOW_SUCCESS_MS = 1400;
-
-export type FeedSuggestionsVariant = "inline" | "header" | "empty" | "list";
 
 type FeedSuggestionsRowProps = {
   users: DiscoverUser[];
@@ -41,255 +30,15 @@ type FeedSuggestionsRowProps = {
   onSnooze?: () => void;
   onDismissPermanent?: () => void;
   onFollowingChanged: (targetId: string, following: boolean, pending?: boolean) => void;
-  /** Enlace al hub Social (feed). */
   showManageInSocial?: boolean;
-  /** Sin superficie propia (p. ej. dentro de otra sección en Social). */
   embedded?: boolean;
 };
-
-function headerCopy(scope: FeedScope | undefined, variant: FeedSuggestionsVariant) {
-  if (scope === "following" || variant === "empty") {
-    return {
-      title: "Para llenar tu feed",
-      subtitle: "Sigue atletas y verás sus publicaciones aquí",
-    };
-  }
-  if (variant === "inline") {
-    return {
-      title: "Amplía tu círculo",
-      subtitle: "Atletas que encajan contigo",
-    };
-  }
-  return {
-    title: "Gente que podrías seguir",
-    subtitle: "Descubre atletas en la comunidad",
-  };
-}
-
-function SuggestionsSectionHeader({
-  title,
-  subtitle,
-  onDismissPress,
-  onSeeAll,
-  onManageInSocial,
-}: {
-  title: string;
-  subtitle: string;
-  onDismissPress?: () => void;
-  onSeeAll?: () => void;
-  onManageInSocial?: () => void;
-}) {
-  return (
-    <View style={styles.header}>
-      <View style={styles.headerText}>
-        <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          {title}
-        </Text>
-        <Text style={styles.subtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          {subtitle}
-        </Text>
-      </View>
-      <View style={styles.headerActions}>
-        {onManageInSocial ? (
-          <Pressable
-            onPress={onManageInSocial}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Gestionar sugerencias en Social"
-            style={({ pressed }) => [styles.seeAllBtn, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.seeAllText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              En Social
-            </Text>
-          </Pressable>
-        ) : null}
-        {onSeeAll ? (
-          <Pressable
-            onPress={onSeeAll}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Ver todas las sugerencias"
-            style={({ pressed }) => [styles.seeAllBtn, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.seeAllText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Ver todos
-            </Text>
-          </Pressable>
-        ) : null}
-        {onDismissPress ? (
-          <Pressable
-            onPress={onDismissPress}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Opciones de sugerencias"
-            style={({ pressed }) => [styles.dismissBtn, pressed ? styles.pressed : null]}
-          >
-            <Text style={styles.dismissText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              ×
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
-  );
-}
 
 function SuggestionsCarousel({ children }: { children: ReactNode }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
       {children}
     </ScrollView>
-  );
-}
-
-function MutualAvatars({ preview, align = "center" }: { preview: DiscoverUser["mutualPreview"]; align?: "center" | "start" }) {
-  if (!preview?.length) return null;
-  return (
-    <View style={[styles.mutualRow, align === "start" ? styles.mutualRowStart : null]}>
-      {preview.map((m) => (
-        <View key={m.id} style={styles.mutualAvatarWrap}>
-          <UserAvatar src={m.avatarUrl} username={m.username} size={16} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function SuggestionCard({
-  user,
-  pending,
-  followed,
-  fullWidth,
-  layout = "card",
-  onOpenProfile,
-  onFollow,
-}: {
-  user: DiscoverUser;
-  pending: boolean;
-  followed: boolean;
-  fullWidth?: boolean;
-  layout?: "card" | "row";
-  onOpenProfile: () => void;
-  onFollow: () => void;
-}) {
-  const reason = discoverDisplayReason(user);
-  const showPending = pending || user.followPending;
-
-  if (layout === "row") {
-    return (
-      <View style={styles.listRow}>
-        <Pressable
-          onPress={onOpenProfile}
-          style={({ pressed }) => [styles.listRowMain, pressed ? styles.pressed : null]}
-          accessibilityRole="button"
-          accessibilityLabel={`Ver perfil de ${user.username}`}
-        >
-          <View style={styles.listAvatarWrap}>
-            <UserAvatar src={user.avatarUrl} username={user.username} size={40} />
-            {user.activeThisWeek ? <View style={styles.listActiveDot} /> : null}
-          </View>
-          <View style={styles.listMeta}>
-            <Text style={styles.listName} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              @{user.username}
-            </Text>
-            <View style={styles.listMetaLine}>
-              {user.mutualPreview?.length ? (
-                <MutualAvatars preview={user.mutualPreview} align="start" />
-              ) : null}
-              {reason ? (
-                <Text style={styles.listHint} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {reason}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </Pressable>
-        <Pressable
-          onPress={onFollow}
-          disabled={showPending || followed}
-          style={({ pressed }) => [
-            followStyles.base,
-            followed || showPending ? followStyles.following : followStyles.primary,
-            styles.listFollowBtn,
-            pressed ? followStyles.pressed : null,
-            showPending && !followed ? followStyles.busy : null,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            followed
-              ? `Siguiendo a ${user.username}`
-              : showPending
-                ? `Solicitud pendiente a ${user.username}`
-                : `Seguir a ${user.username}`
-          }
-        >
-          <Text
-            style={[
-              followed || showPending ? followStyles.textFollowing : followStyles.textPrimary,
-              styles.listFollowText,
-            ]}
-            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-          >
-            {followed ? "Siguiendo" : showPending ? "Pendiente" : "Seguir"}
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.card, fullWidth ? styles.cardFullWidth : null]}>
-      <View style={styles.cardAccent} />
-      <View style={styles.cardBody}>
-        <Pressable
-          onPress={onOpenProfile}
-          style={({ pressed }) => [styles.cardProfile, pressed ? styles.pressed : null]}
-          accessibilityRole="button"
-          accessibilityLabel={`Ver perfil de ${user.username}`}
-        >
-          <View style={styles.avatarRing}>
-            <UserAvatar src={user.avatarUrl} username={user.username} size={44} />
-            {user.activeThisWeek ? <View style={styles.activeDot} /> : null}
-          </View>
-          <View style={styles.identity}>
-            <Text style={styles.name} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              @{user.username}
-            </Text>
-            <MutualAvatars preview={user.mutualPreview} />
-            <Text style={styles.hint} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {reason}
-            </Text>
-          </View>
-        </Pressable>
-
-        <Pressable
-          onPress={onFollow}
-          disabled={showPending || followed}
-          style={({ pressed }) => [
-            followStyles.base,
-            followed || showPending ? followStyles.following : followStyles.primary,
-            styles.followBtn,
-            pressed ? followStyles.pressed : null,
-            showPending && !followed ? followStyles.busy : null,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={
-            followed
-              ? `Siguiendo a ${user.username}`
-              : showPending
-                ? `Solicitud pendiente a ${user.username}`
-                : `Seguir a ${user.username}`
-          }
-        >
-          <Text
-            style={[followed || showPending ? followStyles.textFollowing : followStyles.textPrimary, styles.followText]}
-            maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-          >
-            {followed ? "Siguiendo ✓" : showPending ? "Pendiente" : "Seguir"}
-          </Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }
 
@@ -322,16 +71,13 @@ function FeedSuggestionsRowInner({
     () =>
       users
         .filter(
-          (u) =>
-            u.id !== currentUserId &&
-            !followingIds.includes(u.id) &&
-            !hiddenIds.has(u.id)
+          (u) => u.id !== currentUserId && !followingIds.includes(u.id) && !hiddenIds.has(u.id)
         )
         .slice(0, carouselMax),
     [users, currentUserId, followingIds, hiddenIds, carouselMax]
   );
 
-  const copy = headerCopy(feedScope, variant);
+  const copy = feedSuggestionsHeaderCopy(feedScope, variant);
 
   useEffect(() => {
     if (skipFade || suggestions.length === 0) return;
@@ -449,13 +195,12 @@ function FeedSuggestionsRowInner({
 
   const surfaceStyle = variant === "inline" ? styles.surfaceInline : styles.surface;
   const showSeeAll = variant !== "list" && !embedded;
-
   const showHeader = !embedded || variant !== "list";
 
   const body = (
     <>
       {showHeader ? (
-        <SuggestionsSectionHeader
+        <FeedSuggestionsSectionHeader
           title={copy.title}
           subtitle={copy.subtitle}
           onDismissPress={onSnooze || onDismissPermanent ? handleDismissPress : undefined}
@@ -470,7 +215,7 @@ function FeedSuggestionsRowInner({
               key={`${u.id || "user"}-${index}`}
               style={[styles.listCardWrap, index < suggestions.length - 1 ? styles.listRowDivider : null]}
             >
-              <SuggestionCard
+              <FeedSuggestionCard
                 user={u}
                 layout="row"
                 fullWidth
@@ -486,7 +231,7 @@ function FeedSuggestionsRowInner({
         <SuggestionsCarousel>
           {suggestions.map((u, index) => (
             <View key={`${u.id || "user"}-${index}`} style={styles.carouselItem}>
-              <SuggestionCard
+              <FeedSuggestionCard
                 user={u}
                 pending={pendingIds.has(u.id) || optimisticPending.has(u.id)}
                 followed={followedIds.has(u.id)}
@@ -517,7 +262,6 @@ function FeedSuggestionsRowInner({
 
 export const FeedSuggestionsRow = memo(FeedSuggestionsRowInner);
 
-/** Fila inline del feed: tipo de ítem distinto en FlashList (`getItemType`) para evitar reciclado con posts. */
 export const FeedInlineSuggestionsRow = memo(function FeedInlineSuggestionsRow(
   props: Omit<FeedSuggestionsRowProps, "variant">
 ) {
@@ -537,279 +281,3 @@ export function FeedSuggestionsLoadingRow({ inline = false }: { inline?: boolean
     </ProfileSectionSurface>
   );
 }
-
-const styles = StyleSheet.create({
-  surface: {
-    marginBottom: 10,
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 0,
-  },
-  surfaceInline: {
-    marginBottom: 8,
-    marginTop: 4,
-    paddingTop: 12,
-    paddingBottom: 12,
-    paddingHorizontal: 0,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    paddingHorizontal: SECTION_INSET,
-    marginBottom: 10,
-    gap: 10,
-  },
-  headerText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  title: {
-    color: AUTH.neutral100,
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: -0.2,
-  },
-  subtitle: {
-    color: AUTH.muted,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  seeAllBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  seeAllText: {
-    color: AUTH.gold,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  dismissBtn: {
-    width: 30,
-    height: 30,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "rgba(82, 82, 82, 0.65)",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-  },
-  dismissText: {
-    color: AUTH.muted,
-    fontSize: 18,
-    lineHeight: 20,
-    fontWeight: "400",
-  },
-  carousel: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: 8,
-    paddingHorizontal: SECTION_INSET,
-  },
-  carouselItem: {
-    width: CARD_WIDTH,
-  },
-  listColumn: {
-    paddingHorizontal: SECTION_INSET,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.15)",
-    backgroundColor: "rgba(14, 14, 16, 0.6)",
-    overflow: "hidden",
-  },
-  listColumnEmbedded: {
-    paddingHorizontal: 0,
-    borderWidth: 0,
-    backgroundColor: "transparent",
-    borderRadius: 0,
-  },
-  listCardWrap: {
-    alignSelf: "stretch",
-  },
-  listRowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(64, 64, 64, 0.65)",
-  },
-  listRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    minHeight: 0,
-  },
-  listRowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-  },
-  listAvatarWrap: {
-    position: "relative",
-  },
-  listActiveDot: {
-    position: "absolute",
-    right: 0,
-    bottom: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#4ade80",
-    borderWidth: 1.5,
-    borderColor: "#0e0e10",
-  },
-  listMeta: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  listName: {
-    color: AUTH.neutral100,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  listMetaLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minWidth: 0,
-  },
-  listHint: {
-    flex: 1,
-    color: AUTH.muted,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  listFollowBtn: {
-    alignSelf: "center",
-    minWidth: 84,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 18,
-  },
-  listFollowText: {
-    fontSize: 12,
-  },
-  mutualRowStart: {
-    justifyContent: "flex-start",
-    marginBottom: 0,
-  },
-  cardFullWidth: {
-    width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
-  },
-  card: {
-    width: CARD_WIDTH,
-    minHeight: 142,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.2)",
-    backgroundColor: "rgba(14, 14, 16, 0.95)",
-    overflow: "hidden",
-  },
-  cardAccent: {
-    height: 2,
-    width: "100%",
-    backgroundColor: "rgba(212, 175, 55, 0.55)",
-  },
-  cardBody: {
-    flex: 1,
-    justifyContent: "space-between",
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 8,
-  },
-  cardProfile: {
-    flex: 1,
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    minHeight: 0,
-  },
-  avatarRing: {
-    padding: 2,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.35)",
-    backgroundColor: "rgba(212, 175, 55, 0.06)",
-    marginBottom: 6,
-  },
-  activeDot: {
-    position: "absolute",
-    right: 2,
-    bottom: 2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#4ade80",
-    borderWidth: 1.5,
-    borderColor: "#0e0e10",
-  },
-  mutualRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 2,
-    marginBottom: 2,
-  },
-  mutualAvatarWrap: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.35)",
-    overflow: "hidden",
-  },
-  identity: {
-    width: "100%",
-    alignItems: "center",
-    gap: 2,
-    marginBottom: 6,
-  },
-  name: {
-    color: AUTH.neutral100,
-    fontSize: 11,
-    fontWeight: "700",
-    textAlign: "center",
-    width: "100%",
-  },
-  hint: {
-    color: AUTH.muted,
-    fontSize: 9,
-    lineHeight: 13,
-    textAlign: "center",
-    width: "100%",
-  },
-  followBtn: {
-    alignSelf: "stretch",
-    width: "100%",
-    minWidth: 0,
-    minHeight: 28,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    borderRadius: 14,
-  },
-  followText: {
-    fontSize: 11,
-  },
-  pressed: {
-    opacity: 0.88,
-  },
-  titleSkeleton: {
-    width: 160,
-    height: 14,
-    borderRadius: 4,
-    backgroundColor: "rgba(82, 82, 82, 0.35)",
-  },
-  subtitleSkeleton: {
-    width: 120,
-    height: 10,
-    borderRadius: 4,
-    backgroundColor: "rgba(82, 82, 82, 0.28)",
-  },
-});

@@ -1,9 +1,10 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { InteractionManager, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppScreenShell } from "../AppScreenShell";
-import { useSocialHub } from "../../context/SocialHubContext";
+import { useSocialHubStore } from "../../stores/useSocialHubStore";
 import type { DiscoverFacetFilter } from "../../utils/socialDiscoverFilters";
 import { NotificationsTabScreen } from "../notifications/NotificationsTabScreen";
 import { SocialDiscoverScreen } from "./SocialDiscoverScreen";
@@ -40,8 +41,14 @@ export function SocialTabRoot() {
     pendingFollowRequests,
     refreshBadge,
     refreshHub,
-    setSocialTabFocused,
-  } = useSocialHub();
+  } = useSocialHubStore(
+    useShallow((s) => ({
+      unreadNotifications: s.unreadNotifications,
+      pendingFollowRequests: s.pendingFollowRequests,
+      refreshBadge: s.refreshBadge,
+      refreshHub: s.refreshHub,
+    }))
+  );
 
   const [segment, setSegment] = useState<SocialTabSegmentId>(() =>
     segmentFromParams(parseDiscoverParam(discoverParam), activityParam === "1")
@@ -52,7 +59,6 @@ export function SocialTabRoot() {
 
   useFocusEffect(
     useCallback(() => {
-      setSocialTabFocused(true);
       if (parseDiscoverParam(discoverParam)) {
         setSegment("discover");
         setDiscoverFacet(parseFacetParam(facetParam));
@@ -67,9 +73,8 @@ export function SocialTabRoot() {
 
       return () => {
         task.cancel();
-        setSocialTabFocused(false);
       };
-    }, [discoverParam, facetParam, activityParam, refreshHub, refreshBadge, setSocialTabFocused])
+    }, [discoverParam, facetParam, activityParam, refreshHub, refreshBadge])
   );
 
   const onSegmentChange = useCallback(

@@ -24,6 +24,7 @@ export type SafeUser = {
   instagramUrl: string;
   stravaUrl: string;
   location: string;
+  hasGeoLocation?: boolean;
   profileVisibility: ProfileVisibilityMode;
   profileSections: ProfileSectionSettings;
   discoverable: boolean;
@@ -78,6 +79,8 @@ export type UpdateProfileInput = Partial<{
   instagramUrl: string;
   stravaUrl: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
   profileVisibility: ProfileVisibilityMode;
   profileSections: ProfileSectionSettings;
   discoverable: boolean;
@@ -100,6 +103,9 @@ export type DiscoverUser = ProfileUser & {
   reason?: string;
   activeThisWeek?: boolean;
   trainedThisWeek?: boolean;
+  /** Distancia aproximada si el servidor calculó GPS (km). */
+  distanceKm?: number | null;
+  nearby?: boolean;
 };
 
 export type DiscoverFacetParam = "all" | "active" | "trained" | "sameGoal" | "nearby";

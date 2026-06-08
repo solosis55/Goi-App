@@ -1,5 +1,6 @@
 import type { DiscoverUser } from "../types/auth";
 import { isNearbyUser } from "./socialDiscoverSort";
+import type { GeoPoint } from "./geoNearby";
 
 const HIGHLIGHT_MAX = 6;
 
@@ -57,12 +58,17 @@ export function pickFollowBackUsers(
 
 export function pickNearbyUsers(
   users: DiscoverUser[],
-  viewerLocation: string | undefined,
+  viewer: GeoPoint | undefined,
   max = 8
 ): DiscoverUser[] {
   return users
-    .filter((u) => isNearbyUser(viewerLocation, u))
-    .sort((a, b) => (b.mutualCount ?? 0) - (a.mutualCount ?? 0))
+    .filter((u) => isNearbyUser(viewer, u))
+    .sort((a, b) => {
+      const da = a.distanceKm ?? 9999;
+      const db = b.distanceKm ?? 9999;
+      if (da !== db) return da - db;
+      return (b.mutualCount ?? 0) - (a.mutualCount ?? 0);
+    })
     .slice(0, max);
 }
 

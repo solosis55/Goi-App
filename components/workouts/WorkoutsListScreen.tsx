@@ -1,4 +1,3 @@
-import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { FlashList } from "@shopify/flash-list";
@@ -20,6 +19,7 @@ import { AUTH, AUTH_MAX_FONT_MULTIPLIER, AUTH_PAD, authScreenStyles } from "../.
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { useWorkoutHubData } from "../../hooks/useWorkoutHubData";
+import { useFocusStaleRefresh } from "../../hooks/useFocusStaleRefresh";
 import type { Workout } from "../../types/workout";
 import { blocksFromLegacy } from "../../utils/workoutBlocks";
 import { buildWorkoutHubHeroCopy } from "../../utils/workoutHubHeroCopy";
@@ -34,6 +34,7 @@ import { workoutHapticLight } from "../../utils/workoutHaptics";
 import { AnimatedGoldButton } from "../auth/AnimatedGoldButton";
 import { ExerciseImageSlot } from "./ExerciseImageSlot";
 import { WorkoutDraftResumeBanner } from "./WorkoutDraftResumeBanner";
+import { WorkoutTrainingReminderCard } from "./WorkoutTrainingReminderCard";
 import { WorkoutExerciseChips } from "./WorkoutExerciseChips";
 import { WorkoutHubEmptyState } from "./WorkoutHubEmptyState";
 import { WorkoutHubHero } from "./WorkoutHubHero";
@@ -203,23 +204,20 @@ export function WorkoutsListScreen() {
   const [sort, setSort] = useState<WorkoutListSort>("recent");
   const hubSnapshotRef = useRef({ workouts: 0, sessions: 0 });
   hubSnapshotRef.current = { workouts: hub.workouts.length, sessions: hub.sessions.length };
-  const hubLastLoadRef = useRef(0);
-  const HUB_FOCUS_STALE_MS = 30_000;
 
-  useFocusEffect(
-    useCallback(() => {
+  useFocusStaleRefresh({
+    staleMs: 30_000,
+    hasData: () =>
+      hubSnapshotRef.current.workouts > 0 || hubSnapshotRef.current.sessions > 0,
+    onRefresh: () => {
       const hasData =
         hubSnapshotRef.current.workouts > 0 || hubSnapshotRef.current.sessions > 0;
-      const stale = Date.now() - hubLastLoadRef.current > HUB_FOCUS_STALE_MS;
       if (!hasData) hub.setLoading(true);
-      if (!hasData || stale) {
-        void hub.load().finally(() => {
-          hubLastLoadRef.current = Date.now();
-          if (!hasData) hub.setLoading(false);
-        });
-      }
-    }, [hub.load, hub.setLoading])
-  );
+      return hub.load().finally(() => {
+        if (!hasData) hub.setLoading(false);
+      });
+    },
+  });
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -324,6 +322,9 @@ export function WorkoutsListScreen() {
       {hub.stats.totalSessions > 0 ? <WorkoutWeekSparkline counts={weekSparkCounts} /> : null}
 
       <WorkoutDraftResumeBanner />
+      <View style={styles.reminderPad}>
+        <WorkoutTrainingReminderCard />
+      </View>
 
       <WorkoutsSubTabBar
         active={subTab}
@@ -520,6 +521,9 @@ const styles = StyleSheet.create({
   listHeader: {
     gap: 10,
     paddingBottom: 8,
+  },
+  reminderPad: {
+    marginBottom: 4,
   },
   menuBtn: {
     paddingHorizontal: 8,

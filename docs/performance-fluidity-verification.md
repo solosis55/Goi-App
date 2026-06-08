@@ -12,9 +12,9 @@ Checklist manual y plantilla de métricas. Marcar **OK** / **KO** / **N/A** tras
 
 **Antes de empezar**
 
-1. `npx tsc --noEmit` en Goi App — debe pasar sin errores.
+1. `npm run verify` en Goi App — tests + typecheck deben pasar.
 2. Cerrar apps en segundo plano; reiniciar Metro si acabas de cambiar de rama.
-3. Beam dorado **activado** (Perfil → Privacidad → «Brillo dorado en el feed»).
+3. Beam dorado **activado** (Perfil → Privacidad → «Brillo dorado en el feed»). Debe verse también en **posts recientes** (training, fotos, `hasMedia`).
 
 ---
 
@@ -130,10 +130,10 @@ Rellenar **una vez** como referencia; repetir tras cambios grandes.
 
 ```bash
 cd "Goi App"
-npm run verify:fluidity
+npm run verify
 ```
 
-Incluye typecheck (`tsc --noEmit`). No sustituye prueba en dispositivo.
+Incluye Jest (38 tests) + `tsc --noEmit`. `npm run verify:fluidity` ejecuta **solo** typecheck. Ninguno sustituye prueba en dispositivo.
 
 ---
 
@@ -175,18 +175,18 @@ Verificar persistencia y coherencia tras la migración (`docs/zustand-migration.
 - `ProfileScreen`: `removeClippedSubviews={false}` por sticky tabs + grid (celdas memoizadas).
 - Posts legacy con data URL en imagen: se muestran; nuevos deben usar URL HTTP.
 - `SessionPerformExerciseCard`: `LayoutAnimation` permitido (pantalla aislada, no lista).
-- `SocialHubContext` → estado en `useSocialHubStore`; provider solo hidrata al login.
+- `SocialHubProvider` hidrata `useSocialHubStore` al login (sin facade `useSocialHub()`).
+- Beam: `postEligibleForGoldBeam` incluye training / `hasMedia`; en scroll top prioriza post elegible más reciente (`useFeedGoldBeam`).
 
-## Optimizaciones de fluidez (may 2026)
+## Optimizaciones y refactors (may–jun 2026)
 
-- Feed: prefs locales con stale 60 s; focus sin bloquear en `refreshFollowing`; `extraData` sin comentarios/delete; interacciones por fila vía `useFeedInteractionStore`; scroll FAB throttled.
-- Social: tab sin `force` en hub/badge; Discover stale 45 s; follow optimista en listas.
-- Perfil: guardar vía Zustand optimista; focus posts stale 30 s; grid memo por celda.
-- Notificaciones: mark-read optimista; `extraData` sin `unreadCount`.
-- Rutinas: focus stale 30 s; historial sesiones en FlashList; `WorkoutRow` / `ExerciseCatalogRow` memo.
-- Crear post: procesado de imágenes tras `InteractionManager.runAfterInteractions`.
-- Zustand Fase 3: `useSocialHubStore` (badges, hub, follow); tab bar con selector fino.
-- Zustand Fase 4: `useNotificationPrefsStore`, `useSocialUiStore` (chips notif + secciones hub).
+- Feed: prefs en `useFeedPrefsStore`; focus vía `useFeedFocusEffects` + `useFocusStaleRefresh`; interacciones en `usePostInteractions` / `useFeedInteractionStore`.
+- Feed UI: `FeedScreenContent`, hooks `useFeed*`; beam corregido en posts recientes.
+- Social: `useSocialHubStore` directo; Discover stale 45 s; follow optimista.
+- Perfil: `ProfilePostsShell`; guardar/silenciar vía store; focus posts stale 30 s.
+- Crear post: hooks `usePostDraftPersistence`, `usePostSubmit`, …; imágenes tras `InteractionManager`.
+- Media: `utils/postMedia/`; `PostTrainingBody` compartido.
+- Tests: `npm run verify` (38 tests + tsc).
 
 ---
 

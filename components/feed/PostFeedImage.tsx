@@ -9,7 +9,7 @@ import {
   type StyleProp,
 } from "react-native";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import { resolveFeedPostMediaUrl } from "../../utils/feedPostMediaUrl";
+import { resolveUrl } from "../../utils/postMedia/url";
 import { withMediaCacheBuster } from "../../utils/mediaCacheBuster";
 
 export type PostFeedImageProps = {
@@ -42,7 +42,7 @@ function PostFeedImageInner({
   const [errorBust, setErrorBust] = useState(0);
   const [failed, setFailed] = useState(false);
 
-  const resolvedUri = useMemo(() => resolveFeedPostMediaUrl(url), [url]);
+  const resolvedUri = useMemo(() => resolveUrl(url), [url]);
   const displayUri = useMemo(
     () => (resolvedUri ? withMediaCacheBuster(resolvedUri, errorBust) : null),
     [resolvedUri, errorBust]

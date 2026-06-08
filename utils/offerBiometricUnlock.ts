@@ -36,7 +36,7 @@ export function offerBiometricUnlockAfterLogin(
           {
             text: "Ahora no",
             style: "cancel",
-            onPress: () => router.replace("/feed"),
+            onPress: () => router.replace("/(tabs)"),
           },
           {
             text: "Activar",

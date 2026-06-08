@@ -1,10 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getUsersPreviews } from "../api/auth";
-import { loadMutedUserIds, unmuteUser } from "../utils/feedLocalPrefs";
+import { useFeedPrefsStore } from "../stores/useFeedPrefsStore";
 
 export type MutedUserRow = { id: string; username: string };
 
 export function useMutedUsers(userId: string | undefined) {
+  const mutedUserIds = useFeedPrefsStore((s) => s.mutedUserIds);
+  const unmuteAuthor = useFeedPrefsStore((s) => s.unmuteAuthor);
   const [rows, setRows] = useState<MutedUserRow[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -13,9 +15,9 @@ export function useMutedUsers(userId: string | undefined) {
       setRows([]);
       return;
     }
+    const ids = useFeedPrefsStore.getState().mutedUserIds;
     setLoading(true);
     try {
-      const ids = await loadMutedUserIds(userId);
       if (ids.length === 0) {
         setRows([]);
         return;
@@ -32,13 +34,16 @@ export function useMutedUsers(userId: string | undefined) {
     }
   }, [userId]);
 
+  useEffect(() => {
+    void reload();
+  }, [reload, mutedUserIds]);
+
   const handleUnmute = useCallback(
     async (targetUserId: string) => {
       if (!userId) return;
-      await unmuteUser(userId, targetUserId);
-      await reload();
+      await unmuteAuthor(userId, targetUserId);
     },
-    [userId, reload]
+    [userId, unmuteAuthor]
   );
 
   return { rows, loading, reload, unmute: handleUnmute };
