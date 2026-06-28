@@ -12,6 +12,7 @@
 |-----------|----------------|
 | **[`react-native-teoria.md`](./react-native-teoria.md)** | **Documento teórico central** — RN, Metro, Expo, Gluestack, FlashList, Zustand, fluidez |
 | **[`flujo-subida-imagenes.md`](./flujo-subida-imagenes.md)** | Diagrama: subir foto → URL en servidor → imagen en pantalla |
+| **[`backlog-lanzamiento.md`](./backlog-lanzamiento.md)** | Checklist P0/P1 — paridad Web/App/Server y lanzamiento |
 | **[`ai-setup.md`](./ai-setup.md)** | Configuración de IA (`.cursorrules`) |
 | **[`comparativa-ui-gluestack-vs-paper.md`](./comparativa-ui-gluestack-vs-paper.md)** | Justificación del sistema de diseño |
 | [`../README.md`](../README.md) | Arranque, `.env`, Expo Go, scripts |

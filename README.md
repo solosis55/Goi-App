@@ -10,7 +10,7 @@ Expo solo inyecta variables cuyo nombre empieza por `EXPO_PUBLIC_`. La URL debe 
 |--------|---------|
 | Web / iOS simulador / Android emulador con backend en tu PC | `http://127.0.0.1:4000/api` (en Android emulador, si no defines nada, la app usa por defecto `http://10.0.2.2:4000/api`) |
 | Dispositivo físico en la misma Wi‑Fi que el PC | `http://192.168.x.x:4000/api` (IP local del ordenador donde corre el servidor) |
-| Producción | `https://tu-dominio.com/api` |
+| Producción (Render) | `https://goi-server.onrender.com/api` |
 
 1. Copia `.env.example` a `.env` en esta carpeta.
 2. Ajusta `EXPO_PUBLIC_API_URL` y reinicia Metro (`npx expo start`) para que cargue el cambio.
