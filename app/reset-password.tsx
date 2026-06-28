@@ -166,7 +166,7 @@ export default function ResetPasswordScreen() {
                           setSubmitError(null);
                           setSuccessMessage(null);
                         }}
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder="Mínimo 8 caracteres"
                         placeholderTextColor={AUTH.faint}
                         secureTextEntry={!showPassword}
                         autoCapitalize="none"

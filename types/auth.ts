@@ -47,6 +47,20 @@ export type AuthResponse = {
   token?: string;
 };
 
+export type RegisterResponse = AuthResponse & {
+  requiresEmailVerification?: boolean;
+  devVerificationToken?: string;
+};
+
+export type ResendVerificationResponse = {
+  message: string;
+  devVerificationToken?: string;
+};
+
+export type VerifyEmailResponse = {
+  message: string;
+};
+
 export type RegisterInput = {
   username: string;
   email: string;

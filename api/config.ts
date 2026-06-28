@@ -55,9 +55,9 @@ function apiBaseFromExpoDevHost(): string | null {
 /**
  * URL base de la API (incluye `/api`), misma convención que `VITE_API_URL` en Goi Web.
  *
- * - **Emulador Android:** `http://10.0.2.2:4000/api` (o `.env`).
- * - **Móvil físico + Expo Go:** IP de `hostUri` si arrancas con `npm start` / QR en LAN.
- * - **Override:** `EXPO_PUBLIC_API_URL` en `.env` (reinicia Metro).
+ * - **Override explícito:** `EXPO_PUBLIC_API_URL` en `.env` (p. ej. Render `https://…`) tiene prioridad.
+ * - **Móvil físico + Expo Go sin .env:** IP de `hostUri` → `:4000/api` en LAN.
+ * - **Emulador Android:** `http://10.0.2.2:4000/api` si no hay override.
  */
 function envPointsToDeviceLoopback(url: string): boolean {
   try {
@@ -69,15 +69,36 @@ function envPointsToDeviceLoopback(url: string): boolean {
   }
 }
 
+/** `.env` con URL remota (Render, etc.): no sustituir por IP LAN de Metro. */
+function isExplicitRemoteEnvUrl(url: string): boolean {
+  try {
+    const withScheme = url.includes("://") ? url : `https://${url}`;
+    const { protocol, hostname } = new URL(withScheme);
+    if (protocol === "https:") return true;
+    if (DEV_LOOPBACK_HOSTS.has(hostname.toLowerCase())) return false;
+    return hostname.includes(".");
+  } catch {
+    return false;
+  }
+}
+
 function resolveDevApiBase(): string {
+  if (envUrl && envUrl.length > 0) {
+    const normalized = envUrl.replace(/\/$/, "");
+    if (
+      isExplicitRemoteEnvUrl(normalized) ||
+      Platform.OS === "web" ||
+      !envPointsToDeviceLoopback(normalized)
+    ) {
+      return normalized;
+    }
+  }
+
   const fromExpoHost = apiBaseFromExpoDevHost();
   if (fromExpoHost) return fromExpoHost;
 
   if (envUrl && envUrl.length > 0) {
-    const normalized = envUrl.replace(/\/$/, "");
-    if (Platform.OS === "web" || !envPointsToDeviceLoopback(normalized)) {
-      return normalized;
-    }
+    return envUrl.replace(/\/$/, "");
   }
 
   if (Platform.OS === "android") {

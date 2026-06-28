@@ -5,6 +5,7 @@ import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { useGoiTheme } from "../../constants/theme";
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
+import { openLegalUrl } from "../../utils/openLegalUrl";
 
 export function ProfileAccountSection() {
   const router = useRouter();
@@ -32,6 +33,12 @@ export function ProfileAccountSection() {
     });
   }, [hasMultipleAccounts, router, showAlert, signOut]);
 
+  const openLegal = useCallback((kind: "privacy" | "legalNotice") => {
+    void openLegalUrl(kind).catch(() => {
+      showAlert({ title: "Goi", message: "No se pudo abrir el enlace.", buttons: [{ text: "OK" }] });
+    });
+  }, [showAlert]);
+
   return (
     <View style={styles.wrap}>
       <Text
@@ -40,6 +47,39 @@ export function ProfileAccountSection() {
           fontSize: typography.fontSize.sm,
           fontWeight: typography.fontWeight.semibold,
           marginBottom: 10,
+        }}
+        maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+      >
+        Legal
+      </Text>
+      <Pressable
+        onPress={() => openLegal("privacy")}
+        style={({ pressed }) => [styles.rowBtn, pressed ? styles.rowBtnPressed : null]}
+        accessibilityRole="link"
+        accessibilityLabel="Política de privacidad"
+      >
+        <Text style={styles.rowBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Política de privacidad
+        </Text>
+      </Pressable>
+      <Pressable
+        onPress={() => openLegal("legalNotice")}
+        style={({ pressed }) => [styles.rowBtn, pressed ? styles.rowBtnPressed : null]}
+        accessibilityRole="link"
+        accessibilityLabel="Aviso legal"
+      >
+        <Text style={styles.rowBtnText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Aviso legal
+        </Text>
+      </Pressable>
+
+      <Text
+        style={{
+          color: palette.text,
+          fontSize: typography.fontSize.sm,
+          fontWeight: typography.fontWeight.semibold,
+          marginBottom: 10,
+          marginTop: 20,
         }}
         maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
       >

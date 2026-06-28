@@ -17,7 +17,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { login } from "../api/auth";
+import { login, resendVerificationEmail } from "../api/auth";
 import { ApiError } from "../api/client";
 import { AnimatedGoldButton } from "../components/auth/AnimatedGoldButton";
 import { AuthTopGlow } from "../components/AuthTopGlow";
@@ -77,6 +77,8 @@ export default function LoginScreen() {
   } | null>(null);
   const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [showResendVerification, setShowResendVerification] = useState(false);
 
   useEffect(() => {
     if (!isHydrated || (isAuthenticated && !isAddAccount)) return;
@@ -103,10 +105,33 @@ export default function LoginScreen() {
     }, RATE_LIMIT_COOLDOWN_MS);
   }, []);
 
+  const onResendVerification = useCallback(async () => {
+    const normalized = email.trim();
+    if (!normalized || resendLoading) return;
+    setResendLoading(true);
+    setSubmitError(null);
+    try {
+      await resendVerificationEmail(normalized);
+      showAlert({
+        title: "Goi",
+        message: "Si el correo está registrado y aún no verificado, enviaremos un nuevo enlace.",
+        buttons: [{ text: "Entendido" }],
+      });
+      setShowResendVerification(false);
+    } catch (e) {
+      setSubmitError({
+        message: getErrorMessage(e, "No se pudo reenviar el correo."),
+      });
+    } finally {
+      setResendLoading(false);
+    }
+  }, [email, resendLoading, showAlert]);
+
   const onSubmit = useCallback(async () => {
     if (submitting || rateLimited) return;
     setFieldErrors({});
     setSubmitError(null);
+    setShowResendVerification(false);
     const parsed = loginFormSchema.safeParse({ email, password });
     if (!parsed.success) {
       setFieldErrors(collectFieldErrors(parsed.error.issues));
@@ -152,6 +177,10 @@ export default function LoginScreen() {
       if (e instanceof ApiError) {
         const networkish = e.code === "API_NETWORK_ERROR" || e.status === 0;
         const invalidCreds = e.code === "AUTH_INVALID_CREDENTIALS";
+        const emailNotVerified = e.code === "AUTH_EMAIL_NOT_VERIFIED";
+        if (emailNotVerified) {
+          setShowResendVerification(true);
+        }
         setSubmitError({
           message: getErrorMessage(e, "No se pudo autenticar"),
           detail: __DEV__ ? `Código ${e.code} · HTTP ${e.status}` : undefined,
@@ -159,7 +188,9 @@ export default function LoginScreen() {
             ? "Comprueba la conexión Wi‑Fi o datos móviles, y que el servidor Goi Web esté en marcha."
             : invalidCreds
               ? "Revisa email y contraseña, o usa «¿Olvidaste tu contraseña?»."
-              : undefined,
+              : emailNotVerified
+                ? "Revisa tu bandeja y spam, o reenvía el correo de verificación."
+                : undefined,
         });
       } else {
         setSubmitError({ message: "No se pudo autenticar." });
@@ -370,6 +401,16 @@ export default function LoginScreen() {
                       </Text>
                     ) : null}
                   </View>
+                ) : null}
+
+                {showResendVerification ? (
+                  <AnimatedGoldButton
+                    label={resendLoading ? "Reenviando…" : "Reenviar correo de verificación"}
+                    loadingLabel="Reenviando…"
+                    loading={resendLoading}
+                    disabled={resendLoading || rateLimited}
+                    onPress={() => void onResendVerification()}
+                  />
                 ) : null}
 
                 <AnimatedGoldButton

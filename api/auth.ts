@@ -5,14 +5,17 @@ import type {
   LoginInput,
   ProfileUser,
   RegisterInput,
+  RegisterResponse,
+  ResendVerificationResponse,
   ResetPasswordInput,
   SafeUser,
   UpdateProfileInput,
+  VerifyEmailResponse,
 } from "../types/auth";
 import { apiFetch } from "./client";
 
 export function register(input: RegisterInput) {
-  return apiFetch<AuthResponse>("/auth/register", {
+  return apiFetch<RegisterResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -36,6 +39,20 @@ export function resetPasswordWithToken(input: ResetPasswordInput) {
   return apiFetch<{ message: string }>("/auth/reset-password", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export function verifyEmailWithToken(token: string) {
+  return apiFetch<VerifyEmailResponse>("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function resendVerificationEmail(email: string) {
+  return apiFetch<ResendVerificationResponse>("/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ email }),
   });
 }
 

@@ -69,6 +69,13 @@ function ThemedRoot() {
               }}
             />
             <Stack.Screen
+              name="verify-email"
+              options={{
+                animation: "fade_from_bottom",
+                animationDuration: 420,
+              }}
+            />
+            <Stack.Screen
               name="reset-password"
               options={{
                 animation: "fade_from_bottom",

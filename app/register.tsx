@@ -16,9 +16,10 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { login, register } from "../api/auth";
+import { register, resendVerificationEmail } from "../api/auth";
 import { ApiError } from "../api/client";
 import { AnimatedGoldButton } from "../components/auth/AnimatedGoldButton";
+import { LegalConsentRow } from "../components/auth/LegalConsentRow";
 import { AuthTopGlow } from "../components/AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER, authScreenStyles, collectFieldErrors } from "../constants/authUi";
 import { registerFormSchema } from "../constants/registerSchema";
@@ -49,6 +50,11 @@ export default function RegisterScreen() {
   const [submitError, setSubmitError] = useState<{ message: string; detail?: string } | null>(null);
   const [focusedField, setFocusedField] = useState<"username" | "email" | "password" | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalError, setLegalError] = useState("");
+  const [verifyPendingEmail, setVerifyPendingEmail] = useState("");
+  const [pendingMessage, setPendingMessage] = useState("");
+  const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -72,6 +78,11 @@ export default function RegisterScreen() {
     if (rateLimited) return;
     setFieldErrors({});
     setSubmitError(null);
+    setLegalError("");
+    if (!acceptedLegal) {
+      setLegalError("Debes aceptar el aviso legal y la política de privacidad");
+      return;
+    }
     const parsed = registerFormSchema.safeParse({ username, email, password });
     if (!parsed.success) {
       setFieldErrors(collectFieldErrors(parsed.error.issues));
@@ -81,18 +92,14 @@ export default function RegisterScreen() {
     try {
       const body = parsed.data;
       const reg = await register(body);
+      if (reg.requiresEmailVerification || !reg.token) {
+        setVerifyPendingEmail(body.email);
+        setPendingMessage("Te hemos enviado un correo para confirmar tu cuenta. Revisa bandeja y spam.");
+        setPassword("");
+        return;
+      }
       if (reg.token && reg.user) {
         await signIn(reg.token, reg.user);
-      } else {
-        const loginRes = await login({ email: body.email, password: body.password });
-        if (!loginRes.token) {
-          setSubmitError({
-            message: "Cuenta creada pero el servidor no devolvió sesión. Inicia sesión manualmente.",
-            detail: __DEV__ ? "Respuesta de login sin `token`" : undefined,
-          });
-          return;
-        }
-        await signIn(loginRes.token, loginRes.user);
       }
       if (Platform.OS !== "web") {
         try {
@@ -122,7 +129,28 @@ export default function RegisterScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [email, password, notifyBiometricUnlockOptIn, rateLimited, router, scheduleRateLimitCooldown, signIn, username]);
+  }, [acceptedLegal, email, notifyBiometricUnlockOptIn, password, rateLimited, router, scheduleRateLimitCooldown, signIn, username]);
+
+  const onResendVerification = useCallback(async () => {
+    if (!verifyPendingEmail || resendLoading) return;
+    setResendLoading(true);
+    setSubmitError(null);
+    try {
+      await resendVerificationEmail(verifyPendingEmail);
+      setPendingMessage("Correo reenviado. Revisa bandeja y spam en unos minutos.");
+      showAlert({
+        title: "Goi",
+        message: "Hemos solicitado el reenvío del correo de verificación. Revisa bandeja y spam.",
+        buttons: [{ text: "Entendido" }],
+      });
+    } catch (e) {
+      setSubmitError({
+        message: getErrorMessage(e, "No se pudo reenviar el correo."),
+      });
+    } finally {
+      setResendLoading(false);
+    }
+  }, [resendLoading, showAlert, verifyPendingEmail]);
 
   const border = (key: "username" | "email" | "password") =>
     focusedField === key ? AUTH.fieldBorderFocus : AUTH.fieldBorder;
@@ -185,6 +213,46 @@ export default function RegisterScreen() {
                 >
               <View style={authScreenStyles.card}>
                 <View style={authScreenStyles.cardGlowLine} pointerEvents="none" />
+                {verifyPendingEmail ? (
+                  <>
+                    <Text style={authScreenStyles.cardTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Confirma tu email
+                    </Text>
+                    <Text style={authScreenStyles.cardSubtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Hemos enviado un enlace a {verifyPendingEmail}. Ábrelo para activar tu cuenta.
+                    </Text>
+                    {pendingMessage ? (
+                      <View style={authScreenStyles.successBox}>
+                        <Text style={authScreenStyles.successText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                          {pendingMessage}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {submitError ? (
+                      <View style={authScreenStyles.errorBox}>
+                        <Text style={authScreenStyles.submitError} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                          {submitError.message}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <AnimatedGoldButton
+                      label={resendLoading ? "Reenviando…" : "Reenviar correo"}
+                      loadingLabel="Reenviando…"
+                      loading={resendLoading}
+                      disabled={resendLoading || rateLimited}
+                      onPress={() => void onResendVerification()}
+                    />
+                    <Pressable
+                      onPress={() => router.replace("/login")}
+                      style={({ pressed }) => [authScreenStyles.linkWrap, pressed ? authScreenStyles.linkPressed : null]}
+                    >
+                      <Text style={authScreenStyles.linkText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                        Ir a iniciar sesión
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <>
                 <Text style={authScreenStyles.cardTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
                   Crear cuenta
                 </Text>
@@ -294,7 +362,7 @@ export default function RegisterScreen() {
                       setPassword(t);
                       setSubmitError(null);
                     }}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                     placeholderTextColor={AUTH.faint}
                     secureTextEntry={!showPassword}
                     autoComplete="password-new"
@@ -314,6 +382,15 @@ export default function RegisterScreen() {
                     </Text>
                   ) : null}
                 </View>
+
+                <LegalConsentRow
+                  checked={acceptedLegal}
+                  onToggle={(v) => {
+                    setAcceptedLegal(v);
+                    if (v) setLegalError("");
+                  }}
+                  error={legalError}
+                />
 
                 {submitError ? (
                   <View style={authScreenStyles.errorBox}>
@@ -335,8 +412,8 @@ export default function RegisterScreen() {
                   label={rateLimited ? "Espera un momento…" : "Crear cuenta"}
                   loadingLabel="Procesando…"
                   loading={submitting}
-                  disabled={rateLimited}
-                  onPress={onSubmit}
+                  disabled={rateLimited || submitting}
+                  onPress={() => void onSubmit()}
                 />
 
                 <Pressable
@@ -349,6 +426,8 @@ export default function RegisterScreen() {
                     ¿Ya tienes cuenta? Inicia sesión
                   </Text>
                 </Pressable>
+                  </>
+                )}
               </View>
             </ScrollView>
             </KeyboardAvoidingView>

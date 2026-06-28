@@ -17,7 +17,9 @@ Basado en la matriz flujo × Web × App × Server (marzo 2026).
 
 **Decisiones de infra (mayo 2026):** Render (API) · Vercel solo web · Neon compartida dev/prod por ahora · dominio propio y BD prod separada más adelante · Expo Go (APK aplazado) · fotos en prod no críticas (plan free).
 
-**Progreso Fase 0:** ~85% — App + Render OK; Web/Vercel configurado en código; **verificar login web tras push**.
+**Progreso Fase 0:** ✅ **Cerrada** (mayo 2026) — login App (Expo Go) + Web ([go-i.vercel.app](https://go-i.vercel.app)) contra Render. Fotos en prod: pendiente (disco Render / URLs absolutas).
+
+**Progreso Fase 1 (parcial):** Web — login + registro + verificación de email probados en prod (mayo 2026). Pulidos UX en [revision-pendiente.md](./revision-pendiente.md) (REV-001, REV-003). App auth: pendiente prueba completa.
 
 **Cómo usar este doc**
 
@@ -43,13 +45,13 @@ Basado en la matriz flujo × Web × App × Server (marzo 2026).
 ### Goi Server + deploy
 
 - [x] **0.1** Documentar URL de producción única (`API_URL`) para Web y App — tabla al inicio del doc
-- [ ] **0.2** Confirmar que prod sirve: `/api/health`, `/api/health/db`, `/uploads/*` — health ✅ y db ✅; `/uploads/*` sin probar en prod
+- [ ] **0.2** Confirmar que prod sirve: `/api/health`, `/api/health/db`, `/uploads/*` — health ✅ y db ✅; **fotos en web/app prod no se ven** (plan free + `/tmp`; abordar con disco Render o S3)
 - [x] **0.3** Neon: schema aplicado (`npm run db:setup` o equivalente en prod)
 - [x] **0.4** Variables de entorno de prod listadas (JWT, DATABASE_URL, uploads path, CORS si aplica) — sección [Variables Render](#variables-render-mayo-2026)
 
 ### Goi Web — salir de Express en runtime
 
-- [x] **0.5** Vercel / hosting: API del frontend apunta a Goi Server — `vercel.json` + `VITE_API_URL` → Render; **verificar login web** tras push a Vercel
+- [x] **0.5** Vercel / hosting: API del frontend apunta a Goi Server — probado login web mayo 2026
 - [x] **0.6** Revisar `vercel.json` / `api/index.mjs`: Express solo si queda explícitamente como legacy archivado — `api/README.md`; sin rewrite `/api`
 - [x] **0.7** `VITE_API_URL` en prod = URL del Goi Server — en `vercel.json` build env
 - [x] **0.8** Eliminar o ignorar `VITE_LEGACY_API_URL` y `:4001` en `.env.example` y docs de arranque
@@ -69,7 +71,7 @@ Basado en la matriz flujo × Web × App × Server (marzo 2026).
 **Verificación Fase 0:** login desde Web y App contra **la misma** API desplegada (no localhost).
 
 - [x] App (Expo Go) — login + feed contra `https://goi-server.onrender.com/api` (mayo 2026)
-- [ ] Web (Vercel) — pendiente reconectar `VITE_API_URL` y quitar Express
+- [x] Web ([go-i.vercel.app](https://go-i.vercel.app)) — login OK; fotos pendientes
 
 #### Variables Render (mayo 2026)
 
@@ -92,18 +94,18 @@ CORS: Goi Server permite `*` en `/api` (middleware + headers); no hace falta var
 
 ### Goi Server
 
-- [ ] **1.1** Registro: errores claros (email/username duplicado, validación password)
+- [x] **1.1** Registro: errores claros (email/username duplicado, validación password) — mayo 2026
 - [ ] **1.2** Forgot password: **envío de email real** en prod (SMTP / Resend / SendGrid)
 - [ ] **1.3** Forgot password: en dev, documentar `AUTH_RESET_RETURN_TOKEN` vs prod
 - [ ] **1.4** Reset password: enlace o deep link documentado para Web y App
-- [ ] **1.5** (Opcional P1) Verificación de email — decidir si entra en v1 o v1.1
+- [x] **1.5** Verificación de email en v1 — Resend + GET verify en prod; probado vía Web mayo 2026
 
 ### Goi Web
 
-- [ ] **1.6** Registro + login + logout sin errores contra Server prod
+- [x] **1.6** Registro + login + verify contra Server prod — mayo 2026 ([go-i.vercel.app](https://go-i.vercel.app)); logout sin regresión explícita; pulidos REV-001 / REV-003
 - [ ] **1.7** Flujo forgot → reset (`?reset=token`) probado con email real
-- [ ] **1.8** Enlaces legales visibles en registro o auth (`/privacidad`, `/aviso-legal`)
-- [ ] **1.9** Mensajes de error alineados con códigos API (`409`, `AUTH_*`)
+- [x] **1.8** Enlaces legales visibles en registro o auth (`/privacidad`, `/aviso-legal`) — mayo 2026
+- [x] **1.9** Mensajes de error alineados con códigos API (`409`, `AUTH_*`) — mayo 2026
 
 ### Goi App
 
@@ -282,11 +284,12 @@ Hacer al cierre de Fase 0–3 (y repasar tras 4–5).
 
 ## Checklist rápida pre-beta (15 min manual)
 
-- [ ] Registro nuevo usuario (Web)
+- [x] Registro nuevo usuario (Web) — mayo 2026; verify por enlace OK
 - [ ] Registro nuevo usuario (App)
 - [x] Login App contra API prod (Render) — mayo 2026
-- [ ] Login / logout Web
-- [ ] Login / logout ambos (criterio completo)
+- [x] Login Web ([go-i.vercel.app](https://go-i.vercel.app)) — mayo 2026
+- [x] Verificación email (Web) — enlace del correo → login OK — mayo 2026
+- [ ] Login / logout ambos (logout sin regresión explícita)
 - [ ] Publicar con foto (Web) — **bloqueado hasta 2.6**
 - [ ] Publicar con foto (App)
 - [ ] Feed following + all (Web) — **bloqueado hasta 2.4**
@@ -303,5 +306,6 @@ Hacer al cierre de Fase 0–3 (y repasar tras 4–5).
 - API Server: `Goi Server/docs/API-AUDIT.md`
 - Imágenes posts: `docs/flujo-subida-imagenes.md`
 - Refactor App (estado): `docs/refactoring-suggestions.md`
+- Pulidos y bugs detectados en pruebas: [revision-pendiente.md](./revision-pendiente.md)
 
-**Última actualización:** mayo 2026 (Fase 0 parcial: Render Live + App Expo Go)
+**Última actualización:** mayo 2026 (Fase 0 cerrada; Fase 1 Web auth+verify probados en prod)

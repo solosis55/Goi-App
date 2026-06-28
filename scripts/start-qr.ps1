@@ -1,8 +1,22 @@
-# npm start — Expo Go por Wi‑Fi (LAN + QR).
-# Uso: npm start  |  npm run start:clear  |  npm start clean
+# npm start - Expo Go por Wi-Fi (LAN + QR).
+# Uso: npm start | npm run start:clear
+#
+# Si .env tiene EXPO_PUBLIC_API_URL=https://... (Render), NO se sustituye por IP local.
 
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
+
+function Read-DotEnvValue {
+  param([string]$Key)
+  $path = Join-Path (Get-Location) ".env"
+  if (-not (Test-Path $path)) { return $null }
+  foreach ($line in Get-Content $path) {
+    if ($line -match "^\s*$Key\s*=\s*(.+?)\s*$") {
+      return $matches[1].Trim().Trim('"').Trim("'")
+    }
+  }
+  return $null
+}
 
 function Test-IsWifiAdapter {
   param([string]$InterfaceAlias)
@@ -23,9 +37,6 @@ if ($candidates.Count -eq 0) {
   exit 1
 }
 
-# PC con cable + Wi-Fi: preferir Ethernet en el QR. Muchos routers (TP-Link) aislan
-# clientes Wi-Fi entre sí; el movil suele poder hablar con el PC por cable (192.168.1.31)
-# pero no con la IP Wi-Fi del propio PC (192.168.1.37).
 $chosen = $candidates | Sort-Object @{
   Expression = {
     if (Test-IsWifiAdapter $_.InterfaceAlias) { 2 } else { 0 }
@@ -42,7 +53,7 @@ if ($candidates.Count -gt 1) {
     Write-Host "  $($c.IPAddress)  ($($c.InterfaceAlias))$mark" -ForegroundColor DarkGray
   }
   if ((Test-IsWifiAdapter $iface) -eq $false) {
-    Write-Host "  (Ethernet priorizado: evita aislamiento AP movil→Wi-Fi del PC)" -ForegroundColor DarkGray
+    Write-Host "  (Ethernet priorizado: evita aislamiento AP movil -> Wi-Fi del PC)" -ForegroundColor DarkGray
   }
   Write-Host ""
 }
@@ -53,7 +64,7 @@ $profile = Get-NetConnectionProfile | Where-Object {
 
 if ($profile -and $profile.NetworkCategory -eq "Public") {
   Write-Host ""
-  Write-Host "AVISO: La red '$($profile.Name)' esta en PUBLICO (Windows bloquea el movil)." -ForegroundColor Yellow
+  Write-Host "AVISO: La red esta en PUBLICO (Windows bloquea el movil)." -ForegroundColor Yellow
   Write-Host "  Panel Wi-Fi -> Propiedades -> Perfil: Privado" -ForegroundColor Yellow
   Write-Host "  O como admin: .\scripts\open-firewall-expo.ps1" -ForegroundColor Yellow
   Write-Host ""
@@ -67,25 +78,43 @@ if (-not $metroRule) {
 }
 
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = $ip
-$env:EXPO_PUBLIC_API_URL = "http://${ip}:4000/api"
-# Toda la API en Goi Server; no forzar :4001 legacy
-$env:EXPO_PUBLIC_AUTH_API_URL = $env:EXPO_PUBLIC_API_URL
 
-Write-Host "Metro (QR):  exp://${ip}:8081  [$iface]" -ForegroundColor Cyan
-Write-Host "API:         $env:EXPO_PUBLIC_API_URL" -ForegroundColor Cyan
+$apiFromDotEnv = Read-DotEnvValue "EXPO_PUBLIC_API_URL"
+$authFromDotEnv = Read-DotEnvValue "EXPO_PUBLIC_AUTH_API_URL"
+$useRemoteApi = ($null -ne $apiFromDotEnv) -and ($apiFromDotEnv -match "^https://")
+
+if ($useRemoteApi) {
+  $env:EXPO_PUBLIC_API_URL = $apiFromDotEnv
+  if ($authFromDotEnv) {
+    $env:EXPO_PUBLIC_AUTH_API_URL = $authFromDotEnv
+  } else {
+    Remove-Item Env:EXPO_PUBLIC_AUTH_API_URL -ErrorAction SilentlyContinue
+  }
+  Write-Host "Metro (QR):  exp://${ip}:8081  [$iface]" -ForegroundColor Cyan
+  Write-Host "API (Render): $env:EXPO_PUBLIC_API_URL" -ForegroundColor Green
+  Write-Host '  (.env remoto: emails OK; no hace falta Goi Server local)' -ForegroundColor DarkGray
+} else {
+  $env:EXPO_PUBLIC_API_URL = "http://${ip}:4000/api"
+  $env:EXPO_PUBLIC_AUTH_API_URL = $env:EXPO_PUBLIC_API_URL
+  Write-Host "Metro (QR):  exp://${ip}:8081  [$iface]" -ForegroundColor Cyan
+  Write-Host "API (LAN):   $env:EXPO_PUBLIC_API_URL" -ForegroundColor Cyan
+  Write-Host '  (local: sin RESEND en Goi Server NO llegan emails)' -ForegroundColor Yellow
+  Write-Host '  Para prod: EXPO_PUBLIC_API_URL=https://goi-server.onrender.com/api en .env' -ForegroundColor DarkGray
+}
+
 Write-Host ""
 Write-Host "Prueba en el movil (Chrome):  http://${ip}:8081" -ForegroundColor Yellow
 Write-Host "  Si no carga, el QR tampoco funcionara." -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "1. Backend: cd '..\Goi Server' && npm run dev  (y npm run db:setup si fallan columnas)" -ForegroundColor DarkGray
-Write-Host "2. Escanea el QR con Expo Go (misma Wi-Fi, datos moviles apagados)" -ForegroundColor DarkGray
-Write-Host "3. Debe salir aqui: Android Bundled ..." -ForegroundColor DarkGray
-Write-Host ""
 
-$clear =
-  $args -contains "-c" -or
-  $args -contains "--clear" -or
-  $args -contains "clean"
+if (-not $useRemoteApi) {
+  Write-Host "1. Backend: cd '..\Goi Server' && npm run dev" -ForegroundColor DarkGray
+  Write-Host "2. Escanea el QR con Expo Go (misma Wi-Fi, datos moviles apagados)" -ForegroundColor DarkGray
+  Write-Host "3. Debe salir aqui: Android Bundled ..." -ForegroundColor DarkGray
+  Write-Host ""
+}
+
+$clear = $args -contains "-c" -or $args -contains "--clear" -or $args -contains "clean"
 
 if ($clear) {
   npx expo start --lan -c
