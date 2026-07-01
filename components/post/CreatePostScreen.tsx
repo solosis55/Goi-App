@@ -4,12 +4,15 @@ import {
   ActivityIndicator,
   InteractionManager,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
   View,
+  type TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthTopGlow } from "../AuthTopGlow";
@@ -24,6 +27,7 @@ import { useMentionCandidates } from "../../hooks/useMentionCandidates";
 import { usePostSessionPicker } from "../../hooks/usePostSessionPicker";
 import { hapticLight, hapticSuccess } from "../../utils/appHaptics";
 import { CreatePostSessionPickerSheet } from "./CreatePostSessionPickerSheet";
+import { CreatePostSessionTodayCta } from "./CreatePostSessionHero";
 import {
   CreatePostEditPanel,
   type CreatePostEditPanelKind,
@@ -86,6 +90,7 @@ export function CreatePostScreen({
   const { candidates: mentionCandidates, recordMentionPick } = useMentionCandidates();
   const formBusy = form.submitting || form.restoringDraft;
   const previewScrollRef = useRef<ScrollView>(null);
+  const captionInputRef = useRef<TextInput>(null);
 
   const sessionExercisePreviews = useMemo(
     () =>
@@ -279,7 +284,7 @@ export function CreatePostScreen({
   }, [form.images.length, form.mediaBusy, form.submitting, onAddMedia]);
 
   const focusStandardCaption = useCallback(() => {
-    previewScrollRef.current?.scrollToEnd({ animated: true });
+    captionInputRef.current?.focus();
   }, []);
 
   const canPublish =
@@ -342,16 +347,37 @@ export function CreatePostScreen({
     [format, form.hasDraft, onChangeFormat, showAlert]
   );
 
-  const sessionAvailable = useMemo(() => {
-    if (!form.sessionId) return sessionPicker.available;
-    const current = sessionPicker.getSession(form.sessionId);
-    if (!current) return sessionPicker.available;
-    if (sessionPicker.available.some((s) => s.id === current.id)) return sessionPicker.available;
-    return [current, ...sessionPicker.available];
-  }, [form.sessionId, sessionPicker]);
-
   const toolbarPanel: CreatePostToolbarAction | null =
     editPanel === "text" || editPanel === "media" || editPanel === "options" ? editPanel : null;
+
+  const linkTodaySession = useCallback(async () => {
+    const session = sessionPicker.todayAvailableSession ?? (await sessionPicker.linkTodaySession());
+    if (!session) return;
+    hapticLight();
+    await form.selectSession(session.id, {
+      workoutTitle: session.workoutTitle,
+      performedAt: session.performedAt,
+      notes: session.notes,
+      snapshot: session.snapshot,
+      workoutId: session.workoutId,
+    });
+  }, [form, sessionPicker]);
+
+  const applySuggestedSession = useCallback(async () => {
+    const id = form.suggestedSessionId;
+    if (!id) return;
+    const session = sessionPicker.getSession(id);
+    hapticLight();
+    await form.selectSession(id, session
+      ? {
+          workoutTitle: session.workoutTitle,
+          performedAt: session.performedAt,
+          notes: session.notes,
+          snapshot: session.snapshot,
+          workoutId: session.workoutId,
+        }
+      : undefined);
+  }, [form, sessionPicker]);
 
   return (
     <View style={styles.root}>
@@ -413,6 +439,29 @@ export function CreatePostScreen({
         onPressVisibility={() => setEditPanel("options")}
       />
 
+      {!form.sessionId && sessionPicker.todayAvailableSession && !form.restoringDraft ? (
+        <View style={styles.quickLinkWrap}>
+          <CreatePostSessionTodayCta
+            session={sessionPicker.todayAvailableSession}
+            onPress={() => void linkTodaySession()}
+          />
+        </View>
+      ) : null}
+
+      {!form.sessionId && form.suggestedSessionId && !form.restoringDraft && !sessionPicker.todayAvailableSession ? (
+        <Pressable
+          onPress={() => void applySuggestedSession()}
+          style={({ pressed }) => [styles.suggestBanner, pressed ? styles.pressed : null]}
+        >
+          <Text style={styles.suggestEyebrow} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Recomendado
+          </Text>
+          <Text style={styles.suggestTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Vincular tu última sesión sin publicar
+          </Text>
+        </Pressable>
+      ) : null}
+
       <CreatePostDraftRecoveredBanner
         active={form.draftBanner && !form.restoringDraft && !fromWorkoutFinish}
         onDismiss={form.dismissDraftBanner}
@@ -434,12 +483,18 @@ export function CreatePostScreen({
       {form.restoringDraft ? (
         <ActivityIndicator color={AUTH.gold} style={{ marginTop: 24 }} />
       ) : (
-        <ScrollView
-          ref={previewScrollRef}
-          style={styles.previewScroll}
-          contentContainerStyle={styles.previewScrollContent}
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          style={styles.flex1}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 48 : 0}
         >
+          <ScrollView
+            ref={previewScrollRef}
+            style={styles.previewScroll}
+            contentContainerStyle={styles.previewScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
           {format === "training" ? (
             <PostFeedPreviewTraining
               draft={previewDraft}
@@ -474,28 +529,30 @@ export function CreatePostScreen({
               onPressViewSession={form.sessionId ? openLinkedSessionDetail : undefined}
             />
           )}
-        </ScrollView>
+          </ScrollView>
+
+          {format === "standard" ? (
+            <CreatePostInlineCaption
+              inputRef={captionInputRef}
+              value={form.content}
+              onChange={form.setContent}
+              charCount={form.validation.charCount}
+              mentionCandidates={mentionCandidates}
+              onMentionPick={recordMentionPick}
+            />
+          ) : null}
+
+          <View style={[styles.toolbarDock, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+            <CreatePostToolbar
+              format={format}
+              hasSession={Boolean(form.sessionId)}
+              imageCount={form.images.length}
+              activePanel={toolbarPanel}
+              onPress={openToolbarAction}
+            />
+          </View>
+        </KeyboardAvoidingView>
       )}
-
-      {format === "standard" && !form.restoringDraft ? (
-        <CreatePostInlineCaption
-          value={form.content}
-          onChange={form.setContent}
-          charCount={form.validation.charCount}
-          mentionCandidates={mentionCandidates}
-          onMentionPick={recordMentionPick}
-        />
-      ) : null}
-
-      <View style={[styles.toolbarDock, { paddingBottom: Math.max(insets.bottom, 10) }]}>
-        <CreatePostToolbar
-          format={format}
-          hasSession={Boolean(form.sessionId)}
-          imageCount={form.images.length}
-          activePanel={toolbarPanel}
-          onPress={openToolbarAction}
-        />
-      </View>
 
       {form.submitError ? (
         <Text style={styles.error} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -530,11 +587,8 @@ export function CreatePostScreen({
       <CreatePostSessionPickerSheet
         visible={sessionPickerOpen}
         onClose={() => setSessionPickerOpen(false)}
-        sessions={sessionPicker.sessions}
-        available={sessionAvailable}
-        loading={sessionPicker.loading}
+        picker={sessionPicker}
         value={form.sessionId}
-        suggestedSessionId={form.suggestedSessionId}
         showUnlink
         onSelect={(id, meta) => void form.selectSession(id, meta)}
       />
@@ -545,6 +599,7 @@ export function CreatePostScreen({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: AUTH.bg },
+  flex1: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -583,6 +638,32 @@ const styles = StyleSheet.create({
   },
   previewScroll: { flex: 1 },
   previewScrollContent: { flexGrow: 1, justifyContent: "flex-start", paddingVertical: 8 },
+  quickLinkWrap: { marginHorizontal: 12, marginTop: 8, marginBottom: 2 },
+  suggestBanner: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 2,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(82, 82, 82, 0.65)",
+    backgroundColor: "rgba(14, 14, 16, 0.9)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  pressed: { opacity: 0.88 },
+  suggestEyebrow: {
+    color: AUTH.gold,
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  suggestTitle: {
+    color: AUTH.neutral100,
+    fontSize: 14,
+    fontWeight: "700",
+  },
   toolbarDock: {
     marginHorizontal: 10,
     marginTop: 4,

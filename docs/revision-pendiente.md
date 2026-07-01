@@ -91,7 +91,7 @@ Pulidos UX REV-001–003 cerrados. **Fase 2 feed/posts cerrada** (mayo 2026). Si
 - [ ] **Plataforma:** Web + App  
 - [ ] **Detectado:** mayo 2026
 
-**Contexto:** La lógica de crear/ver posts estándar va alineada; el aspecto y la ergonomía del flujo aún no están al nivel de producto final.
+**Sprint A (mayo 2026 — Web):** cabecera tipo App (Cancelar · título · Publicar sticky), chips de requisitos, toolbar inferior en móvil, preview estándar 1:1 en composer, bullets del chooser alineados con App. Pendiente valorar en uso real y Sprint B (editor/ratios feed).
 
 **Web — áreas a pulir:**
 

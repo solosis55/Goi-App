@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import {
   FlatList,
   Pressable,
@@ -19,6 +19,7 @@ type MentionableTextInputProps = Omit<TextInputProps, "value" | "onChangeText"> 
   candidates: MentionPickUser[];
   onMentionPick?: (picked: MentionPickUser) => void;
   listPlacement?: "above" | "below";
+  inputRef?: RefObject<TextInput | null>;
 };
 
 function MentionSuggestionRow({
@@ -56,10 +57,12 @@ export function MentionableTextInput({
   candidates,
   onMentionPick,
   listPlacement = "below",
+  inputRef: externalInputRef,
   style,
   ...rest
 }: MentionableTextInputProps) {
-  const inputRef = useRef<TextInput>(null);
+  const internalRef = useRef<TextInput>(null);
+  const inputRef = externalInputRef ?? internalRef;
   const selectionRef = useRef({ start: value.length, end: value.length });
   const [caretTick, setCaretTick] = useState(0);
 

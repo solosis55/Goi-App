@@ -1,6 +1,6 @@
-import { getWorkoutSessions } from "../api/workoutSessions";
+import { getWorkoutSessionsPicker } from "../api/workoutSessions";
 
-/** Sesión más reciente del usuario (p. ej. tras completar un entreno). */
+/** Sesión más reciente sin publicar del usuario (p. ej. tras completar un entreno). */
 export async function getLatestSessionIdForUser(userId: string): Promise<{
   sessionId: string | null;
   workoutTitle: string | null;
@@ -9,10 +9,8 @@ export async function getLatestSessionIdForUser(userId: string): Promise<{
   snapshot: import("../types/workoutSessionSnapshot").WorkoutSessionSnapshot | null;
 }> {
   try {
-    const sessions = await getWorkoutSessions();
-    const latest = sessions
-      .filter((s) => s.userId === userId)
-      .sort((a, b) => b.performedAt.localeCompare(a.performedAt))[0];
+    const page = await getWorkoutSessionsPicker({ limit: 15, includeLinked: true });
+    const latest = page.sessions.find((s) => s.userId === userId && !s.linkedPostId);
     if (!latest) {
       return { sessionId: null, workoutTitle: null, performedAt: null, notes: null, snapshot: null };
     }
@@ -28,16 +26,14 @@ export async function getLatestSessionIdForUser(userId: string): Promise<{
   }
 }
 
-/** Si llega workoutId legacy, usa la sesión más reciente de esa rutina. */
+/** Si llega workoutId legacy, usa la sesión más reciente sin publicar de esa rutina. */
 export async function resolveSessionIdFromWorkoutId(
   userId: string,
   workoutId: string
 ): Promise<string | null> {
   try {
-    const sessions = await getWorkoutSessions();
-    const match = sessions
-      .filter((s) => s.userId === userId && s.workoutId === workoutId)
-      .sort((a, b) => b.performedAt.localeCompare(a.performedAt))[0];
+    const page = await getWorkoutSessionsPicker({ workoutId, limit: 10, includeLinked: true });
+    const match = page.sessions.find((s) => s.userId === userId && !s.linkedPostId);
     return match?.id ?? null;
   } catch {
     return null;

@@ -202,23 +202,8 @@ export function usePostDraftPersistence({
               latest.notes ?? null,
               latest.snapshot ?? null
             );
-          } else if (
-            !restoredFromPending &&
-            !preferLinkedSession &&
-            latest.sessionId &&
-            postFormat === "training" &&
-            !restoredFromDraft
-          ) {
+          } else if (!restoredFromPending && !preferLinkedSession && latest.sessionId && !restoredFromDraft) {
             setSuggestedSessionId(latest.sessionId);
-            if (!draft?.sessionId) {
-              applyLinkedSession(
-                latest.sessionId,
-                latest.workoutTitle,
-                latest.performedAt,
-                latest.notes ?? null,
-                latest.snapshot ?? null
-              );
-            }
           }
         }
       } finally {

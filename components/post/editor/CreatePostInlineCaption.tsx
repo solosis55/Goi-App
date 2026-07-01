@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, type TextInput } from "react-native";
+import type { RefObject } from "react";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../../constants/authUi";
 import { POST_BODY_MAX } from "../../../constants/createPost";
 import { CAPTION_PROMPTS_STANDARD } from "../../../constants/createPostPrompts";
@@ -12,6 +13,7 @@ type CreatePostInlineCaptionProps = {
   onFocus?: () => void;
   mentionCandidates?: MentionPickUser[];
   onMentionPick?: (picked: MentionPickUser) => void;
+  inputRef?: RefObject<TextInput | null>;
 };
 
 export function CreatePostInlineCaption({
@@ -21,19 +23,23 @@ export function CreatePostInlineCaption({
   onFocus,
   mentionCandidates = [],
   onMentionPick,
+  inputRef,
 }: CreatePostInlineCaptionProps) {
   return (
     <View style={styles.wrap}>
       <MentionableTextInput
+        inputRef={inputRef}
         value={value}
         onChangeText={onChange}
         onFocus={onFocus}
         candidates={mentionCandidates}
         onMentionPick={onMentionPick}
-        listPlacement="above"
+        listPlacement="below"
         placeholder="Escribe el pie de foto…"
         placeholderTextColor={AUTH.faint}
         multiline
+        scrollEnabled
+        textAlignVertical="top"
         style={styles.input}
         maxLength={POST_BODY_MAX + 80}
         maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
@@ -65,6 +71,7 @@ export function CreatePostInlineCaption({
 
 const styles = StyleSheet.create({
   wrap: {
+    flexShrink: 0,
     marginHorizontal: 12,
     marginTop: 4,
     marginBottom: 6,
@@ -78,7 +85,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 44,
-    maxHeight: 96,
+    maxHeight: 132,
     color: AUTH.neutral100,
     fontSize: 15,
     lineHeight: 21,
@@ -93,7 +100,8 @@ const styles = StyleSheet.create({
   prompts: {
     gap: 6,
     paddingRight: 8,
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
   },
   promptChip: {
     paddingHorizontal: 10,
