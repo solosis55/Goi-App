@@ -24,7 +24,7 @@ No sustituye al [backlog de lanzamiento](./backlog-lanzamiento.md); aquí van de
 | Reset contraseña | ✅ | ✅ |
 | Legales (1.12) | ✅ registro | ✅ apartado Legal en perfil |
 
-Pulidos UX: REV-001, REV-003, REV-002 (email al registrar en App). Ver [revision-pendiente.md](./revision-pendiente.md).
+Pulidos UX REV-001–003 cerrados. Pendiente opcional: REV-004.
 
 ---
 
@@ -32,14 +32,23 @@ Pulidos UX: REV-001, REV-003, REV-002 (email al registrar en App). Ver [revision
 
 ### REV-001 · Web — Pantalla “email enviado” tras registro (P1)
 
-- [ ] **Plataforma:** Web  
-- [ ] **Detectado:** mayo 2026 (prueba registro vía web)
+- [x] **Plataforma:** Web  
+- [x] **Detectado:** mayo 2026 · **Cerrado:** mayo 2026
 
-**Problema:** Al registrarse, la UI se queda en estado de **carga** hasta que aparece el mensaje de verificar correo. No hay feedback intermedio claro.
+**Problema:** Al registrarse, la UI se quedaba en estado de **carga** en el formulario hasta terminar register + resend.
 
-**Objetivo:** Igual que en App — mostrar de inmediato una pantalla dedicada de “hemos enviado un enlace a tu correo”, con el email indicado y botón/opción de **reenviar verificación**.
+**Fix:** Tras crear la cuenta, cambio inmediato a `verify-pending` con «Enviando correo…» y reenvío en segundo plano (como App).
 
-**Referencia App:** `app/register.tsx` (estado `verifyPendingEmail`, bloque de reenvío).
+---
+
+### REV-003 · Paridad login vs registro — orden de pantallas (P1)
+
+- [x] **Plataforma:** Web  
+- [x] **Detectado:** mayo 2026 · **Cerrado:** mayo 2026
+
+**Problema:** Web empezaba en **crear cuenta**; App en **iniciar sesión**.
+
+**Fix:** Vista por defecto `login`; enlace secundario «¿No tienes cuenta? Crear cuenta».
 
 ---
 
@@ -51,19 +60,6 @@ Pulidos UX: REV-001, REV-003, REV-002 (email al registrar en App). Ver [revision
 **Problema:** Tras crear cuenta en App, no llegaba el email; solo al pulsar Reenviar.
 
 **Causa:** Dos caminos distintos (register enviaba en server; reenvío otro). Unificado: `POST /auth/register` solo crea la cuenta; Web y App llaman `POST /auth/resend-verification` inmediatamente después (mismo flujo que el botón Reenviar).
-
----
-
-### REV-003 · Paridad login vs registro — orden de pantallas (P1)
-
-- [ ] **Plataforma:** Web + App  
-- [ ] **Detectado:** mayo 2026
-
-**Problema:** En **Web** la pantalla de auth empieza en **crear cuenta** y el enlace “ya tengo cuenta” es secundario. En **App** empieza en **iniciar sesión** y el registro es secundario.
-
-**Objetivo:** Unificar — **login primero**, registro como acción secundaria (como en App).
-
-**Archivos probables:** Web `src/pages/AuthPage.tsx` (vista por defecto `register` → `login`); App ya OK en `app/login.tsx`.
 
 ---
 
