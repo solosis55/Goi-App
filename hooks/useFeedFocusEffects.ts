@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import type { FeedAnimatedFlashListRef } from "../components/feed/FeedAnimatedFlashList";
 import { FEED_AUX_REFRESH_STALE_MS, FEED_STALE_MS, type FeedScope } from "../constants/feed";
 import { feedListIndexForPostId, type FeedListItem } from "../utils/feedListItems";
+import { useSocialHubStore } from "../stores/useSocialHubStore";
 import { useFocusStaleRefresh } from "./useFocusStaleRefresh";
 
 type UseFeedFocusEffectsOptions = {
@@ -25,6 +26,7 @@ type UseFeedFocusEffectsOptions = {
     opts?: { force?: boolean }
   ) => void;
   isFeedCacheFresh: () => boolean;
+  hasFeedTimeline: () => boolean;
   scrollFeedToTop: () => void;
   listRef: RefObject<FeedAnimatedFlashListRef | null>;
   refreshStories: () => Promise<void>;
@@ -50,6 +52,7 @@ export function useFeedFocusEffects({
   initScope,
   fetchFeed,
   isFeedCacheFresh,
+  hasFeedTimeline,
   scrollFeedToTop,
   listRef,
   refreshStories,
@@ -129,32 +132,24 @@ export function useFeedFocusEffects({
     refreshBadge,
   ]);
 
-  const onRefresh = useCallback(
-    ({ isFirstFocus }: { isFirstFocus: boolean }) => {
+  const onRefresh = useCallback(() => {
       const afterPublish = afterPublishRef.current;
-      const mode = afterPublish ? "refresh" : isFirstFocus ? "initial" : "refresh";
+      const fetchMode = afterPublish || hasFeedTimeline() ? "refresh" : "initial";
 
       void (async () => {
         if (!feedScopeReady) {
-          void refreshFollowing();
-          const scope = await initScope(followingIds.length);
-          void fetchFeed(mode, scope, afterPublish ? { force: true } : undefined);
+          await refreshFollowing();
+          const scope = await initScope(useSocialHubStore.getState().followingIds.length);
+          void fetchFeed(fetchMode, scope, afterPublish ? { force: true } : undefined);
           return;
         }
         if (afterPublish || focusAuxStaleRef.current) {
           void refreshFollowing();
         }
-        void fetchFeed(mode, feedScope, afterPublish ? { force: true } : undefined);
+        void fetchFeed(fetchMode, feedScope, afterPublish ? { force: true } : undefined);
       })();
     },
-    [
-      feedScopeReady,
-      refreshFollowing,
-      initScope,
-      followingIds.length,
-      fetchFeed,
-      feedScope,
-    ]
+    [feedScopeReady, refreshFollowing, initScope, fetchFeed, feedScope, hasFeedTimeline]
   );
 
   useFocusStaleRefresh({

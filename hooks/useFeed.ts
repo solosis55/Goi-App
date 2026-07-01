@@ -52,62 +52,109 @@ export function useFeed(userId: string | undefined) {
     [filteredTimeline]
   );
 
+  const fetchGenRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
+
+  const hasFeedTimeline = useCallback(() => timelineLengthRef.current > 0, []);
+
   const fetchFeed = useCallback(
     async (mode: "initial" | "refresh" | "more", scope: FeedScope, opts?: { force?: boolean }) => {
       if (!userId) return;
+
+      let effectiveMode = mode;
+      if (effectiveMode === "refresh" && timelineLengthRef.current === 0 && !opts?.force) {
+        effectiveMode = "initial";
+      }
       if (
-        mode === "refresh" &&
+        effectiveMode === "refresh" &&
         !opts?.force &&
         Date.now() - lastFetchAtRef.current < FEED_STALE_MS &&
         timelineLengthRef.current > 0
       ) {
         return;
       }
-      if (mode === "initial") setLoading(true);
-      else if (mode === "more") setLoadingMore(true);
+      if (fetchInFlightRef.current && effectiveMode === "refresh" && !opts?.force) {
+        return;
+      }
+
+      const fetchGen = ++fetchGenRef.current;
+      fetchInFlightRef.current = true;
+      if (effectiveMode === "initial") setLoading(true);
+      else if (effectiveMode === "more") setLoadingMore(true);
       else setRefreshing(true);
       setError(null);
 
       try {
-        const cursor = mode === "more" ? nextCursorRef.current : null;
+        const cursor = effectiveMode === "more" ? nextCursorRef.current : null;
         const page = await getFeedPage(scope, FEED_PAGE_SIZE, cursor);
+        if (fetchGen !== fetchGenRef.current) return;
 
-        if (mode === "more" && cursor) {
-          setTimeline((prev) => [...prev, ...page.items]);
+        if (effectiveMode === "more" && cursor) {
+          setTimeline((prev) => {
+            const seen = new Set(
+              prev.filter((e): e is { kind: "post"; post: Post } => e.kind === "post").map((e) => e.post.id)
+            );
+            const fresh = page.items.filter(
+              (e) => e.kind !== "post" || !seen.has(e.post.id)
+            );
+            if (fresh.length === 0) {
+              nextCursorRef.current = null;
+              setNextCursor(null);
+              setHasMore(false);
+              return prev;
+            }
+            nextCursorRef.current = page.nextCursor;
+            setNextCursor(page.nextCursor);
+            setHasMore(page.hasMore);
+            return [...prev, ...fresh];
+          });
         } else {
           const list = page.items;
-          const anchor = feedAnchorRef.current;
+          const preserveTimeline =
+            effectiveMode === "refresh" && !scrollAtTopRef.current && timelineLengthRef.current > 0;
 
-          if (mode === "refresh" && anchor && !scrollAtTopRef.current) {
-            const anchorIdx = list.findIndex((e) => e.kind === "post" && e.post.id === anchor);
-            if (anchorIdx > 0) {
-              setPendingNewCount(anchorIdx);
-            } else if (anchorIdx === -1) {
-              const firstPost = list.find((e) => e.kind === "post");
-              if (firstPost && firstPost.kind === "post" && firstPost.post.id !== anchor) {
-                setPendingNewCount(1);
+          if (
+            effectiveMode === "refresh" &&
+            list.length === 0 &&
+            timelineLengthRef.current > 0 &&
+            !opts?.force
+          ) {
+            /* Respuesta vacía inesperada: mantener timeline visible. */
+          } else if (preserveTimeline) {
+            const anchor = feedAnchorRef.current;
+            if (anchor) {
+              const anchorIdx = list.findIndex((e) => e.kind === "post" && e.post.id === anchor);
+              if (anchorIdx > 0) {
+                setPendingNewCount(anchorIdx);
+              } else if (anchorIdx === -1) {
+                const firstPost = list.find((e) => e.kind === "post");
+                if (firstPost && firstPost.kind === "post" && firstPost.post.id !== anchor) {
+                  setPendingNewCount(1);
+                }
               }
             }
-          } else if (mode === "refresh" || mode === "initial") {
+          } else {
             const firstPost = list.find((e) => e.kind === "post");
             feedAnchorRef.current = firstPost && firstPost.kind === "post" ? firstPost.post.id : null;
-            if (scrollAtTopRef.current) setPendingNewCount(0);
+            if (scrollAtTopRef.current || effectiveMode === "initial") setPendingNewCount(0);
+            setTimeline(list);
+            nextCursorRef.current = page.nextCursor;
+            setNextCursor(page.nextCursor);
+            setHasMore(page.hasMore);
           }
-
-          setTimeline(list);
         }
 
-        nextCursorRef.current = page.nextCursor;
-        setNextCursor(page.nextCursor);
-        setHasMore(page.hasMore);
         lastFetchAtRef.current = Date.now();
       } catch (e) {
+        if (fetchGen !== fetchGenRef.current) return;
         if (e instanceof ApiError) {
           setError({ message: e.message, detail: `Código ${e.code} · HTTP ${e.status}` });
         } else {
           setError({ message: "No se pudo cargar el feed." });
         }
       } finally {
+        if (fetchGen !== fetchGenRef.current) return;
+        fetchInFlightRef.current = false;
         setLoading(false);
         setRefreshing(false);
         setLoadingMore(false);
@@ -203,5 +250,6 @@ export function useFeed(userId: string | undefined) {
     patchTimeline,
     patchPost,
     isFeedCacheFresh,
+    hasFeedTimeline,
   };
 }

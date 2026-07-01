@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { InteractionManager } from "react-native";
 
 export type FocusStaleRefreshMeta = {
@@ -43,11 +43,27 @@ export function useFocusStaleRefresh({
   const focusCountRef = useRef(0);
   const lastRefreshAtRef = useRef(0);
 
+  const onRefreshRef = useRef(onRefresh);
+  const onEveryFocusRef = useRef(onEveryFocus);
+  const hasDataRef = useRef(hasData);
+  const forceRefreshRef = useRef(forceRefresh);
+  const skipFocusIncrementRef = useRef(skipFocusIncrement);
+  const onFocusEnterRef = useRef(onFocusEnter);
+
+  useEffect(() => {
+    onRefreshRef.current = onRefresh;
+    onEveryFocusRef.current = onEveryFocus;
+    hasDataRef.current = hasData;
+    forceRefreshRef.current = forceRefresh;
+    skipFocusIncrementRef.current = skipFocusIncrement;
+    onFocusEnterRef.current = onFocusEnter;
+  });
+
   useFocusEffect(
     useCallback(() => {
       if (!enabled) return;
 
-      const skipIncrement = skipFocusIncrement?.() ?? false;
+      const skipIncrement = skipFocusIncrementRef.current?.() ?? false;
       if (!skipIncrement) {
         focusCountRef.current += 1;
       }
@@ -56,19 +72,19 @@ export function useFocusStaleRefresh({
       const isFirstFocus = focusCount === 1;
       const now = Date.now();
       const stale = now - lastRefreshAtRef.current > staleMs;
-      const dataReady = hasData?.() ?? false;
+      const dataReady = hasDataRef.current?.() ?? false;
       const meta: FocusStaleRefreshMeta = { isFirstFocus, stale, focusCount };
-      const forced = forceRefresh?.(meta) ?? false;
+      const forced = forceRefreshRef.current?.(meta) ?? false;
 
       const run = () => {
-        onEveryFocus?.(meta);
+        onEveryFocusRef.current?.(meta);
         if (!forced && !isFirstFocus && dataReady && !stale) return;
-        void Promise.resolve(onRefresh(meta)).then(() => {
+        void Promise.resolve(onRefreshRef.current(meta)).then(() => {
           lastRefreshAtRef.current = Date.now();
         });
       };
 
-      const focusCleanup = onFocusEnter?.();
+      const focusCleanup = onFocusEnterRef.current?.();
 
       let deferredCleanup: (() => void) | undefined;
       if (deferUntilInteractions) {
@@ -82,16 +98,6 @@ export function useFocusStaleRefresh({
         focusCleanup?.();
         deferredCleanup?.();
       };
-    }, [
-      enabled,
-      staleMs,
-      hasData,
-      onRefresh,
-      onEveryFocus,
-      deferUntilInteractions,
-      forceRefresh,
-      skipFocusIncrement,
-      onFocusEnter,
-    ])
+    }, [enabled, staleMs, deferUntilInteractions])
   );
 }

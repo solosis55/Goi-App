@@ -62,6 +62,8 @@ export default function HomeFeedScreen() {
     patchTimeline,
     patchPost,
     isFeedCacheFresh,
+    hasFeedTimeline,
+    scrollToTop,
   } = feed;
 
   const goldBeamEnabled = useFeedPrefsStore((s) => s.goldBeamEnabled);
@@ -104,8 +106,8 @@ export default function HomeFeedScreen() {
 
   const scrollFeedToTop = useCallback(() => {
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
-    feed.scrollToTop();
-  }, [feed]);
+    scrollToTop();
+  }, [scrollToTop]);
 
   const refreshFollowing = useCallback(async (): Promise<string[]> => {
     if (!user?.id) return [];
@@ -148,6 +150,7 @@ export default function HomeFeedScreen() {
     initScope,
     fetchFeed,
     isFeedCacheFresh,
+    hasFeedTimeline,
     scrollFeedToTop,
     listRef,
     refreshStories,

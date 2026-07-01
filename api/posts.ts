@@ -10,6 +10,7 @@ import type {
 
 import { ApiError, apiFetch } from "./client";
 import { normalizeFeedPage, normalizePost } from "../utils/normalizePost";
+import { resolveFeedPagePagination } from "../utils/resolveFeedPage";
 import type { PostImageUploadFile } from "../utils/postImage";
 
 export type PostsByUserPageResponse = {
@@ -66,7 +67,7 @@ export async function getFeedPage(scope: "all" | "following", limit = 20, cursor
   const page = await apiFetch<FeedPageResponse>(`/posts/feed?${sp.toString()}`, {
     timeoutMs: 30_000,
   });
-  return normalizeFeedPage(page);
+  return resolveFeedPagePagination(normalizeFeedPage(page), limit);
 }
 
 export function getPostsByUserPage(
