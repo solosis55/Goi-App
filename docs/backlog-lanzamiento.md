@@ -312,5 +312,6 @@ Hacer al cierre de Fase 0–3 (y repasar tras 4–5).
 - Pulidos y bugs detectados en pruebas: [revision-pendiente.md](./revision-pendiente.md)
 - Auth emails, enlaces y dev tokens: [Goi Server/docs/auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md)
 - Paridad tipos/errores auth Web ↔ App: [auth-paridad-web-app.md](./auth-paridad-web-app.md)
+- Matriz paridad producto Web ↔ App: [paridad-web-app.md](./paridad-web-app.md)
 
 **Última actualización:** mayo 2026 (Fase 1 casi cerrada; auth Web + App probados)
