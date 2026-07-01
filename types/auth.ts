@@ -74,6 +74,7 @@ export type LoginInput = {
 
 export type ForgotPasswordResponse = {
   message: string;
+  /** Solo si el servidor tiene `AUTH_RESET_RETURN_TOKEN=true` (desarrollo). Ver Goi Server/docs/auth-emails-y-enlaces.md */
   devResetToken?: string;
 };
 

@@ -19,7 +19,7 @@ Basado en la matriz flujo × Web × App × Server (marzo 2026).
 
 **Progreso Fase 0:** ✅ **Cerrada** (mayo 2026) — login App (Expo Go) + Web ([go-i.vercel.app](https://go-i.vercel.app)) contra Render. Fotos en prod: pendiente (disco Render / URLs absolutas).
 
-**Progreso Fase 1 (parcial):** Web — login + registro + verificación de email probados en prod (mayo 2026). Pulidos UX en [revision-pendiente.md](./revision-pendiente.md) (REV-001, REV-003). App auth: pendiente prueba completa.
+**Progreso Fase 1:** ✅ **Cerrada** (mayo 2026). Docs: [auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md), [auth-paridad-web-app.md](./auth-paridad-web-app.md). Siguiente: **Fase 2** (feed Web).
 
 **Cómo usar este doc**
 
@@ -95,31 +95,33 @@ CORS: Goi Server permite `*` en `/api` (middleware + headers); no hace falta var
 ### Goi Server
 
 - [x] **1.1** Registro: errores claros (email/username duplicado, validación password) — mayo 2026
-- [ ] **1.2** Forgot password: **envío de email real** en prod (SMTP / Resend / SendGrid)
-- [ ] **1.3** Forgot password: en dev, documentar `AUTH_RESET_RETURN_TOKEN` vs prod
-- [ ] **1.4** Reset password: enlace o deep link documentado para Web y App
+- [x] **1.2** Forgot password: envío de email real en prod (Resend) — probado Web + App mayo 2026
+- [x] **1.3** Forgot/verify en dev: `AUTH_RESET_RETURN_TOKEN` vs prod — [auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md)
+- [x] **1.4** Reset/verify: enlaces Web + App documentados — [auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md)
 - [x] **1.5** Verificación de email en v1 — Resend + GET verify en prod; probado vía Web mayo 2026
 
 ### Goi Web
 
-- [x] **1.6** Registro + login + verify contra Server prod — mayo 2026 ([go-i.vercel.app](https://go-i.vercel.app)); logout sin regresión explícita; pulidos REV-001 / REV-003
-- [ ] **1.7** Flujo forgot → reset (`?reset=token`) probado con email real
+- [x] **1.6** Registro + login + verify contra Server prod — mayo 2026; logout sin regresión explícita; pulidos REV-001 / REV-003
+- [x] **1.7** Flujo forgot → reset (`?reset=token`) probado con email real — mayo 2026
 - [x] **1.8** Enlaces legales visibles en registro o auth (`/privacidad`, `/aviso-legal`) — mayo 2026
 - [x] **1.9** Mensajes de error alineados con códigos API (`409`, `AUTH_*`) — mayo 2026
 
 ### Goi App
 
-- [ ] **1.10** Registro + login + logout en dispositivo real
-- [ ] **1.11** `forgot-password` + `reset-password` probados (deep link o URL manual)
-- [ ] **1.12** **Enlaces legales** en registro o ajustes (WebView o `Linking` a URLs públicas)
-- [ ] **1.13** Sesión expirada (`AUTH_SESSION_STALE`) → logout limpio
+- [x] **1.10** Registro + login + logout en dispositivo real — revisado mayo 2026 (Expo Go + Render)
+- [x] **1.11** `forgot-password` + `reset-password` probados — mayo 2026
+- [x] **1.12** Enlaces legales en registro y apartado Legal en perfil — mayo 2026
+- [ ] **1.13** Sesión expirada (`AUTH_SESSION_STALE`) → logout limpio — código listo; regresión explícita pendiente
 
 ### Limpieza (pilar 4 — auth)
 
-- [ ] **1.14** Tipos `RegisterInput`, `AuthResponse`, errores API: revisar diff Web vs App
+- [x] **1.14** Tipos auth y errores `AUTH_*`: revisión Web vs App — [auth-paridad-web-app.md](./auth-paridad-web-app.md)
 - [ ] **1.15** Sin usuarios demo con password débil en prod (o desactivar seed público)
 
 **Verificación Fase 1:** 3 personas externas se registran solas (Web o App) sin ayuda técnica.
+
+**Estado:** ✅ **Fase 1 cerrada** (mayo 2026) — auth, verify, forgot/reset y legales probados en Web + App contra Render. Residual no bloqueante: **1.13** (regresión `AUTH_SESSION_STALE`), **1.15** (usuarios demo en Neon), prueba con 3 usuarios externos, pulidos [revision-pendiente.md](./revision-pendiente.md) REV-001–003.
 
 ---
 
@@ -284,11 +286,12 @@ Hacer al cierre de Fase 0–3 (y repasar tras 4–5).
 
 ## Checklist rápida pre-beta (15 min manual)
 
-- [x] Registro nuevo usuario (Web) — mayo 2026; verify por enlace OK
-- [ ] Registro nuevo usuario (App)
+- [x] Registro nuevo usuario (Web) — mayo 2026
+- [x] Registro nuevo usuario (App) — mayo 2026
 - [x] Login App contra API prod (Render) — mayo 2026
 - [x] Login Web ([go-i.vercel.app](https://go-i.vercel.app)) — mayo 2026
-- [x] Verificación email (Web) — enlace del correo → login OK — mayo 2026
+- [x] Verificación email (Web) — mayo 2026
+- [x] Forgot / reset contraseña (Web + App) — mayo 2026
 - [ ] Login / logout ambos (logout sin regresión explícita)
 - [ ] Publicar con foto (Web) — **bloqueado hasta 2.6**
 - [ ] Publicar con foto (App)
@@ -307,5 +310,7 @@ Hacer al cierre de Fase 0–3 (y repasar tras 4–5).
 - Imágenes posts: `docs/flujo-subida-imagenes.md`
 - Refactor App (estado): `docs/refactoring-suggestions.md`
 - Pulidos y bugs detectados en pruebas: [revision-pendiente.md](./revision-pendiente.md)
+- Auth emails, enlaces y dev tokens: [Goi Server/docs/auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md)
+- Paridad tipos/errores auth Web ↔ App: [auth-paridad-web-app.md](./auth-paridad-web-app.md)
 
-**Última actualización:** mayo 2026 (Fase 0 cerrada; Fase 1 Web auth+verify probados en prod)
+**Última actualización:** mayo 2026 (Fase 1 casi cerrada; auth Web + App probados)

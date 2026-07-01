@@ -13,15 +13,18 @@ No sustituye al [backlog de lanzamiento](./backlog-lanzamiento.md); aquí van de
 
 ---
 
-## Probado en prod (Web)
+## Probado en prod (Web + App)
 
-| Flujo | Estado | Notas |
-|-------|--------|-------|
-| Login | ✅ OK | [go-i.vercel.app](https://go-i.vercel.app) — mayo 2026 |
-| Registro | ✅ OK (funcional) | Flujo completo; pulido UX pendiente → REV-001 |
-| Verificación email | ✅ OK | Enlace del correo → cuenta activa → login — mayo 2026 |
+| Flujo | Web | App |
+|-------|-----|-----|
+| Login | ✅ | ✅ |
+| Registro + validaciones | ✅ | ✅ |
+| Verificación email | ✅ | ✅ |
+| Forgot + correo | ✅ | ✅ |
+| Reset contraseña | ✅ | ✅ |
+| Legales (1.12) | ✅ registro | ✅ apartado Legal en perfil |
 
-Los ítems REV-001 y REV-003 siguen abiertos como **mejoras**, no bloquean el flujo core.
+Pulidos UX: REV-001, REV-003, REV-002 (email al registrar en App). Ver [revision-pendiente.md](./revision-pendiente.md).
 
 ---
 
@@ -83,7 +86,16 @@ Los ítems REV-001 y REV-003 siguen abiertos como **mejoras**, no bloquean el fl
 
 ---
 
-## Plantilla para nuevos ítems
+### REV-005 · Web local — forgot sin correo (API local sin Resend) (P1)
+
+- [x] **Plataforma:** Web  
+- [x] **Detectado:** mayo 2026
+
+**Problema:** En `localhost:5173` con `VITE_API_URL=/api`, el proxy iba a Goi Server **local** sin `RESEND_API_KEY`. La API respondía OK pero **no enviaba email**. Expo Go usaba Render → sí llegaba.
+
+**Fix:** `.env.development` apunta a Render por defecto; aviso en consola si API es local.
+
+---
 
 ```markdown
 ### REV-XXX · Título breve (P0|P1|P2)
