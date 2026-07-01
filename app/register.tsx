@@ -98,23 +98,20 @@ export default function RegisterScreen() {
       if (reg.requiresEmailVerification || !reg.token) {
         setVerifyPendingEmail(body.email);
         setPassword("");
-        try {
-          const resend = await resendVerificationEmail(body.email);
-          if (__DEV__ && resend.devVerificationToken) {
-            setPendingMessage(`Modo dev: token en consola del servidor o AUTH_RESET_RETURN_TOKEN.`);
+        if (reg.verificationEmailSent || reg.devVerificationToken) {
+          if (__DEV__ && reg.devVerificationToken) {
+            setPendingMessage("Modo dev: token en consola del servidor o AUTH_RESET_RETURN_TOKEN.");
           } else {
             setPendingMessage("Te hemos enviado un correo para confirmar tu cuenta. Revisa bandeja y spam.");
           }
-        } catch (resendErr) {
-          if (resendErr instanceof ApiError) {
-            setSubmitError({
-              message: getErrorMessage(resendErr, "Cuenta creada pero no pudimos enviar el correo."),
-              detail: __DEV__ ? `Código ${resendErr.code} · HTTP ${resendErr.status}` : undefined,
-            });
-          } else {
-            setSubmitError({ message: "Cuenta creada pero no pudimos enviar el correo." });
-          }
+        } else {
           setPendingMessage("Pulsa «Reenviar correo» para intentarlo de nuevo.");
+          setSubmitError({
+            message: getErrorMessage(
+              new ApiError("email send failed", 502, "AUTH_EMAIL_SEND_FAILED"),
+              "Cuenta creada pero no pudimos enviar el correo.",
+            ),
+          });
         }
         return;
       }
@@ -239,7 +236,9 @@ export default function RegisterScreen() {
                       Confirma tu email
                     </Text>
                     <Text style={authScreenStyles.cardSubtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                      Hemos enviado un enlace a {verifyPendingEmail}. Ábrelo para activar tu cuenta.
+                      {pendingMessage && !submitError
+                        ? `Hemos enviado un enlace a ${verifyPendingEmail}. Ábrelo para activar tu cuenta.`
+                        : `Revisa ${verifyPendingEmail} cuando recibas el enlace de verificación.`}
                     </Text>
                     {pendingMessage ? (
                       <View style={authScreenStyles.successBox}>
