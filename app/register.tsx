@@ -90,12 +90,32 @@ export default function RegisterScreen() {
     }
     setSubmitting(true);
     try {
-      const body = parsed.data;
+      const body = {
+        ...parsed.data,
+        email: parsed.data.email.trim().toLowerCase(),
+      };
       const reg = await register(body);
       if (reg.requiresEmailVerification || !reg.token) {
         setVerifyPendingEmail(body.email);
-        setPendingMessage("Te hemos enviado un correo para confirmar tu cuenta. Revisa bandeja y spam.");
         setPassword("");
+        try {
+          const resend = await resendVerificationEmail(body.email);
+          if (__DEV__ && resend.devVerificationToken) {
+            setPendingMessage(`Modo dev: token en consola del servidor o AUTH_RESET_RETURN_TOKEN.`);
+          } else {
+            setPendingMessage("Te hemos enviado un correo para confirmar tu cuenta. Revisa bandeja y spam.");
+          }
+        } catch (resendErr) {
+          if (resendErr instanceof ApiError) {
+            setSubmitError({
+              message: getErrorMessage(resendErr, "Cuenta creada pero no pudimos enviar el correo."),
+              detail: __DEV__ ? `Código ${resendErr.code} · HTTP ${resendErr.status}` : undefined,
+            });
+          } else {
+            setSubmitError({ message: "Cuenta creada pero no pudimos enviar el correo." });
+          }
+          setPendingMessage("Pulsa «Reenviar correo» para intentarlo de nuevo.");
+        }
         return;
       }
       if (reg.token && reg.user) {

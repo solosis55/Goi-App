@@ -45,14 +45,12 @@ Pulidos UX: REV-001, REV-003, REV-002 (email al registrar en App). Ver [revision
 
 ### REV-002 · App — El correo no se envía al registrarse (P0)
 
-- [ ] **Plataforma:** App  
-- [ ] **Detectado:** mayo 2026
+- [x] **Plataforma:** App + Web + Server  
+- [x] **Detectado:** mayo 2026 · **Cerrado:** mayo 2026
 
-**Problema:** Tras crear cuenta, **no llega el email de verificación**. Solo se envía si el usuario pulsa **Reenviar**.
+**Problema:** Tras crear cuenta en App, no llegaba el email; solo al pulsar Reenviar.
 
-**Objetivo:** El registro debe disparar el mismo envío que el reenvío (API `POST /auth/register` → email vía Resend, o confirmar que el server lo envía y la App no lo bloquea/skip).
-
-**Revisar:** flujo en `app/register.tsx`, respuesta de registro en `api/auth.ts`, y server (`register` + `sendVerificationEmail`).
+**Causa:** Dos caminos distintos (register enviaba en server; reenvío otro). Unificado: `POST /auth/register` solo crea la cuenta; Web y App llaman `POST /auth/resend-verification` inmediatamente después (mismo flujo que el botón Reenviar).
 
 ---
 
