@@ -112,16 +112,16 @@ CORS: Goi Server permite `*` en `/api` (middleware + headers); no hace falta var
 - [x] **1.10** Registro + login + logout en dispositivo real — revisado mayo 2026 (Expo Go + Render)
 - [x] **1.11** `forgot-password` + `reset-password` probados — mayo 2026
 - [x] **1.12** Enlaces legales en registro y apartado Legal en perfil — mayo 2026
-- [ ] **1.13** Sesión expirada (`AUTH_SESSION_STALE`) → logout limpio — código listo; regresión explícita pendiente
+- [x] **1.13** Sesión expirada (`AUTH_SESSION_STALE`) → logout limpio — Web + App; ver [auth-emails-y-enlaces.md](../../Goi%20Server/docs/auth-emails-y-enlaces.md#sesión-expirada-auth_session_stale-ítem-113) mayo 2026
 
 ### Limpieza (pilar 4 — auth)
 
 - [x] **1.14** Tipos auth y errores `AUTH_*`: revisión Web vs App — [auth-paridad-web-app.md](./auth-paridad-web-app.md)
-- [ ] **1.15** Sin usuarios demo con password débil en prod (o desactivar seed público)
+- [x] **1.15** Sin usuarios demo en Neon prod — `db:audit-demo-users` / `db:remove-demo-users` mayo 2026
 
 **Verificación Fase 1:** 3 personas externas se registran solas (Web o App) sin ayuda técnica.
 
-**Estado:** ✅ **Fase 1 cerrada** (mayo 2026) — auth, verify, forgot/reset y legales probados en Web + App contra Render. Residual no bloqueante: **1.13** (regresión `AUTH_SESSION_STALE`), **1.15** (usuarios demo en Neon), prueba con 3 usuarios externos, pulidos [revision-pendiente.md](./revision-pendiente.md) REV-001–003.
+**Estado:** ✅ **Fase 1 cerrada** (mayo 2026) — auth completo Web + App. Residual opcional: prueba 3 usuarios externos, pulidos [revision-pendiente.md](./revision-pendiente.md) REV-001–003.
 
 ---
 
