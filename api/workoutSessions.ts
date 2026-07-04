@@ -25,17 +25,39 @@ function pickerQueryString(params: SessionPickerQueryParams): string {
   return sp.toString();
 }
 
+function shouldFallbackPicker(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  return (
+    err.status === 404 ||
+    err.status === 405 ||
+    err.code === "API_INVALID_RESPONSE" ||
+    err.code === "WORKOUT_SESSION_NOT_FOUND"
+  );
+}
+
+async function loadLinkedSessionIdsSafe(): Promise<string[]> {
+  try {
+    return await getLinkedSessionIds();
+  } catch {
+    return [];
+  }
+}
+
+async function fallbackPickerPage(params: SessionPickerQueryParams): Promise<SessionPickerPageResponse> {
+  const [sessions, linked] = await Promise.all([getWorkoutSessions(), loadLinkedSessionIdsSafe()]);
+  return buildSessionPickerPageFromList(sessions, linked, params);
+}
+
 export async function getWorkoutSessionsPicker(params: SessionPickerQueryParams = {}) {
   const qs = pickerQueryString(params);
   try {
     return await apiFetch<SessionPickerPageResponse>(`/workout-sessions/picker${qs ? `?${qs}` : ""}`);
   } catch (err) {
-    if (
-      err instanceof ApiError &&
-      (err.status === 404 || err.status === 405 || err.code === "API_INVALID_RESPONSE")
-    ) {
-      const [sessions, linked] = await Promise.all([getWorkoutSessions(), getLinkedSessionIds()]);
-      return buildSessionPickerPageFromList(sessions, linked, params);
+    if (shouldFallbackPicker(err)) {
+      if (__DEV__) {
+        console.warn("[Goi] /workout-sessions/picker no disponible; usando listado clásico.", err);
+      }
+      return fallbackPickerPage(params);
     }
     throw err;
   }
