@@ -12,7 +12,6 @@ export type FeedPostCardRowProps = {
   post: Post;
   currentUserId: string | undefined;
   sessionAvatarUrl?: string | null;
-  isBeamActive: boolean;
   highlighted: boolean;
   initialCommentsOpen: boolean;
   workoutTitle: string | null | undefined;
@@ -22,7 +21,6 @@ function FeedPostCardRowInner({
   post,
   currentUserId,
   sessionAvatarUrl,
-  isBeamActive,
   highlighted,
   initialCommentsOpen,
   workoutTitle,
@@ -64,7 +62,6 @@ function FeedPostCardRowInner({
   return (
     <PostCard
       post={safePost}
-      isBeamActive={isBeamActive}
       initialCommentsOpen={initialCommentsOpen}
       onPressWorkout={onPressWorkout}
       onPressSession={onPressSession}
@@ -96,7 +93,6 @@ function feedPostCardRowAreEqual(prev: FeedPostCardRowProps, next: FeedPostCardR
     prev.post === next.post &&
     prev.currentUserId === next.currentUserId &&
     prev.sessionAvatarUrl === next.sessionAvatarUrl &&
-    prev.isBeamActive === next.isBeamActive &&
     prev.highlighted === next.highlighted &&
     prev.initialCommentsOpen === next.initialCommentsOpen &&
     prev.workoutTitle === next.workoutTitle

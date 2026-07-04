@@ -7,9 +7,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { AUTH } from "../../constants/authUi";
-
-const MAX_CONTENT_WIDTH = 672;
+import { FeedPostSeparator } from "./FeedPostSeparator";
 
 function ShimmerBone({ style }: { style: object }) {
   const opacity = useSharedValue(0.45);
@@ -29,7 +27,7 @@ function ShimmerBone({ style }: { style: object }) {
 
 function FeedPostCardSkeletonOne() {
   const { width: windowWidth } = useWindowDimensions();
-  const mediaWidth = Math.min(windowWidth - 32, MAX_CONTENT_WIDTH);
+  const mediaWidth = windowWidth;
   const mediaHeight = Math.round(mediaWidth * (5 / 4));
 
   return (
@@ -41,7 +39,7 @@ function FeedPostCardSkeletonOne() {
           <ShimmerBone style={styles.lineBadge} />
         </View>
       </View>
-      <ShimmerBone style={{ width: mediaWidth, height: mediaHeight, borderRadius: 0, alignSelf: "center" }} />
+      <ShimmerBone style={{ width: mediaWidth, height: mediaHeight, borderRadius: 0, alignSelf: "stretch" }} />
       <View style={styles.actions}>
         <ShimmerBone style={styles.iconBone} />
         <ShimmerBone style={styles.iconBone} />
@@ -65,8 +63,9 @@ export function FeedPostCardSkeleton({ count = 3 }: FeedPostCardSkeletonProps) {
   return (
     <View style={styles.list}>
       {Array.from({ length: count }, (_, i) => (
-        <View key={i} style={i < count - 1 ? styles.itemGap : null}>
+        <View key={i}>
           <FeedPostCardSkeletonOne />
+          {i < count - 1 ? <FeedPostSeparator /> : null}
         </View>
       ))}
     </View>
@@ -77,15 +76,12 @@ const styles = StyleSheet.create({
   list: {
     width: "100%",
   },
-  itemGap: {
-    marginBottom: 20,
-  },
   card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(38, 38, 38, 0.9)",
-    backgroundColor: "rgba(14, 14, 16, 0.92)",
+    borderRadius: 0,
+    borderWidth: 0,
+    backgroundColor: "#0a0a0c",
     overflow: "hidden",
+    width: "100%",
   },
   bone: {
     backgroundColor: "rgba(64, 64, 64, 0.55)",

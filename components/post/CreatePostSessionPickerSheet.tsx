@@ -1,13 +1,16 @@
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,7 +24,7 @@ import {
 } from "../../utils/sessionPickerDateRange";
 import { groupSessionsForPicker } from "../../utils/sessionPickerGroups";
 import { formatSessionPickerMetrics } from "../../utils/sessionPickerMetrics";
-import { CreatePostSessionHero, CreatePostSessionTodayCta } from "./CreatePostSessionHero";
+import { CreatePostSessionTodayCta } from "./CreatePostSessionHero";
 
 type CreatePostSessionPickerSheetProps = {
   visible: boolean;
@@ -42,13 +45,12 @@ export function CreatePostSessionPickerSheet({
 }: CreatePostSessionPickerSheetProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const searchRef = useRef<TextInput>(null);
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = Math.round(windowHeight * 0.88);
 
   useEffect(() => {
     if (!visible) return;
     void picker.refresh();
-    const t = setTimeout(() => searchRef.current?.focus(), 120);
-    return () => clearTimeout(t);
   }, [visible, picker.refresh]);
 
   const hasFilters =
@@ -71,8 +73,6 @@ export function CreatePostSessionPickerSheet({
     onClose();
   };
 
-  const selectedPreview = value ? picker.getSession(value) : null;
-
   const linkToday = async () => {
     const session = picker.todayAvailableSession ?? (await picker.linkTodaySession());
     if (!session) return;
@@ -86,242 +86,302 @@ export function CreatePostSessionPickerSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar" />
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8, maxHeight: "88%" }]}>
-        <View style={styles.handle} />
-        <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Vincular sesión
-        </Text>
-        <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Las ya publicadas aparecen deshabilitadas. Usa filtros si tienes muchas sesiones.
-        </Text>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
+      onRequestClose={onClose}
+    >
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Cerrar" />
 
-        <TextInput
-          ref={searchRef}
-          value={picker.query}
-          onChangeText={picker.setQuery}
-          placeholder="Buscar rutina, ejercicio o nota…"
-          placeholderTextColor={AUTH.faint}
-          style={styles.search}
-          maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-          returnKeyType="search"
-        />
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsRow}
-          style={styles.chipsScroll}
+        <View
+          style={[
+            styles.sheet,
+            {
+              height: sheetMaxHeight,
+              paddingBottom: Math.max(insets.bottom, 12) + 8,
+            },
+          ]}
         >
-          {SESSION_PICKER_DATE_PRESETS.map((preset) => (
-            <Pressable
-              key={preset.id}
-              onPress={() => picker.setDatePreset(preset.id)}
-              style={({ pressed }) => [
-                styles.chip,
-                picker.datePreset === preset.id ? styles.chipActive : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={[styles.chipText, picker.datePreset === preset.id ? styles.chipTextActive : null]}
-                maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-              >
-                {preset.label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+          <View style={styles.handle} />
 
-        {picker.routineOptions.length > 1 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
-            <Pressable
-              onPress={() => picker.setWorkoutId("")}
-              style={({ pressed }) => [
-                styles.chip,
-                !picker.workoutId ? styles.chipActive : null,
-                pressed ? styles.pressed : null,
-              ]}
-            >
-              <Text
-                style={[styles.chipText, !picker.workoutId ? styles.chipTextActive : null]}
-                maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-              >
-                Todas
+          <View style={styles.sheetHead}>
+            <View style={styles.sheetHeadText}>
+              <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                Vincular sesión
+              </Text>
+              <Text style={styles.sub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                Las ya publicadas aparecen deshabilitadas. Usa filtros si tienes muchas sesiones.
+              </Text>
+            </View>
+            <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+              <Text style={styles.closeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                Cerrar
               </Text>
             </Pressable>
-            {picker.routineOptions.map((routine) => (
-              <Pressable
-                key={routine.workoutId}
-                onPress={() => picker.setWorkoutId(routine.workoutId)}
-                style={({ pressed }) => [
-                  styles.chip,
-                  picker.workoutId === routine.workoutId ? styles.chipActive : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    picker.workoutId === routine.workoutId ? styles.chipTextActive : null,
+          </View>
+
+          <View style={styles.filtersBlock}>
+            <TextInput
+              value={picker.query}
+              onChangeText={picker.setQuery}
+              placeholder="Buscar rutina, ejercicio o nota…"
+              placeholderTextColor={AUTH.faint}
+              style={styles.search}
+              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipsRow}
+              style={styles.chipsScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              {SESSION_PICKER_DATE_PRESETS.map((preset) => (
+                <Pressable
+                  key={preset.id}
+                  onPress={() => picker.setDatePreset(preset.id)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    picker.datePreset === preset.id ? styles.chipActive : null,
+                    pressed ? styles.pressed : null,
                   ]}
-                  maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-                  numberOfLines={1}
                 >
-                  {routine.workoutTitle} ({routine.sessionCount})
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
+                  <Text
+                    style={[styles.chipText, picker.datePreset === preset.id ? styles.chipTextActive : null]}
+                    maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+                  >
+                    {preset.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
 
-        {selectedPreview ? (
-          <View style={styles.selectedHero}>
-            <CreatePostSessionHero session={selectedPreview} />
-          </View>
-        ) : null}
-
-        {!value && picker.todayAvailableSession ? (
-          <CreatePostSessionTodayCta session={picker.todayAvailableSession} onPress={() => void linkToday()} />
-        ) : null}
-
-        {picker.loading ? (
-          <ActivityIndicator color={AUTH.gold} style={styles.loader} />
-        ) : picker.sessions.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {hasFilters ? "Sin resultados" : "Sin sesiones registradas"}
-            </Text>
-            <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              {hasFilters
-                ? "Prueba otro término o amplía el rango de fechas."
-                : "Completa un entrenamiento para vincularlo a una publicación."}
-            </Text>
-            {!hasFilters ? (
-              <Pressable
-                onPress={() => {
-                  onClose();
-                  router.push("/(tabs)/entrenamientos");
-                }}
-                style={({ pressed }) => [styles.cta, pressed ? styles.pressed : null]}
+            {picker.routineOptions.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.chipsRow}
+                style={styles.chipsScroll}
+                keyboardShouldPersistTaps="handled"
               >
-                <Text style={styles.ctaText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  Ir a entrenar
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : (
-          <ScrollView style={styles.list} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            {showUnlink && !hasFilters ? (
-              <Pressable
-                onPress={() => pick(null)}
-                style={({ pressed }) => [
-                  styles.row,
-                  value === null ? styles.rowSelected : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <Text style={styles.rowTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  Sin sesión vinculada
-                </Text>
-                <Text style={styles.rowSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  Solo texto o fotos
-                </Text>
-              </Pressable>
-            ) : null}
-            {groups.map((group) => (
-              <View key={group.label} style={styles.group}>
-                <Text style={styles.groupLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {group.label}
-                </Text>
-                {group.sessions.map((s) => {
-                  const linked = isSessionPickerItemLinked(s);
-                  const selected = value === s.id;
-                  const isSuggested =
-                    picker.suggestedSessionId === s.id && group.label === "Recomendado" && !selected && !linked;
-                  const dateLabel = formatSessionPerformedAt(s.performedAt);
-                  const metrics = formatSessionPickerMetrics(s);
-                  return (
-                    <Pressable
-                      key={s.id}
-                      disabled={linked}
-                      onPress={() =>
-                        pick(s.id, {
-                          workoutTitle: s.workoutTitle,
-                          performedAt: s.performedAt,
-                          notes: s.notes,
-                          workoutId: s.workoutId,
-                          snapshot: s.snapshot ?? null,
-                        })
-                      }
-                      style={({ pressed }) => [
-                        styles.row,
-                        linked ? styles.rowLinked : null,
-                        selected ? styles.rowSelected : null,
-                        !linked && pressed ? styles.pressed : null,
+                <Pressable
+                  onPress={() => picker.setWorkoutId("")}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    !picker.workoutId ? styles.chipActive : null,
+                    pressed ? styles.pressed : null,
+                  ]}
+                >
+                  <Text
+                    style={[styles.chipText, !picker.workoutId ? styles.chipTextActive : null]}
+                    maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+                  >
+                    Todas
+                  </Text>
+                </Pressable>
+                {picker.routineOptions.map((routine) => (
+                  <Pressable
+                    key={routine.workoutId}
+                    onPress={() => picker.setWorkoutId(routine.workoutId)}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      picker.workoutId === routine.workoutId ? styles.chipActive : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        picker.workoutId === routine.workoutId ? styles.chipTextActive : null,
                       ]}
+                      maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+                      numberOfLines={1}
                     >
-                      <View style={styles.rowTop}>
-                        <Text
-                          style={[styles.rowTitle, selected ? styles.rowTitleActive : null, linked ? styles.rowTitleLinked : null]}
-                          numberOfLines={1}
-                          maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
-                        >
-                          {s.workoutTitle}
-                        </Text>
-                        {linked ? (
-                          <View style={styles.badgeMuted}>
-                            <Text style={styles.badgeMutedText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                              Publicada
-                            </Text>
-                          </View>
-                        ) : null}
-                        {isSuggested ? (
-                          <View style={styles.badge}>
-                            <Text style={styles.badgeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                              Reciente
-                            </Text>
-                          </View>
-                        ) : null}
-                        {selected ? <Text style={styles.check}>✓</Text> : null}
-                      </View>
-                      <Text style={styles.rowSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                        {dateLabel ? `Sesión · ${dateLabel}` : "Sesión realizada"}
-                        {linked ? " · Ya compartida en el feed" : ""}
-                      </Text>
-                      {metrics ? (
-                        <Text style={styles.rowMetrics} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                          {metrics}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
-            {picker.hasMore ? (
-              <Pressable
-                onPress={() => picker.loadMore()}
-                disabled={picker.loadingMore}
-                style={({ pressed }) => [styles.loadMore, pressed ? styles.pressed : null]}
-              >
-                <Text style={styles.loadMoreText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                  {picker.loadingMore ? "Cargando…" : "Cargar más sesiones"}
-                </Text>
-              </Pressable>
+                      {routine.workoutTitle} ({routine.sessionCount})
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             ) : null}
-          </ScrollView>
-        )}
-      </View>
+          </View>
+
+          <View style={styles.body}>
+            {picker.loading ? (
+              <ActivityIndicator color={AUTH.gold} style={styles.loader} />
+            ) : picker.sessions.length === 0 ? (
+              <View style={styles.emptyBox}>
+                <Text style={styles.emptyTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {hasFilters ? "Sin resultados" : "Sin sesiones registradas"}
+                </Text>
+                <Text style={styles.emptyBody} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                  {hasFilters
+                    ? "Prueba otro término o amplía el rango de fechas."
+                    : "Completa un entrenamiento para vincularlo a una publicación."}
+                </Text>
+                {!hasFilters ? (
+                  <Pressable
+                    onPress={() => {
+                      onClose();
+                      router.push("/(tabs)/entrenamientos");
+                    }}
+                    style={({ pressed }) => [styles.cta, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={styles.ctaText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Ir a entrenar
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {!value && picker.todayAvailableSession ? (
+                  <View style={styles.todayWrap}>
+                    <CreatePostSessionTodayCta
+                      session={picker.todayAvailableSession}
+                      onPress={() => void linkToday()}
+                    />
+                  </View>
+                ) : null}
+
+                {showUnlink && !hasFilters ? (
+                  <Pressable
+                    onPress={() => pick(null)}
+                    style={({ pressed }) => [
+                      styles.row,
+                      value === null ? styles.rowSelected : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <Text style={styles.rowTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Sin sesión vinculada
+                    </Text>
+                    <Text style={styles.rowSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      Solo texto o fotos
+                    </Text>
+                  </Pressable>
+                ) : null}
+                {groups.map((group) => (
+                  <View key={group.label} style={styles.group}>
+                    <Text style={styles.groupLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      {group.label}
+                    </Text>
+                    {group.sessions.map((s) => {
+                      const linked = isSessionPickerItemLinked(s);
+                      const selected = value === s.id;
+                      const isSuggested =
+                        picker.suggestedSessionId === s.id && group.label === "Recomendado" && !selected && !linked;
+                      const dateLabel = formatSessionPerformedAt(s.performedAt);
+                      const metrics = formatSessionPickerMetrics(s);
+                      return (
+                        <Pressable
+                          key={s.id}
+                          disabled={linked}
+                          onPress={() =>
+                            pick(s.id, {
+                              workoutTitle: s.workoutTitle,
+                              performedAt: s.performedAt,
+                              notes: s.notes,
+                              workoutId: s.workoutId,
+                              snapshot: s.snapshot ?? null,
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.row,
+                            linked ? styles.rowLinked : null,
+                            selected ? styles.rowSelected : null,
+                            !linked && pressed ? styles.pressed : null,
+                          ]}
+                        >
+                          <View style={styles.rowTop}>
+                            <Text
+                              style={[
+                                styles.rowTitle,
+                                selected ? styles.rowTitleActive : null,
+                                linked ? styles.rowTitleLinked : null,
+                              ]}
+                              numberOfLines={1}
+                              maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+                            >
+                              {s.workoutTitle}
+                            </Text>
+                            {linked ? (
+                              <View style={styles.badgeMuted}>
+                                <Text style={styles.badgeMutedText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                                  Publicada
+                                </Text>
+                              </View>
+                            ) : null}
+                            {isSuggested ? (
+                              <View style={styles.badge}>
+                                <Text style={styles.badgeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                                  Reciente
+                                </Text>
+                              </View>
+                            ) : null}
+                            {selected ? <Text style={styles.check}>✓</Text> : null}
+                          </View>
+                          <Text style={styles.rowSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                            {dateLabel ? `Sesión · ${dateLabel}` : "Sesión realizada"}
+                            {linked ? " · Ya compartida en el feed" : ""}
+                          </Text>
+                          {metrics ? (
+                            <Text style={styles.rowMetrics} numberOfLines={2} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                              {metrics}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ))}
+                {picker.hasMore ? (
+                  <Pressable
+                    onPress={() => picker.loadMore()}
+                    disabled={picker.loadingMore}
+                    style={({ pressed }) => [styles.loadMore, pressed ? styles.pressed : null]}
+                  >
+                    <Text style={styles.loadMoreText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+                      {picker.loadingMore ? "Cargando…" : "Cargar más sesiones"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
+  overlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+  },
   sheet: {
+    width: "100%",
+    zIndex: 2,
+    elevation: 24,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     backgroundColor: "#0c0c0e",
@@ -330,6 +390,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(82, 82, 82, 0.55)",
     paddingHorizontal: 16,
     paddingTop: 10,
+    overflow: "hidden",
+    flexDirection: "column",
   },
   handle: {
     alignSelf: "center",
@@ -339,8 +401,33 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(115, 115, 115, 0.65)",
     marginBottom: 10,
   },
+  sheetHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 12,
+  },
+  sheetHeadText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  closeBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  closeText: {
+    color: AUTH.muted,
+    fontSize: 15,
+    fontWeight: "600",
+  },
   title: { color: AUTH.neutral100, fontSize: 18, fontWeight: "700" },
-  sub: { color: AUTH.faint, fontSize: 12, marginBottom: 10, lineHeight: 17 },
+  sub: { color: AUTH.faint, fontSize: 12, lineHeight: 17 },
+  filtersBlock: {
+    gap: 8,
+    marginBottom: 10,
+    flexShrink: 0,
+  },
   search: {
     borderWidth: 1,
     borderColor: "rgba(82, 82, 82, 0.65)",
@@ -350,9 +437,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 8,
   },
-  chipsScroll: { marginBottom: 8, flexGrow: 0 },
+  chipsScroll: { flexGrow: 0, height: 34 },
   chipsRow: { gap: 6, paddingRight: 8 },
   chip: {
     paddingHorizontal: 10,
@@ -368,9 +454,15 @@ const styles = StyleSheet.create({
   },
   chipText: { color: AUTH.muted, fontSize: 11, fontWeight: "600" },
   chipTextActive: { color: AUTH.gold },
-  selectedHero: { marginBottom: 10 },
+  body: {
+    flexGrow: 1,
+    flexShrink: 1,
+    minHeight: 180,
+  },
+  todayWrap: { marginBottom: 10 },
   loader: { marginVertical: 24 },
-  list: { maxHeight: 420 },
+  list: { flex: 1 },
+  listContent: { paddingBottom: 8 },
   group: { marginBottom: 12, gap: 8 },
   groupLabel: {
     color: AUTH.faint,

@@ -18,6 +18,8 @@ export type PostTrainingBodyProps = {
   onPressSession?: () => void;
   onPressLinkSession?: () => void;
   compact?: boolean;
+  /** Selector de formato: tarjeta de sesión aún más compacta. */
+  chooserMini?: boolean;
   linked?: boolean;
   showViewFullCta?: boolean;
   mediaLabel?: string;
@@ -42,6 +44,7 @@ export function PostTrainingBody({
   onPressSession,
   onPressLinkSession,
   compact = false,
+  chooserMini = false,
   linked = false,
   showViewFullCta = false,
   mediaLabel,
@@ -63,11 +66,12 @@ export function PostTrainingBody({
           moreExercisesCount={moreExercisesCount}
           linked={linked}
           compact={compact}
+          chooserMini={chooserMini}
           onPress={onPressSession}
           showViewFullCta={showViewFullCta || Boolean(onPressSession)}
         />
       ) : onPressLinkSession != null ? (
-        <PostSessionAttachment empty compact={compact} onPressLink={onPressLinkSession} />
+        <PostSessionAttachment empty compact={compact} chooserMini={chooserMini} onPressLink={onPressLinkSession} />
       ) : null}
 
       {mediaSlot ? (

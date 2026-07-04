@@ -2,6 +2,7 @@ import { Box } from "@gluestack-ui/themed";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef } from "react";
 import { ActivityIndicator } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import type { FeedAnimatedFlashListRef } from "../../components/feed/FeedAnimatedFlashList";
 import { FeedReportModal } from "../../components/feed/FeedReportModal";
 import { FeedScreenContent } from "../../components/feed/FeedScreenContent";
@@ -12,7 +13,6 @@ import { useAuth } from "../../context/AuthContext";
 import { useFeed } from "../../hooks/useFeed";
 import { useFeedDiscoverSuggestions } from "../../hooks/useFeedDiscoverSuggestions";
 import { useFeedFocusEffects } from "../../hooks/useFeedFocusEffects";
-import { useFeedGoldBeam } from "../../hooks/useFeedGoldBeam";
 import { useHydrateGoldBeamPref } from "../../hooks/useHydrateGoldBeamPref";
 import { useFeedPostActions } from "../../hooks/useFeedPostActions";
 import { useFeedScrollFab } from "../../hooks/useFeedScrollFab";
@@ -68,7 +68,7 @@ export default function HomeFeedScreen() {
 
   const goldBeamEnabled = useFeedPrefsStore((s) => s.goldBeamEnabled);
   useHydrateGoldBeamPref();
-  const { scrollY, activeBeamPostId, beamViewabilityPairs } = useFeedGoldBeam(posts, goldBeamEnabled);
+  const scrollY = useSharedValue(0);
   const { showScrollFab, onListScroll } = useFeedScrollFab(scrollY, markAtTop, markScrolledDown);
 
   const {
@@ -204,20 +204,20 @@ export default function HomeFeedScreen() {
   const feedListExtraKey = useMemo(
     () =>
       [
-        activeBeamPostId ?? "",
         highlightedPostId ?? "",
         feedScope,
         showFollowingHint ? "1" : "0",
         feedMediaFingerprint,
         feedInteractionFingerprint,
+        goldBeamEnabled ? "pulse" : "off",
       ].join("|"),
     [
-      activeBeamPostId,
       highlightedPostId,
       feedScope,
       showFollowingHint,
       feedMediaFingerprint,
       feedInteractionFingerprint,
+      goldBeamEnabled,
     ]
   );
 
@@ -241,8 +241,6 @@ export default function HomeFeedScreen() {
         listRef={listRef}
         scrollY={scrollY}
         goldBeamEnabled={goldBeamEnabled}
-        activeBeamPostId={activeBeamPostId}
-        beamViewabilityPairs={beamViewabilityPairs}
         onListScroll={onListScroll}
         showScrollFab={showScrollFab}
         scrollFeedToTop={scrollFeedToTop}

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../../constants/authUi";
-import type { PostFormat } from "../../../constants/postFormat";
+import { POST_FORMAT_LABELS, type PostFormat } from "../../../constants/postFormat";
 import { TabDumbbellIcon } from "../../navigation/TabBarIcons";
 
 type CreatePostFormatSegmentProps = {
@@ -37,7 +37,7 @@ export function CreatePostFormatSegment({ value, onChange, compact = false }: Cr
           style={[styles.label, value === "standard" ? styles.labelActive : null]}
           maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
         >
-          Publicación
+          {POST_FORMAT_LABELS.standard}
         </Text>
       </Pressable>
       <Pressable
@@ -55,7 +55,7 @@ export function CreatePostFormatSegment({ value, onChange, compact = false }: Cr
           style={[styles.label, value === "training" ? styles.labelActive : null]}
           maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
         >
-          Training
+          {POST_FORMAT_LABELS.training}
         </Text>
       </Pressable>
     </View>

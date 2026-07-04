@@ -1,4 +1,4 @@
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { Post } from "../../types/post";
 import type { PostPreviewDraft } from "../post/preview/postPreviewTypes";
 import { MentionHighlightedText } from "../post/MentionHighlightedText";
@@ -109,14 +109,16 @@ export function PostCardBody({
           mediaLabel={hasMedia ? "Foto del entreno" : undefined}
           mediaSlot={
             hasMedia ? (
-              <PostMediaCarousel
-                postId={postId}
-                media={displayPost.media ?? []}
-                onDoubleTapLike={onDoubleTapLike}
-                slideWidth={trainingFeedMediaWidth}
-                slideHeight={trainingFeedMediaHeight}
-                layout="inset"
-              />
+              <View style={[bodyStyles.trainingMediaWrap, { width: trainingFeedMediaWidth }]}>
+                <PostMediaCarousel
+                  postId={postId}
+                  media={displayPost.media ?? []}
+                  onDoubleTapLike={onDoubleTapLike}
+                  slideWidth={trainingFeedMediaWidth}
+                  slideHeight={trainingFeedMediaHeight}
+                  layout="inset"
+                />
+              </View>
             ) : undefined
           }
         />
@@ -136,3 +138,11 @@ export function PostCardBody({
     </View>
   );
 }
+
+const bodyStyles = StyleSheet.create({
+  trainingMediaWrap: {
+    position: "relative",
+    alignSelf: "center",
+    overflow: "hidden",
+  },
+});

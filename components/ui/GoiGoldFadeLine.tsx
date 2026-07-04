@@ -10,7 +10,7 @@ import { AUTH } from "../../constants/authUi";
  * Dónde usarla:
  * - Shell: barra superior del feed (`FeedTopBar`).
  * - Paneles: bloques cuenta/sugerencias/perfil (`ProfileSectionSurface`), sheets modales.
- * - Feed: brillo en tarjeta central (`PostCardGoldBeam`).
+ * - Feed: separador entre publicaciones (`FeedPostSeparator`).
  *
  * Evitar: tabs, chips, separadores de día, tab bar.
  */

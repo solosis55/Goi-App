@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState } from "react";
-import { runOnJS, useAnimatedScrollHandler } from "react-native-reanimated";
-import type { SharedValue } from "react-native-reanimated";
+import {
+  runOnJS,
+  useAnimatedScrollHandler,
+  type SharedValue,
+} from "react-native-reanimated";
 
 const SCROLL_TOP_FAB_THRESHOLD = 380;
 const SCROLL_FAB_JS_THROTTLE_MS = 100;
@@ -35,10 +38,9 @@ export function useFeedScrollFab(
   );
 
   const onListScroll = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      const y = e.contentOffset.y;
-      scrollY.value = y;
-      runOnJS(updateScrollFab)(y);
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+      runOnJS(updateScrollFab)(event.contentOffset.y);
     },
   });
 

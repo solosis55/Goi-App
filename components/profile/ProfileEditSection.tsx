@@ -471,19 +471,19 @@ function ProfileEditPrivateFields({
           maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
           accessibilityRole="text"
         >
-          Brillo dorado en el feed
+          Animación del separador del feed
         </Text>
         <Switch
           value={goldBeamEnabled}
           onValueChange={(value) => void setGoldBeamEnabled(value)}
           trackColor={{ false: AUTH.fieldBorder, true: AUTH.gold }}
           thumbColor={Platform.OS === "android" ? AUTH.neutral100 : undefined}
-          accessibilityLabel="Brillo dorado en el feed al hacer scroll"
+          accessibilityLabel="Pulsación dorada en separadores del feed"
           accessibilityRole="switch"
         />
       </View>
       <Text style={styles.switchHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Desactívalo para ahorrar batería o si notas tirones al scrollear.
+        Rombo dorado pulsando entre publicaciones. Desactívalo para ahorrar batería.
       </Text>
 
       {!isDirty && !restricted ? (

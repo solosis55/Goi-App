@@ -12,7 +12,6 @@ type PostCardComparable = {
   workoutTitle?: string | null;
   highlighted?: boolean;
   initialCommentsOpen?: boolean;
-  isBeamActive?: boolean;
   guardScrollPresses?: boolean;
   pinnedPostId?: string | null;
 };
@@ -34,7 +33,6 @@ export function postCardPropsAreEqual(prev: PostCardComparable, next: PostCardCo
   if (prev.workoutTitle !== next.workoutTitle) return false;
   if (prev.highlighted !== next.highlighted) return false;
   if (prev.initialCommentsOpen !== next.initialCommentsOpen) return false;
-  if (prev.isBeamActive !== next.isBeamActive) return false;
   if (prev.guardScrollPresses !== next.guardScrollPresses) return false;
   if (prev.pinnedPostId !== next.pinnedPostId) return false;
   return true;

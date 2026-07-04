@@ -2,7 +2,7 @@
 export type PostFormat = "standard" | "training";
 
 export const POST_FORMAT_LABELS: Record<PostFormat, string> = {
-  standard: "Publicación",
+  standard: "Estándar",
   training: "Training",
 };
 

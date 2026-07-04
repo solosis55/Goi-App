@@ -1,6 +1,6 @@
-import { Image } from "expo-image";
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -18,10 +18,7 @@ import {
 } from "../../../constants/createPost";
 import type { PostVisibility } from "../../../constants/createPost";
 import type { PostFormat } from "../../../constants/postFormat";
-import {
-  CAPTION_PROMPTS_STANDARD,
-  CAPTION_PROMPTS_TRAINING,
-} from "../../../constants/createPostPrompts";
+import { CAPTION_PROMPTS_STANDARD } from "../../../constants/createPostPrompts";
 import type { PendingPostImage } from "../../../hooks/useCreatePostForm";
 import type { MentionPickUser } from "../../../utils/mentionAutocomplete";
 import { MentionableTextInput } from "../MentionableTextInput";
@@ -82,15 +79,22 @@ export function CreatePostEditPanel({
 
   const title =
     kind === "text" ? "Texto" : kind === "media" ? "Fotos" : "Ajustes";
-  const captionPrompts =
-    format === "training" ? CAPTION_PROMPTS_TRAINING : CAPTION_PROMPTS_STANDARD;
   const textPlaceholder =
     format === "training" ? "¿Cómo fue el entreno?" : "Pie de foto o comentario…";
+  const textSheetMaxHeight = format === "training" ? "88%" : "75%";
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8, maxHeight: "75%" }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            paddingBottom: Math.max(insets.bottom, 12) + 8,
+            maxHeight: kind === "text" ? textSheetMaxHeight : "75%",
+          },
+        ]}
+      >
         <View style={styles.handle} />
         <View style={styles.sheetHead}>
           <Text style={styles.sheetTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -115,23 +119,25 @@ export function CreatePostEditPanel({
               placeholderTextColor={AUTH.faint}
               multiline
               autoFocus
-              style={styles.textInput}
+              style={[styles.textInput, format === "training" ? styles.textInputTraining : null]}
               maxLength={POST_BODY_MAX + 80}
               maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
             />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.prompts}>
-              {captionPrompts.map((prompt) => (
-                <Pressable
-                  key={prompt}
-                  onPress={() => onChangeContent(prompt)}
-                  style={({ pressed }) => [styles.promptChip, pressed ? styles.promptPressed : null]}
-                >
-                  <Text style={styles.promptText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER} numberOfLines={1}>
-                    {prompt}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            {format !== "training" ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.prompts}>
+                {CAPTION_PROMPTS_STANDARD.map((prompt) => (
+                  <Pressable
+                    key={prompt}
+                    onPress={() => onChangeContent(prompt)}
+                    style={({ pressed }) => [styles.promptChip, pressed ? styles.promptPressed : null]}
+                  >
+                    <Text style={styles.promptText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER} numberOfLines={1}>
+                      {prompt}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
             <Text
               style={[styles.charCount, charCount > POST_BODY_MAX ? styles.charOver : null]}
               maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
@@ -165,7 +171,7 @@ export function CreatePostEditPanel({
               ) : null}
               {images.map((img, index) => (
                 <View
-                  key={img.id}
+                  key={`${img.id}@${index}`}
                   style={[styles.thumbWrap, index === 0 ? styles.thumbWrapCover : null]}
                 >
                   {index === 0 ? (
@@ -175,7 +181,7 @@ export function CreatePostEditPanel({
                       </Text>
                     </View>
                   ) : null}
-                  <Image source={{ uri: img.uri }} style={styles.thumb} contentFit="cover" />
+                  <Image source={{ uri: img.uri }} style={styles.thumb} resizeMode="cover" />
                   <Pressable onPress={() => void onToggleCrop(img.id)} style={styles.cropBtn}>
                     <Text style={styles.cropBtnText}>{img.cropSquare ? "1:1" : "Orig."}</Text>
                   </Pressable>
@@ -184,14 +190,17 @@ export function CreatePostEditPanel({
                       <Pressable
                         onPress={() => onMoveImage(img.id, -1)}
                         disabled={index === 0}
-                        style={styles.moveBtn}
+                        style={[styles.moveBtn, index === 0 ? styles.moveBtnDisabled : null]}
                       >
                         <Text style={styles.moveText}>‹</Text>
                       </Pressable>
                       <Pressable
                         onPress={() => onMoveImage(img.id, 1)}
                         disabled={index === images.length - 1}
-                        style={styles.moveBtn}
+                        style={[
+                          styles.moveBtn,
+                          index === images.length - 1 ? styles.moveBtnDisabled : null,
+                        ]}
                       >
                         <Text style={styles.moveText}>›</Text>
                       </Pressable>
@@ -286,6 +295,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     padding: 0,
   },
+  textInputTraining: {
+    minHeight: 168,
+    flexGrow: 1,
+  },
   charCount: { color: AUTH.faint, fontSize: 12, textAlign: "right" },
   charOver: { color: AUTH.danger },
   hint: { color: AUTH.muted, fontSize: 13 },
@@ -349,23 +362,29 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.65)",
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 3,
   },
   removeText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   moveRow: {
     position: "absolute",
-    left: 4,
-    right: 4,
-    top: 4,
+    bottom: 26,
+    left: 0,
+    right: 0,
     flexDirection: "row",
-    justifyContent: "space-between",
+    justifyContent: "center",
+    gap: 8,
+    zIndex: 2,
   },
   moveBtn: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.65)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  moveBtnDisabled: {
+    opacity: 0.35,
   },
   moveText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   addTile: {

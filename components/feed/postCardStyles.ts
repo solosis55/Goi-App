@@ -5,34 +5,34 @@ export const postCardStyles = StyleSheet.create({
   cardWrap: {
     position: "relative",
     overflow: "visible",
+    width: "100%",
   },
   card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.14)",
+    borderRadius: 0,
+    borderWidth: 0,
     backgroundColor: "#0a0a0c",
     ...Platform.select({
       ios: {
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.42,
-        shadowRadius: 18,
+        shadowColor: "transparent",
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
       },
-      android: { elevation: 6 },
+      android: { elevation: 0 },
       default: {},
     }),
   },
   cardClip: {
     overflow: "hidden",
-    borderRadius: 16,
+    borderRadius: 0,
   },
   highlightRing: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 16,
+    borderRadius: 0,
     zIndex: 3,
   },
   cardTextOnly: {
-    backgroundColor: "rgba(22, 20, 14, 0.72)",
+    backgroundColor: "#0a0a0c",
     borderLeftWidth: 3,
     borderLeftColor: "rgba(212, 175, 55, 0.42)",
   },
@@ -44,6 +44,7 @@ export const postCardStyles = StyleSheet.create({
     width: "100%",
     overflow: "hidden",
     backgroundColor: "#1c1c1f",
+    position: "relative",
   },
   actionBarPad: {
     paddingHorizontal: 14,

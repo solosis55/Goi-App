@@ -1,3 +1,6 @@
+/** Margen lateral del header del feed (historias, filtros). Las publicaciones van a ancho completo. */
+export const FEED_HEADER_INSET = 16;
+
 export type FeedScope = "all" | "following";
 
 export const FEED_SCOPES: ReadonlyArray<{ id: FeedScope; label: string }> = [

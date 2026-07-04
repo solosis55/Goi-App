@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthTopGlow } from "../AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
 import { POST_IMAGE_MAX_FILES } from "../../constants/createPost";
-import type { PostFormat } from "../../constants/postFormat";
+import { POST_FORMAT_LABELS, type PostFormat } from "../../constants/postFormat";
 import { useAuth } from "../../context/AuthContext";
 import { useGoiAlert } from "../../context/GoiAlertContext";
 import { goiToast } from "../../context/GoiToastContext";
@@ -37,7 +37,6 @@ import { CreatePostPendingPublishBanner } from "./editor/CreatePostPendingPublis
 import { CreatePostWorkoutShareBanner } from "./editor/CreatePostWorkoutShareBanner";
 import { CreatePostFormatSegment } from "./editor/CreatePostFormatSegment";
 import { CreatePostInlineCaption } from "./editor/CreatePostInlineCaption";
-import { CreatePostRequirementChips } from "./editor/CreatePostRequirementChips";
 import {
   CreatePostToolbar,
   type CreatePostToolbarAction,
@@ -215,7 +214,7 @@ export function CreatePostScreen({
     const result = await form.submit();
     if (result.ok) {
       hapticSuccess();
-      goiToast(format === "training" ? "Training publicado" : "Publicación creada");
+      goiToast(format === "training" ? "Training publicado" : `${POST_FORMAT_LABELS.standard} publicado`);
       InteractionManager.runAfterInteractions(() => {
         router.replace({ pathname: "/(tabs)", params: { feedRefresh: "1" } });
       });
@@ -290,11 +289,6 @@ export function CreatePostScreen({
   const canPublish =
     form.validation.canSubmit && !form.submitting && !form.mediaBusy && !form.restoringDraft;
 
-  const headerSub =
-    format === "training"
-      ? "Vincula tu sesión · foto opcional"
-      : "Foto obligatoria · pie de foto";
-
   const openToolbarAction = useCallback(
     (action: CreatePostToolbarAction) => {
       hapticLight();
@@ -329,22 +323,9 @@ export function CreatePostScreen({
   const requestFormatChange = useCallback(
     (next: PostFormat) => {
       if (next === format || !onChangeFormat) return;
-      const apply = () => onChangeFormat(next);
-      if (!form.hasDraft) {
-        apply();
-        return;
-      }
-      showAlert({
-        title: "Cambiar formato",
-        message:
-          "Tienes un borrador en curso. Al cambiar de formato se cargará el borrador de ese tipo si existe.",
-        buttons: [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Cambiar", onPress: apply },
-        ],
-      });
+      onChangeFormat(next);
     },
-    [format, form.hasDraft, onChangeFormat, showAlert]
+    [format, onChangeFormat]
   );
 
   const toolbarPanel: CreatePostToolbarAction | null =
@@ -389,11 +370,6 @@ export function CreatePostScreen({
             Cancelar
           </Text>
         </Pressable>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {headerSub}
-          </Text>
-        </View>
         <View style={[styles.headerSide, styles.headerSideEnd]}>
           {form.submitting ? (
             <ActivityIndicator size="small" color={AUTH.gold} />
@@ -420,24 +396,11 @@ export function CreatePostScreen({
         </View>
       </View>
 
+      {!sessionPickerOpen ? (
+        <>
       {onChangeFormat ? (
         <CreatePostFormatSegment value={format} onChange={requestFormatChange} compact />
       ) : null}
-
-      <CreatePostRequirementChips
-        format={format}
-        imageCount={form.images.length}
-        charCount={form.validation.charCount}
-        hasSession={Boolean(form.sessionId)}
-        visibility={form.visibility}
-        onPressPhoto={openEditMedia}
-        onPressText={() => {
-          if (format === "standard") focusStandardCaption();
-          else setEditPanel("text");
-        }}
-        onPressSession={() => setSessionPickerOpen(true)}
-        onPressVisibility={() => setEditPanel("options")}
-      />
 
       {!form.sessionId && sessionPicker.todayAvailableSession && !form.restoringDraft ? (
         <View style={styles.quickLinkWrap}>
@@ -553,8 +516,10 @@ export function CreatePostScreen({
           </View>
         </KeyboardAvoidingView>
       )}
+        </>
+      ) : null}
 
-      {form.submitError ? (
+      {form.submitError && !sessionPickerOpen ? (
         <Text style={styles.error} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
           {form.submitError}
         </Text>
@@ -603,16 +568,15 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
     paddingBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(82, 82, 82, 0.6)",
     backgroundColor: "rgba(8, 8, 10, 0.95)",
   },
-  headerSide: { width: 88, justifyContent: "center", minHeight: 40 },
+  headerSide: { justifyContent: "center", minHeight: 40 },
   headerSideEnd: { alignItems: "flex-end" },
-  headerCenter: { flex: 1, alignItems: "center", gap: 2 },
-  headerSub: { color: AUTH.muted, fontSize: 12, fontWeight: "600", textAlign: "center" },
   cancelText: { color: AUTH.muted, fontSize: 16 },
   publishPill: {
     paddingHorizontal: 14,

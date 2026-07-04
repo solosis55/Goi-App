@@ -1,4 +1,5 @@
-const R = 16;
+/** Esquinas del beam alineadas con las tarjetas del feed (ancho completo, sin radio). */
+const R = 0;
 const INSET = 1.5;
 
 function dims(w: number, h: number, r: number, inset: number) {
@@ -6,14 +7,14 @@ function dims(w: number, h: number, r: number, inset: number) {
   const y0 = inset;
   const iw = w - 2 * inset;
   const ih = h - 2 * inset;
-  const ri = Math.max(4, r - inset * 0.25);
+  const ri = r > 0 ? Math.max(4, r - inset * 0.25) : 0;
   return { x0, y0, iw, ih, ri };
 }
 
 /** Arriba → derecha → esquina inferior derecha (sin borde inferior ni izquierdo). */
 export function postCardGoldBeamPath(w: number, h: number): string {
   const { x0, y0, iw, ih, ri } = dims(w, h, R, INSET);
-  if (iw < 2 * ri || ih < 2 * ri) {
+  if (ri <= 0 || iw < 2 * ri || ih < 2 * ri) {
     return `M ${x0} ${y0} L ${x0 + iw} ${y0} L ${x0 + iw} ${y0 + ih}`;
   }
   return [
@@ -42,7 +43,7 @@ export function postCardGoldBeamPointAt(
   const len = postCardGoldBeamPathLength(w, h);
   const s = Math.min(len, Math.max(0, distance));
 
-  if (iw < 2 * ri || ih < 2 * ri) {
+  if (ri <= 0 || iw < 2 * ri || ih < 2 * ri) {
     const edges = [iw, ih];
     const corners = [
       { x: x0, y: y0 },

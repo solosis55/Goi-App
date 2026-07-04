@@ -52,6 +52,10 @@ type PreviewCardShellOptions = {
   fullBleed?: boolean;
   isEmbedded?: boolean;
   embedded?: boolean;
+  /** Sin borde — igual que tarjeta publicada en feed. */
+  feedMatch?: boolean;
+  /** Borde izquierdo dorado (posts training en feed). */
+  trainingAccent?: boolean;
 };
 
 export function previewCardShellStyle({
@@ -59,15 +63,20 @@ export function previewCardShellStyle({
   fullBleed = true,
   isEmbedded = false,
   embedded = false,
+  feedMatch = false,
+  trainingAccent = false,
 }: PreviewCardShellOptions): StyleProp<ViewStyle> {
   return [
     postPreviewCardStyles.card,
     {
       width: cardWidth,
-      borderColor: POST_PREVIEW_CARD.border,
+      borderColor: feedMatch ? "transparent" : POST_PREVIEW_CARD.border,
       backgroundColor: POST_PREVIEW_CARD.background,
+      borderWidth: feedMatch ? 0 : 1,
+      borderLeftWidth: trainingAccent ? 3 : feedMatch ? 0 : 1,
+      borderLeftColor: trainingAccent ? "rgba(212, 175, 55, 0.55)" : feedMatch ? "transparent" : POST_PREVIEW_CARD.border,
     },
-    fullBleed && !isEmbedded ? postPreviewCardStyles.cardBleed : null,
+    fullBleed && !isEmbedded && !feedMatch ? postPreviewCardStyles.cardBleed : null,
     isEmbedded && !embedded ? postPreviewCardStyles.cardEmbedded : null,
     embedded ? postPreviewCardStyles.cardFrameless : null,
   ];

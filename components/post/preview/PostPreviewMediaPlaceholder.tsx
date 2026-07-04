@@ -10,6 +10,10 @@ type PostPreviewMediaPlaceholderProps = {
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
   format?: PostFormat;
+  height?: number;
+  label?: string;
+  /** Solo texto centrado (p. ej. demo del selector de formato). */
+  minimal?: boolean;
   /** Solo degradado (p. ej. CTA de editor encima sin icono duplicado). */
   backgroundOnly?: boolean;
 };
@@ -21,10 +25,14 @@ export function PostPreviewMediaPlaceholder({
   style,
   compact = false,
   format = "standard",
+  height: heightProp,
+  label,
+  minimal = false,
   backgroundOnly = false,
 }: PostPreviewMediaPlaceholderProps) {
   const ph = POST_PREVIEW_CARD.placeholder;
-  const height = previewMediaHeight(width, format, compact);
+  const height = heightProp ?? previewMediaHeight(width, format, compact);
+  const displayLabel = label ?? ph.label;
 
   return (
     <View style={[styles.wrap, { width, height }, style]}>
@@ -38,7 +46,11 @@ export function PostPreviewMediaPlaceholder({
         </Defs>
         <Rect x="0" y="0" width={width} height={height} fill={`url(#${gradientId})`} />
       </Svg>
-      {backgroundOnly ? null : (
+      {backgroundOnly ? null : minimal ? (
+        <Text style={styles.minimalLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          {displayLabel}
+        </Text>
+      ) : (
         <>
           <View
             style={[
@@ -54,7 +66,7 @@ export function PostPreviewMediaPlaceholder({
             </Text>
           </View>
           <Text style={styles.label} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            {ph.label}
+            {displayLabel}
           </Text>
         </>
       )}
@@ -83,4 +95,5 @@ const styles = StyleSheet.create({
   },
   icon: { fontSize: 22 },
   label: { color: AUTH.faint, fontSize: 11, fontWeight: "600" },
+  minimalLabel: { color: AUTH.muted, fontSize: 14, fontWeight: "600" },
 });

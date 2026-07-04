@@ -16,8 +16,6 @@ import { recyclingKey, resolveUrl } from "../../utils/postMedia/url";
 import { PostFeedImage } from "./PostFeedImage";
 import { PostMediaLightbox } from "./PostMediaLightbox";
 
-const MAX_CONTENT_WIDTH = 672;
-
 export type PostMediaAspect = "square" | "portrait45";
 export type PostMediaLayout = "bleed" | "inset";
 
@@ -121,7 +119,7 @@ export function PostMediaCarousel({
 }: PostMediaCarouselProps) {
   const { width: windowWidth } = useWindowDimensions();
   const slideWidth =
-    slideWidthProp ?? Math.min(Math.max(windowWidth - 32, 280), MAX_CONTENT_WIDTH);
+    slideWidthProp ?? (layout === "bleed" ? Math.max(windowWidth, 280) : Math.max(windowWidth - 32, 280));
   const slideHeight = slideHeightProp ?? heroHeightForWidth(slideWidth, mediaAspect);
   const slides = media.filter(
     (m) => m.type === "image" && m.url?.trim() && resolveUrl(m.url)

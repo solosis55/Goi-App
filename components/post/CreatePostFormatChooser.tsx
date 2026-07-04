@@ -11,26 +11,22 @@ import {
   View,
   type ListRenderItem,
 } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthTopGlow } from "../AuthTopGlow";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../constants/authUi";
-import type { PostFormat } from "../../constants/postFormat";
+import { CHOOSER_PREVIEW_MAX_WIDTH } from "../../constants/postFormatChooserPreview";
+import { POST_FORMAT_LABELS, type PostFormat } from "../../constants/postFormat";
 import { useAuth } from "../../context/AuthContext";
 import { hapticLight } from "../../utils/appHaptics";
 import { CreatePostFormatSegment } from "./editor/CreatePostFormatSegment";
+import { ChooserPreviewFit } from "./preview/ChooserPreviewFit";
 import { PostFeedPreviewStandard } from "./preview/PostFeedPreviewStandard";
 import { PostFeedPreviewTraining } from "./preview/PostFeedPreviewTraining";
-import { PreviewBottomFade } from "./preview/PreviewBottomFade";
 import {
   buildSessionExercisePreviews,
   countRemainingExercises,
 } from "../../utils/sessionExercisePreview";
 import type { PostPreviewDraft } from "./preview/postPreviewTypes";
-
-const SLIDE_WIDTH_RATIO = 0.84;
-const SLIDE_GAP = 14;
-const PREVIEW_MAX_HEIGHT_RATIO = 0.36;
 
 type SessionPreviewHint = {
   workoutTitle: string;
@@ -53,7 +49,7 @@ type FormatSlide = {
 const SLIDES: FormatSlide[] = [
   {
     format: "standard",
-    title: "Publicación",
+    title: POST_FORMAT_LABELS.standard,
     bullets: [
       "Foto cuadrada obligatoria",
       "Caption bajo los iconos del feed",
@@ -71,7 +67,8 @@ const SLIDES: FormatSlide[] = [
   },
 ];
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const SLIDE_WIDTH_RATIO = 0.88;
+const SLIDE_GAP = 12;
 
 function buildChooserDraft(
   format: PostFormat,
@@ -104,14 +101,9 @@ function buildChooserDraft(
           exerciseName: "Remo con barra",
           sets: [{ done: true, plannedReps: "10", plannedWeight: "50", actualReps: "10", actualWeight: "50" }],
         },
-        {
-          exerciseId: "ex3",
-          exerciseName: "Press militar",
-          sets: [{ done: true, plannedReps: "12", plannedWeight: "30", actualReps: "12", actualWeight: "30" }],
-        },
       ],
     };
-    const previews = buildSessionExercisePreviews(exampleSnapshot);
+    const previews = buildSessionExercisePreviews(exampleSnapshot, 2);
     return {
       format: "training",
       username,
@@ -120,7 +112,7 @@ function buildChooserDraft(
       visibility: "public",
       imageUris: [],
       workoutTitle,
-      sessionId: hasLinkedSession ? "preview-session" : null,
+      sessionId: hasLinkedSession ? "preview-session" : "preview",
       sessionPerformedAt: sessionPreview?.performedAt ?? now,
       sessionCompletedSets: 12,
       sessionTotalSets: 14,
@@ -145,102 +137,72 @@ function buildChooserDraft(
 type FormatSlideCardProps = {
   slide: FormatSlide;
   slideWidth: number;
-  previewInnerWidth: number;
-  previewMaxHeight: number;
+  previewWidth: number;
   draft: PostPreviewDraft;
-  suggested: boolean;
-  onPress: () => void;
 };
 
-function FormatSlideCard({
-  slide,
-  slideWidth,
-  previewInnerWidth,
-  previewMaxHeight,
-  draft,
-  suggested,
-  onPress,
-}: FormatSlideCardProps) {
-  const scale = useSharedValue(1);
+function FormatSlideCard({ slide, slideWidth, previewWidth, draft }: FormatSlideCardProps) {
   const isTraining = slide.format === "training";
 
-  const animatedCard = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const onPressIn = () => {
-    scale.value = withSpring(0.98, { damping: 18, stiffness: 320 });
-  };
-  const onPressOut = () => {
-    scale.value = withSpring(1, { damping: 18, stiffness: 320 });
-  };
-
-  const a11yHint =
-    slide.format === "training"
-      ? "Formato con tarjeta de sesión debajo del comentario"
-      : "Formato con foto cuadrada y caption bajo los iconos";
-
   return (
-    <AnimatedPressable
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
-      style={[
-        styles.slide,
-        { width: slideWidth },
-        animatedCard,
-        suggested ? styles.slideSuggested : null,
-      ]}
-      accessibilityRole="button"
+    <View
+      style={[styles.slide, { width: slideWidth, height: "100%" }]}
+      accessibilityRole="tab"
       accessibilityLabel={slide.title}
-      accessibilityHint={a11yHint}
     >
-      {suggested ? (
-        <View style={styles.recommendedBadge}>
-          <Text style={styles.recommendedText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Recomendado
-          </Text>
-        </View>
-      ) : null}
-
-      <View style={[styles.previewClip, { maxHeight: previewMaxHeight }]}>
-        {isTraining ? (
-          <PostFeedPreviewTraining
-            draft={draft}
-            fullBleed={false}
-            layoutWidth={previewInnerWidth}
-            compact
-            embedded
-            showViewFullCta={Boolean(draft.sessionId)}
-          />
-        ) : (
-          <PostFeedPreviewStandard
-            draft={draft}
-            fullBleed={false}
-            layoutWidth={previewInnerWidth}
-            compact
-            embedded
-          />
-        )}
-        <PreviewBottomFade width={previewInnerWidth} gradientId={`fade-${slide.format}`} />
+      <View style={styles.previewFrame}>
+        <ChooserPreviewFit key={slide.format} width={previewWidth}>
+          {isTraining ? (
+            <PostFeedPreviewTraining
+              draft={draft}
+              fullBleed={false}
+              layoutWidth={previewWidth}
+              embedded
+              compact
+              formatChooser
+            />
+          ) : (
+            <PostFeedPreviewStandard
+              draft={draft}
+              fullBleed={false}
+              layoutWidth={previewWidth}
+              embedded
+              compact
+              formatChooser
+            />
+          )}
+        </ChooserPreviewFit>
       </View>
+    </View>
+  );
+}
 
-      <View style={styles.slideFooter}>
-        <Text style={styles.slideTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+function ActiveFormatMeta({ slide, suggested }: { slide: FormatSlide; suggested: boolean }) {
+  return (
+    <View style={styles.formatMeta}>
+      <View style={styles.formatMetaHead}>
+        <Text style={styles.formatMetaTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
           {slide.title}
         </Text>
-        <View style={styles.bullets}>
-          {slide.bullets.map((line) => (
-            <View key={line} style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-                {line}
-              </Text>
-            </View>
-          ))}
-        </View>
+        {suggested ? (
+          <View style={styles.formatMetaBadge}>
+            <Text style={styles.formatMetaBadgeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Recomendado
+            </Text>
+          </View>
+        ) : null}
       </View>
-    </AnimatedPressable>
+      <View style={styles.bullets}>
+        {slide.bullets.map((line) => (
+          <View key={line} style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <Text style={styles.bulletText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              {line}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -263,8 +225,7 @@ export function CreatePostFormatChooser({
   const slideWidth = Math.round(screenWidth * SLIDE_WIDTH_RATIO);
   const slideStride = slideWidth + SLIDE_GAP;
   const sidePadding = Math.round((screenWidth - slideWidth) / 2);
-  const previewInnerWidth = slideWidth - 20;
-  const previewMaxHeight = Math.min(400, Math.round(screenHeight * PREVIEW_MAX_HEIGHT_RATIO));
+  const previewWidth = Math.min(CHOOSER_PREVIEW_MAX_WIDTH, slideWidth - 16);
 
   const standardDraft = useMemo(
     () => buildChooserDraft("standard", username, avatarUrl, hasLinkedSession, sessionPreview),
@@ -283,14 +244,11 @@ export function CreatePostFormatChooser({
     [onSelect]
   );
 
-  const scrollToFormat = useCallback(
-    (format: PostFormat) => {
-      const index = format === "training" ? 1 : 0;
-      setActiveIndex(index);
-      listRef.current?.scrollToIndex({ index, animated: true });
-    },
-    []
-  );
+  const scrollToFormat = useCallback((format: PostFormat) => {
+    const index = format === "training" ? 1 : 0;
+    setActiveIndex(index);
+    listRef.current?.scrollToIndex({ index, animated: true });
+  }, []);
 
   const onSegmentChange = useCallback(
     (format: PostFormat) => {
@@ -300,7 +258,7 @@ export function CreatePostFormatChooser({
     [scrollToFormat]
   );
 
-  const onScroll = useCallback(
+  const syncIndexFromScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const x = e.nativeEvent.contentOffset.x;
       const index = Math.round(x / slideStride);
@@ -309,8 +267,6 @@ export function CreatePostFormatChooser({
     },
     [slideStride]
   );
-
-  const initialScrollIndex = suggestedFormat === "training" ? 1 : 0;
 
   useEffect(() => {
     if (suggestedFormat !== "training") return;
@@ -327,23 +283,12 @@ export function CreatePostFormatChooser({
         <FormatSlideCard
           slide={item}
           slideWidth={slideWidth}
-          previewInnerWidth={previewInnerWidth}
-          previewMaxHeight={previewMaxHeight}
+          previewWidth={previewWidth}
           draft={draft}
-          suggested={suggestedFormat === item.format}
-          onPress={() => pick(item.format)}
         />
       );
     },
-    [
-      standardDraft,
-      trainingDraft,
-      slideWidth,
-      previewInnerWidth,
-      previewMaxHeight,
-      suggestedFormat,
-      pick,
-    ]
+    [standardDraft, trainingDraft, slideWidth, previewWidth]
   );
 
   const getItemLayout = useCallback(
@@ -355,87 +300,108 @@ export function CreatePostFormatChooser({
     [slideStride]
   );
 
-  const activeFormat = SLIDES[activeIndex]?.format ?? "standard";
+  const activeSlide = SLIDES[activeIndex] ?? SLIDES[0]!;
+  const activeFormat = activeSlide.format;
   const sessionBannerTitle = sessionPreview?.workoutTitle?.trim();
+  const initialScrollIndex = suggestedFormat === "training" ? 1 : 0;
+  const showSessionBanner = hasLinkedSession && Boolean(sessionBannerTitle);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 12 }]}>
+    <View style={[styles.root, { paddingTop: insets.top + 6, paddingBottom: insets.bottom + 8 }]}>
       <AuthTopGlow width={screenWidth} windowHeight={screenHeight} />
 
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Cancelar">
-          <Text style={styles.cancel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Cancelar
+      <View style={styles.topChrome}>
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} hitSlop={10} accessibilityLabel="Cancelar">
+            <Text style={styles.cancel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Cancelar
+            </Text>
+          </Pressable>
+          <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Publicar
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <Text style={styles.subtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Elige el formato del post en el feed
+        </Text>
+
+        {showSessionBanner ? (
+          <View style={styles.sessionBanner}>
+            <Text style={styles.sessionBannerTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Acabas de terminar «{sessionBannerTitle}»
+            </Text>
+            <Text style={styles.sessionBannerSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+              Training suele encajar mejor para compartir la sesión completa.
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.segmentWrap}>
+          <CreatePostFormatSegment value={activeFormat} onChange={onSegmentChange} compact />
+        </View>
+
+        <ActiveFormatMeta
+          slide={activeSlide}
+          suggested={suggestedFormat === activeSlide.format}
+        />
+      </View>
+
+      <View style={styles.carouselHost}>
+        <FlatList
+          ref={listRef}
+          data={SLIDES}
+          keyExtractor={(item) => item.format}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={slideStride}
+          snapToAlignment="start"
+          disableIntervalMomentum
+          bounces={false}
+          onMomentumScrollEnd={syncIndexFromScroll}
+          onScrollEndDrag={syncIndexFromScroll}
+          initialScrollIndex={initialScrollIndex}
+          initialNumToRender={2}
+          getItemLayout={getItemLayout}
+          onScrollToIndexFailed={() => {
+            listRef.current?.scrollToOffset({ offset: slideStride, animated: false });
+          }}
+          contentContainerStyle={{ paddingHorizontal: sidePadding }}
+          ItemSeparatorComponent={() => <View style={{ width: SLIDE_GAP }} />}
+          renderItem={renderItem}
+          style={styles.carousel}
+        />
+      </View>
+
+      <View style={styles.bottomChrome}>
+        <View style={styles.dots} accessibilityRole="tablist">
+          {SLIDES.map((slide, i) => (
+            <Pressable
+              key={slide.format}
+              onPress={() => onSegmentChange(slide.format)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: i === activeIndex }}
+              accessibilityLabel={slide.title}
+              hitSlop={8}
+            >
+              <View style={[styles.dot, i === activeIndex ? styles.dotActive : null]} />
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable
+          onPress={() => pick(activeFormat)}
+          style={({ pressed }) => [styles.bottomCta, pressed ? styles.bottomCtaPressed : null]}
+          accessibilityRole="button"
+          accessibilityLabel={`Continuar con ${activeSlide.title}`}
+        >
+          <Text style={styles.bottomCtaText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+            Continuar con {activeSlide.title}
           </Text>
         </Pressable>
-        <Text style={styles.title} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Publicar
-        </Text>
-        <View style={styles.headerSpacer} />
       </View>
-
-      <Text style={styles.subtitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-        Elige el formato del post en el feed
-      </Text>
-
-      {hasLinkedSession && sessionBannerTitle ? (
-        <View style={styles.sessionBanner}>
-          <Text style={styles.sessionBannerTitle} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Acabas de terminar «{sessionBannerTitle}»
-          </Text>
-          <Text style={styles.sessionBannerSub} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Training suele encajar mejor para compartir la sesión completa.
-          </Text>
-        </View>
-      ) : null}
-
-      <CreatePostFormatSegment value={activeFormat} onChange={onSegmentChange} />
-
-      <FlatList
-        ref={listRef}
-        data={SLIDES}
-        keyExtractor={(item) => item.format}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        snapToInterval={slideStride}
-        snapToAlignment="start"
-        disableIntervalMomentum
-        bounces={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        initialScrollIndex={initialScrollIndex}
-        initialNumToRender={2}
-        getItemLayout={getItemLayout}
-        onScrollToIndexFailed={() => {
-          listRef.current?.scrollToOffset({ offset: slideStride, animated: false });
-        }}
-        contentContainerStyle={{ paddingHorizontal: sidePadding }}
-        ItemSeparatorComponent={() => <View style={{ width: SLIDE_GAP }} />}
-        renderItem={renderItem}
-        style={styles.carousel}
-      />
-
-      <View style={styles.dots} accessibilityRole="tablist">
-        {SLIDES.map((slide, i) => (
-          <View
-            key={slide.format}
-            style={[styles.dot, i === activeIndex ? styles.dotActive : null]}
-            accessibilityLabel={`${slide.title}${i === activeIndex ? ", seleccionado" : ""}`}
-          />
-        ))}
-      </View>
-
-      <Pressable
-        onPress={() => pick(activeFormat)}
-        style={({ pressed }) => [styles.bottomCta, pressed ? styles.bottomCtaPressed : null]}
-        accessibilityRole="button"
-        accessibilityLabel={`Continuar con ${SLIDES[activeIndex]?.title ?? "formato"}`}
-      >
-        <Text style={styles.bottomCtaText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-          Continuar con {SLIDES[activeIndex]?.title ?? "Publicación"}
-        </Text>
-      </Pressable>
     </View>
   );
 }
@@ -445,10 +411,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AUTH.bg,
   },
+  topChrome: {
+    flexShrink: 0,
+  },
+  bottomChrome: {
+    flexShrink: 0,
+    paddingTop: 6,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 6,
     paddingHorizontal: 16,
   },
   cancel: { color: AUTH.muted, fontSize: 16, width: 80 },
@@ -462,109 +435,121 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 80 },
   subtitle: {
     color: AUTH.muted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
     textAlign: "center",
     paddingHorizontal: 24,
   },
+  segmentWrap: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+  },
+  formatMeta: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(64, 64, 64, 0.45)",
+    backgroundColor: "rgba(12, 12, 14, 0.75)",
+    gap: 4,
+  },
+  formatMetaHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  formatMetaTitle: {
+    color: AUTH.neutral100,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  formatMetaBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: "rgba(212, 175, 55, 0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(212, 175, 55, 0.45)",
+  },
+  formatMetaBadgeText: {
+    color: AUTH.gold,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+  },
+  carouselHost: {
+    flex: 1,
+    minHeight: 0,
+    marginBottom: 4,
+  },
   carousel: {
-    flexGrow: 0,
-    flexShrink: 1,
+    flex: 1,
   },
   slide: {
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(64, 64, 64, 0.55)",
     backgroundColor: "rgba(12, 12, 14, 0.92)",
     overflow: "hidden",
-    paddingTop: 10,
-    paddingHorizontal: 10,
-    paddingBottom: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
-  slideSuggested: {
-    borderColor: "rgba(163, 163, 163, 0.55)",
-    backgroundColor: "rgba(18, 18, 20, 0.98)",
-  },
-  recommendedBadge: {
-    alignSelf: "center",
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "rgba(212, 175, 55, 0.22)",
-    borderWidth: 1,
-    borderColor: "rgba(212, 175, 55, 0.5)",
-  },
-  recommendedText: {
-    color: AUTH.gold,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.4,
-  },
-  previewClip: {
-    overflow: "hidden",
+  previewFrame: {
+    flex: 1,
+    minHeight: 0,
     borderRadius: 12,
     backgroundColor: "#0a0a0c",
-  },
-  slideFooter: {
-    marginTop: 14,
-    alignItems: "center",
-    gap: 4,
-  },
-  slideTitle: {
-    color: AUTH.neutral100,
-    fontSize: 17,
-    fontWeight: "800",
+    overflow: "hidden",
   },
   sessionBanner: {
     marginHorizontal: 16,
-    marginBottom: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.4)",
     backgroundColor: "rgba(35, 32, 22, 0.75)",
-    gap: 4,
+    gap: 2,
   },
   sessionBannerTitle: {
     color: AUTH.gold,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "700",
   },
   sessionBannerSub: {
     color: AUTH.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 15,
   },
   bullets: {
-    marginTop: 8,
-    gap: 6,
-    alignSelf: "stretch",
-    paddingHorizontal: 4,
+    gap: 2,
   },
   bulletRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    gap: 7,
   },
   bulletDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: AUTH.gold,
-    marginTop: 6,
+    marginTop: 5,
   },
   bulletText: {
     flex: 1,
     color: AUTH.muted,
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 11,
+    lineHeight: 15,
   },
   bottomCta: {
     marginHorizontal: 16,
-    marginTop: 14,
+    marginTop: 8,
     paddingVertical: 14,
     borderRadius: 14,
     backgroundColor: AUTH.gold,
@@ -581,8 +566,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    marginTop: 18,
-    paddingBottom: 4,
   },
   dot: {
     width: 7,

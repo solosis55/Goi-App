@@ -1,18 +1,16 @@
 import { useCallback, useMemo, type ComponentProps } from "react";
-import { RefreshControl, StyleSheet, View, type ViewabilityConfigCallbackPairs } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AUTH } from "../../constants/authUi";
-import type { FeedScope } from "../../constants/feed";
+import { FEED_HEADER_INSET, type FeedScope } from "../../constants/feed";
 import {
   FeedPostActionsProvider,
   type FeedPostActionsHandlers,
 } from "../../context/FeedPostActionsContext";
-import { FeedGoldBeamProvider } from "../../context/FeedGoldBeamContext";
 import type { SafeUser } from "../../types/auth";
 import type { Post } from "../../types/post";
 import type { FeedStoryAuthor } from "../../types/story";
-import { postEligibleForGoldBeam } from "../../utils/feedTimeline";
 import type { FeedSuggestionsPlacement } from "../../utils/feedSuggestionsVisibility";
 import type { FeedListItem } from "../../utils/feedListItems";
 import { AppScreenShell } from "../AppScreenShell";
@@ -25,26 +23,20 @@ import { FeedInlineSuggestionsRow, FeedSuggestionsRow } from "./FeedSuggestionsR
 import { FeedLoadMoreFooter } from "./FeedLoadMoreFooter";
 import { FeedNewPostsBanner } from "./FeedNewPostsBanner";
 import { FeedPostCardRow } from "./FeedPostCardRow";
+import { FeedPostSeparator } from "./FeedPostSeparator";
 import { FeedPostCardSkeleton } from "./FeedPostCardSkeleton";
 import { FeedScrollToTopFab } from "./FeedScrollToTopFab";
 import { FeedStickyScopeHeader } from "./FeedStickyScopeHeader";
 import { FeedTopBar } from "./FeedTopBar";
 import { FeedWorkoutEventRow } from "./FeedWorkoutEventRow";
 
-const FEED_MAX_WIDTH = 672;
 const LIST_BOTTOM_PAD = 24;
-
-function FeedListSeparator() {
-  return <View style={styles.listGap} />;
-}
 
 export type FeedScreenContentProps = {
   user: SafeUser;
   listRef: React.RefObject<FeedAnimatedFlashListRef | null>;
   scrollY: SharedValue<number>;
   goldBeamEnabled: boolean;
-  activeBeamPostId: string | null;
-  beamViewabilityPairs: ViewabilityConfigCallbackPairs;
   onListScroll: ReturnType<typeof import("react-native-reanimated").useAnimatedScrollHandler>;
   showScrollFab: boolean;
   scrollFeedToTop: () => void;
@@ -92,8 +84,6 @@ export function FeedScreenContent({
   listRef,
   scrollY,
   goldBeamEnabled,
-  activeBeamPostId,
-  beamViewabilityPairs,
   onListScroll,
   showScrollFab,
   scrollFeedToTop,
@@ -136,26 +126,36 @@ export function FeedScreenContent({
   const renderFeedItem = useCallback(
     ({ item }: { item: FeedListItem }) => {
       if (item.kind === "day") {
-        return <FeedDaySeparator label={item.label} />;
+        return (
+          <View style={styles.insetRow}>
+            <FeedDaySeparator label={item.label} />
+          </View>
+        );
       }
       if (item.kind === "suggestions") {
-        return <FeedInlineSuggestionsRow {...suggestionsRowProps} />;
+        return (
+          <View style={styles.insetRow}>
+            <FeedInlineSuggestionsRow {...suggestionsRowProps} />
+          </View>
+        );
       }
       if (item.kind === "workout") {
-        return <FeedWorkoutEventRow event={item.event} onOpenAuthor={onOpenAuthor} />;
+        return (
+          <View style={styles.insetRow}>
+            <FeedWorkoutEventRow event={item.event} onOpenAuthor={onOpenAuthor} />
+          </View>
+        );
       }
       const post = item.post;
       const openCommentsFromNotification =
         focusPostId === post.id && Boolean(focusCommentId);
+      const separatorActive = goldBeamEnabled;
       return (
         <View style={styles.postRowWrap}>
           <FeedPostCardRow
             post={post}
             currentUserId={user.id}
             sessionAvatarUrl={user.avatarUrl}
-            isBeamActive={
-              goldBeamEnabled && activeBeamPostId === post.id && postEligibleForGoldBeam(post)
-            }
             initialCommentsOpen={openCommentsFromNotification}
             highlighted={highlightedPostId === post.id}
             workoutTitle={
@@ -163,6 +163,7 @@ export function FeedScreenContent({
               (post.workoutId ? workoutTitles[post.workoutId] ?? "Rutina vinculada" : null)
             }
           />
+          <FeedPostSeparator active={separatorActive} />
         </View>
       );
     },
@@ -171,7 +172,6 @@ export function FeedScreenContent({
       focusCommentId,
       user.id,
       user.avatarUrl,
-      activeBeamPostId,
       goldBeamEnabled,
       highlightedPostId,
       workoutTitles,
@@ -205,7 +205,11 @@ export function FeedScreenContent({
           onRetry={error ? () => void fetchFeed("initial", feedScope) : undefined}
         />
 
-        {loading && posts.length === 0 ? <FeedPostCardSkeleton count={3} /> : null}
+        {loading && posts.length === 0 ? (
+          <View style={styles.skeletonBleed}>
+            <FeedPostCardSkeleton count={3} />
+          </View>
+        ) : null}
       </View>
     ),
     [
@@ -261,52 +265,48 @@ export function FeedScreenContent({
 
   return (
     <AppScreenShell variant="feed">
-      <FeedGoldBeamProvider scrollY={scrollY} enabled={goldBeamEnabled}>
-        <View style={styles.screen}>
-          <FeedTopBar
-            user={user}
-            onBrandPress={scrollFeedToTop}
-            scrollY={scrollY}
-            unreadCount={unreadNotifications}
-            onNotificationsPress={onNotificationsPress}
-          />
-          <View style={[styles.newPostsBannerSlot, { top: Math.max(insets.top, 6) + 52 }]}>
-            <FeedNewPostsBanner count={pendingNewCount} onPress={onNewPostsBanner} />
-          </View>
-          <FeedPostActionsProvider handlers={postActionsHandlers}>
-            <FeedAnimatedFlashList
-              ref={listRef}
-              style={styles.list}
-              data={feedListItems}
-              keyExtractor={(item) => item.key}
-              getItemType={(item) => (item.kind === "post" ? `post-${item.post.id}` : item.kind)}
-              keyboardShouldPersistTaps="handled"
-              drawDistance={720}
-              viewabilityConfigCallbackPairs={beamViewabilityPairs}
-              onScroll={onListScroll}
-              scrollEventThrottle={16}
-              onEndReached={loadMore}
-              onEndReachedThreshold={0.4}
-              extraData={feedListExtraKey}
-              ItemSeparatorComponent={FeedListSeparator}
-              renderItem={renderFeedItem}
-              ListHeaderComponent={listHeader}
-              ListFooterComponent={listFooter}
-              contentContainerStyle={styles.listContent}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onPullRefresh}
-                  tintColor={AUTH.gold}
-                  colors={[AUTH.gold]}
-                  progressBackgroundColor="#141416"
-                />
-              }
-            />
-          </FeedPostActionsProvider>
-          <FeedScrollToTopFab visible={showScrollFab} onPress={scrollFeedToTop} />
+      <View style={styles.screen}>
+        <FeedTopBar
+          user={user}
+          onBrandPress={scrollFeedToTop}
+          scrollY={scrollY}
+          unreadCount={unreadNotifications}
+          onNotificationsPress={onNotificationsPress}
+        />
+        <View style={[styles.newPostsBannerSlot, { top: Math.max(insets.top, 6) + 52 }]}>
+          <FeedNewPostsBanner count={pendingNewCount} onPress={onNewPostsBanner} />
         </View>
-      </FeedGoldBeamProvider>
+        <FeedPostActionsProvider handlers={postActionsHandlers}>
+          <FeedAnimatedFlashList
+            ref={listRef}
+            style={styles.list}
+            data={feedListItems}
+            keyExtractor={(item) => item.key}
+            getItemType={(item) => (item.kind === "post" ? `post-${item.post.id}` : item.kind)}
+            keyboardShouldPersistTaps="handled"
+            drawDistance={720}
+            onScroll={onListScroll}
+            scrollEventThrottle={16}
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.4}
+            extraData={feedListExtraKey}
+            renderItem={renderFeedItem}
+            ListHeaderComponent={listHeader}
+            ListFooterComponent={listFooter}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onPullRefresh}
+                tintColor={AUTH.gold}
+                colors={[AUTH.gold]}
+                progressBackgroundColor="#141416"
+              />
+            }
+          />
+        </FeedPostActionsProvider>
+        <FeedScrollToTopFab visible={showScrollFab} onPress={scrollFeedToTop} />
+      </View>
     </AppScreenShell>
   );
 }
@@ -328,20 +328,22 @@ const styles = StyleSheet.create({
   },
   listContent: {
     flexGrow: 0,
-    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: LIST_BOTTOM_PAD,
     width: "100%",
-    maxWidth: FEED_MAX_WIDTH,
-    alignSelf: "center",
-  },
-  listGap: {
-    height: 16,
   },
   postRowWrap: {
     overflow: "visible",
+    width: "100%",
   },
   headerBlock: {
     width: "100%",
+    paddingHorizontal: FEED_HEADER_INSET,
+  },
+  insetRow: {
+    paddingHorizontal: FEED_HEADER_INSET,
+  },
+  skeletonBleed: {
+    marginHorizontal: -FEED_HEADER_INSET,
   },
 });

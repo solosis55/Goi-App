@@ -84,9 +84,8 @@ export function usePostImageAssets(onError?: (message: string) => void) {
       const target = index + direction;
       if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
-      const tmp = next[index];
-      next[index] = next[target];
-      next[target] = tmp;
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
       return next;
     });
   }, []);

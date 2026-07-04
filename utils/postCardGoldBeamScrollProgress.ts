@@ -1,11 +1,8 @@
-/**
- * Scroll necesario para completar el recorrido del brillo.
- * Valores más bajos = el beam avanza más por píxel de scroll (más ligado al dedo).
- */
+/** Scroll necesario para completar el recorrido del brillo (más corto = más visible al desplazar). */
 export function postCardGoldBeamTravelPx(winHeight: number, cardHeight: number): number {
-  const byCard = cardHeight * 0.55;
-  const byScreen = winHeight * 0.28;
-  return Math.max(byScreen, byCard, 220);
+  const byCard = cardHeight * 0.42;
+  const byScreen = winHeight * 0.2;
+  return Math.max(byScreen, byCard, 140);
 }
 
 /** Progreso 0→1 a partir del desplazamiento del feed. */

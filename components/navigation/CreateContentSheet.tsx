@@ -69,7 +69,7 @@ export function CreateContentSheet({ visible, onClose }: CreateContentSheetProps
               Publicar
             </Text>
             <Text style={styles.optionDesc} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-              Comparte en el feed · publicación o training
+              Comparte en el feed · estándar o training
             </Text>
           </View>
         </Pressable>

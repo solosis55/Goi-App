@@ -3,6 +3,7 @@ import { POST_IMAGE_MAX_FILES } from "../../../constants/createPost";
 import { CreatePostPreviewMedia } from "./CreatePostPreviewMedia";
 import { AUTH, AUTH_MAX_FONT_MULTIPLIER } from "../../../constants/authUi";
 import { PostActionBar } from "../../feed/PostActionBar";
+import { postCardStyles } from "../../feed/postCardStyles";
 import { PublicationLinkedSessionBody } from "../PublicationLinkedSessionBody";
 import { PostPreviewMediaPlaceholder } from "./PostPreviewMediaPlaceholder";
 import { PostPreviewCardHeader } from "./PostPreviewCardHeader";
@@ -30,6 +31,8 @@ type PostFeedPreviewStandardProps = {
   onPressAddMedia?: () => void;
   onPressEditCaption?: () => void;
   maxImageFiles?: number;
+  /** Selector de formato: tarjeta completa visible (foto cuadrada a ancho de tarjeta). */
+  formatChooser?: boolean;
 };
 
 /** Vista previa feed — layout tipo Instagram (foto → acciones → caption). */
@@ -49,23 +52,28 @@ export function PostFeedPreviewStandard({
   onPressAddMedia,
   onPressEditCaption,
   maxImageFiles = POST_IMAGE_MAX_FILES,
+  formatChooser = false,
 }: PostFeedPreviewStandardProps) {
   const { width: windowWidth } = useWindowDimensions();
   const isEmbedded = embedded || layoutWidth != null;
+  const feedMatch = previewMode && !formatChooser;
   const cardW = resolvePreviewCardWidth(windowWidth, { fullBleed, layoutWidth });
   const mediaW = cardW;
   const hasMedia = draft.imageUris.length > 0;
-  const avatarSize = compact ? 28 : 40;
+  const avatarSize = feedMatch ? 46 : compact && !formatChooser ? 28 : 40;
   const showPlaceholder =
     shouldShowPreviewMediaPlaceholder("standard", hasMedia) &&
-    (compact || isEmbedded || previewMode);
+    (compact || isEmbedded || previewMode) &&
+    !formatChooser;
   const captionText = draft.content.trim();
-  const showCaptionPlaceholder = !captionText && (previewMode || compact) && !showSessionInline;
-  const mediaSizingCompact = (compact || isEmbedded) && !previewMode;
-  const mediaHeight = previewMediaHeight(mediaW, "standard", mediaSizingCompact, {
-    fullBleed: previewMode && fullBleed,
-    maxHeight: previewMode && fullBleed ? mediaW : undefined,
-  });
+  const showCaptionPlaceholder = !captionText && (previewMode || compact) && !showSessionInline && !formatChooser;
+  const mediaSizingCompact = (compact || isEmbedded) && !previewMode && !formatChooser;
+  const mediaHeight = feedMatch
+    ? mediaW
+    : previewMediaHeight(mediaW, "standard", mediaSizingCompact, {
+        fullBleed: (previewMode && fullBleed) || formatChooser,
+        maxHeight: formatChooser ? mediaW : previewMode && fullBleed ? mediaW : undefined,
+      });
 
   return (
     <View
@@ -74,6 +82,7 @@ export function PostFeedPreviewStandard({
         fullBleed,
         isEmbedded,
         embedded,
+        feedMatch,
       })}
     >
       <PostPreviewCardHeader
@@ -83,9 +92,19 @@ export function PostFeedPreviewStandard({
         metaSuffix=" · ahora"
         headVariant="roomy"
         userFontSize={compact ? undefined : 15}
+        feedMatch={feedMatch}
       />
 
-      {hasMedia ? (
+      {formatChooser ? (
+        <PostPreviewMediaPlaceholder
+          width={mediaW}
+          height={mediaHeight}
+          gradientId="previewFormatChooserStandard"
+          format="standard"
+          minimal
+          label="Foto"
+        />
+      ) : hasMedia ? (
         <CreatePostPreviewMedia
           imageUris={draft.imageUris}
           width={mediaW}
@@ -127,12 +146,7 @@ export function PostFeedPreviewStandard({
         </Pressable>
       ) : null}
 
-      <View style={editorMode ? styles.actionBarDim : null} pointerEvents={editorMode ? "none" : "auto"}>
-        {editorMode ? (
-          <Text style={styles.previewHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
-            Vista previa del feed
-          </Text>
-        ) : null}
+      <View style={[editorMode ? styles.actionBarDim : null, feedMatch ? postCardStyles.actionBarPad : null]} pointerEvents={editorMode ? "none" : "auto"}>
         <PostActionBar
           compact={compact || isEmbedded}
           liked={false}
@@ -150,7 +164,11 @@ export function PostFeedPreviewStandard({
       <Pressable
         onPress={editorMode ? onPressEditCaption : undefined}
         disabled={!editorMode || !onPressEditCaption || showSessionInline}
-        style={[styles.body, compact ? styles.bodyCompact : null, editorMode ? styles.bodyEditable : null]}
+        style={[
+          feedMatch ? postCardStyles.bodyPad : styles.body,
+          compact ? styles.bodyCompact : null,
+          editorMode && !feedMatch ? styles.bodyEditable : null,
+        ]}
       >
         {showSessionInline && draft.sessionId ? (
           <PublicationLinkedSessionBody
@@ -168,19 +186,28 @@ export function PostFeedPreviewStandard({
           </Text>
         ) : captionText ? (
           <Text
-            style={[styles.caption, compact ? styles.captionCompact : null]}
+            style={[
+              feedMatch ? postCardStyles.content : styles.caption,
+              compact ? styles.captionCompact : null,
+            ]}
             maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
             numberOfLines={compact ? 3 : undefined}
           >
             {captionText}
           </Text>
         ) : null}
-        {editorMode && !showSessionInline ? (
+        {editorMode && !showSessionInline && !feedMatch ? (
           <Text style={styles.editCaptionHint} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
             Toca para editar texto
           </Text>
         ) : null}
       </Pressable>
+
+      {editorMode && feedMatch ? (
+        <Text style={styles.previewHintFeed} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+          Vista previa del feed
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -197,9 +224,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   actionBarDim: { opacity: 0.42 },
-  previewHint: {
+  previewHintFeed: {
     ...postPreviewCardStyles.previewHint,
-    paddingTop: 4,
+    paddingVertical: 10,
+    paddingBottom: 14,
+    backgroundColor: "#0a0a0c",
   },
   bodyEditable: {
     borderWidth: 1,

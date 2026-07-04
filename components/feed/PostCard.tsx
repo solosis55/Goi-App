@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Platform, View, useWindowDimensions } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from "react-native-reanimated";
 import { useGoiAlert } from "../../context/GoiAlertContext";
@@ -11,8 +11,6 @@ import type { Post } from "../../types/post";
 import { PostCardCommentComposer } from "./PostCardComments";
 import { postCardPropsAreEqual } from "../../utils/postCardAreEqual";
 import { PostCardHeader } from "./PostCardHeader";
-import { useFeedGoldBeam } from "../../context/FeedGoldBeamContext";
-import { PostCardGoldBeam } from "./PostCardGoldBeam";
 import { PostActionBar } from "./PostActionBar";
 import { useOptionalPressGuard } from "../../hooks/usePressGuard";
 import { buildTrainingPreviewDraft } from "../../utils/postTrainingPreviewDraft";
@@ -52,7 +50,6 @@ type PostCardProps = {
   onPressSession?: () => void;
   highlighted?: boolean;
   initialCommentsOpen?: boolean;
-  isBeamActive?: boolean;
   guardScrollPresses?: boolean;
 };
 
@@ -90,16 +87,12 @@ function PostCardInner({
   onPressSession,
   highlighted,
   initialCommentsOpen = false,
-  isBeamActive = false,
   guardScrollPresses = false,
 }: PostCardProps) {
   const displayPost = usePostMediaHydration(post);
   const press = useOptionalPressGuard(guardScrollPresses);
-  const feedBeam = useFeedGoldBeam();
-  const cardWrapRef = useRef<View>(null);
-  const [cardSize, setCardSize] = useState({ w: 0, h: 0 });
   const { width: screenWidth } = useWindowDimensions();
-  const feedCardWidth = Math.min(Math.max(screenWidth - 32, 280), 672);
+  const feedCardWidth = Math.max(screenWidth, 280);
   const mediaSlideWidth = feedCardWidth;
   const trainingFeedMediaWidth = trainingFeedInsetWidth(mediaSlideWidth);
   const trainingFeedMediaHeight = trainingFeedInsetHeight(trainingFeedMediaWidth);
@@ -241,15 +234,7 @@ function PostCardInner({
   );
 
   return (
-    <View
-      ref={cardWrapRef}
-      collapsable={false}
-      style={styles.cardWrap}
-      onLayout={(e) => {
-        const { width, height } = e.nativeEvent.layout;
-        if (width > 0 && height > 0) setCardSize({ w: width, h: height });
-      }}
-    >
+    <View style={styles.cardWrap}>
       <View
         style={[
           styles.card,
@@ -368,10 +353,6 @@ function PostCardInner({
 
       {highlighted ? (
         <Animated.View pointerEvents="none" style={[styles.highlightRing, highlightRingStyle]} />
-      ) : null}
-
-      {isBeamActive && feedBeam?.enabled && cardSize.w > 0 && cardSize.h > 0 ? (
-        <PostCardGoldBeam width={cardSize.w} height={cardSize.h} />
       ) : null}
     </View>
   );

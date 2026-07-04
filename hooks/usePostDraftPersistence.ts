@@ -68,6 +68,7 @@ export function usePostDraftPersistence({
   const [restoringDraft, setRestoringDraft] = useState(false);
   const [pendingPublish, setPendingPublish] = useState<PendingPostPublish | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const draftHydrationPassRef = useRef(0);
   const initialVisibilityRef = useRef(initialVisibility);
   const initialSessionIdRef = useRef(initialSessionId);
   const legacyWorkoutIdRef = useRef(legacyWorkoutId);
@@ -85,7 +86,10 @@ export function usePostDraftPersistence({
     if (!userId) return;
     let cancelled = false;
     setHydrated(false);
+    setDraftBanner(false);
     void (async () => {
+      draftHydrationPassRef.current += 1;
+      const showRecoveredBanner = draftHydrationPassRef.current === 1;
       setRestoringDraft(true);
       try {
         let resolvedInitialSessionId = initialSessionIdRef.current;
@@ -189,7 +193,7 @@ export function usePostDraftPersistence({
             if (draft.sessionId) {
               restoreSessionBasics(draft.sessionId, draft.sessionWorkoutTitle);
             }
-            if (!cancelled) setDraftBanner(true);
+            if (!cancelled && showRecoveredBanner) setDraftBanner(true);
           }
         }
 

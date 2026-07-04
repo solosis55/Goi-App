@@ -23,6 +23,8 @@ type PostSessionAttachmentProps = {
   onPress?: () => void;
   onPressLink?: () => void;
   compact?: boolean;
+  /** Miniatura en selector de formato (más compacta que `compact`). */
+  chooserMini?: boolean;
   /** Sesión vinculada en el editor (resalte visual). */
   linked?: boolean;
   /** Muestra «Ver entreno completo» aunque no haya onPress (p. ej. mini-preview). */
@@ -33,6 +35,7 @@ type PostSessionAttachmentProps = {
 
 const PREVIEW_MAX_EXERCISES_DEFAULT = 3;
 const PREVIEW_MAX_EXERCISES_COMPACT = 2;
+const PREVIEW_MAX_EXERCISES_CHOOSER = 2;
 
 function parseSetsRatioFromLabel(label: string | null | undefined): {
   completed: number;
@@ -50,19 +53,24 @@ function SessionProgressBar({
   completed,
   total,
   compact,
+  mini = false,
 }: {
   completed: number;
   total: number;
   compact: boolean;
+  mini?: boolean;
 }) {
   const ratio = total > 0 ? Math.min(1, Math.max(0, completed / total)) : 0;
   const pct = Math.round(ratio * 100);
   return (
-    <View style={[styles.progressBlock, compact ? styles.progressBlockCompact : null]}>
-      <View style={styles.progressTrack}>
+    <View style={[styles.progressBlock, compact ? styles.progressBlockCompact : null, mini ? styles.progressBlockMini : null]}>
+      <View style={[styles.progressTrack, mini ? styles.progressTrackMini : null]}>
         <View style={[styles.progressFill, { width: `${pct}%` }]} />
       </View>
-      <Text style={styles.progressLabel} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+      <Text
+        style={[styles.progressLabel, mini ? styles.progressLabelMini : null]}
+        maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+      >
         {completed}/{total} series
       </Text>
     </View>
@@ -73,16 +81,24 @@ function SessionExercisePreviewList({
   items,
   moreCount,
   compact,
+  mini = false,
   hero,
 }: {
   items: SessionExercisePreview[];
   moreCount: number;
   compact: boolean;
+  mini?: boolean;
   hero: boolean;
 }) {
   if (items.length === 0) return null;
   return (
-    <View style={[styles.exerciseList, compact ? styles.exerciseListCompact : null]}>
+    <View
+      style={[
+        styles.exerciseList,
+        compact ? styles.exerciseListCompact : null,
+        mini ? styles.exerciseListMini : null,
+      ]}
+    >
       {items.map((item, index) =>
         hero ? (
           <View key={`${item.exerciseName}-${item.summary}-${index}`} style={styles.exerciseRowHero}>
@@ -133,7 +149,10 @@ function SessionExercisePreviewList({
         )
       )}
       {moreCount > 0 ? (
-        <Text style={styles.moreExercises} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        <Text
+          style={[styles.moreExercises, mini ? styles.moreExercisesMini : null]}
+          maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+        >
           +{moreCount} ejercicio{moreCount === 1 ? "" : "s"} más
         </Text>
       ) : null}
@@ -161,6 +180,7 @@ export function PostSessionAttachment({
   onPress,
   onPressLink,
   compact = false,
+  chooserMini = false,
   linked = false,
   showViewFullCta = false,
   exercisePreviews = [],
@@ -175,6 +195,7 @@ export function PostSessionAttachment({
           styles.card,
           styles.cardEmpty,
           compact ? styles.cardCompact : null,
+          chooserMini ? styles.cardChooserMini : null,
           onPressLink && pressed ? styles.pressed : null,
         ]}
         accessibilityRole="button"
@@ -221,7 +242,11 @@ export function PostSessionAttachment({
     .filter(Boolean) as string[];
   const notesPreview = !exercisePreviews.length ? parsedNotes?.bodyNotes?.trim() : "";
   const showCta = Boolean(onPress) || showViewFullCta;
-  const maxExercises = compact ? PREVIEW_MAX_EXERCISES_COMPACT : PREVIEW_MAX_EXERCISES_DEFAULT;
+  const maxExercises = chooserMini
+    ? PREVIEW_MAX_EXERCISES_CHOOSER
+    : compact
+      ? PREVIEW_MAX_EXERCISES_COMPACT
+      : PREVIEW_MAX_EXERCISES_DEFAULT;
   const visibleExercises = exercisePreviews.slice(0, maxExercises);
   const moreCount =
     moreExercisesCount > 0
@@ -240,6 +265,7 @@ export function PostSessionAttachment({
     linked && !useHero ? styles.cardLinked : null,
     linked && useHero ? styles.cardHeroLinked : null,
     compact ? styles.cardCompact : null,
+    chooserMini ? styles.cardChooserMini : null,
   ];
 
   const bodyContent = useHero ? (
@@ -314,7 +340,7 @@ export function PostSessionAttachment({
       ) : null}
     </View>
   ) : (
-    <View style={styles.body}>
+    <View style={[styles.body, chooserMini ? styles.bodyChooserMini : null]}>
       {linked ? (
         <View style={styles.linkedBadge}>
           <Text style={styles.linkedBadgeText} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
@@ -322,16 +348,28 @@ export function PostSessionAttachment({
           </Text>
         </View>
       ) : null}
-      <Text style={styles.title} numberOfLines={1} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+      <Text
+        style={[styles.title, chooserMini ? styles.titleChooserMini : null]}
+        numberOfLines={1}
+        maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+      >
         {title}
       </Text>
       {dateLabel ? (
-        <Text style={styles.meta} maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}>
+        <Text
+          style={[styles.meta, chooserMini ? styles.metaChooserMini : null]}
+          maxFontSizeMultiplier={AUTH_MAX_FONT_MULTIPLIER}
+        >
           Sesión · {dateLabel}
         </Text>
       ) : null}
       {showProgress ? (
-        <SessionProgressBar completed={progressCompleted} total={progressTotal} compact />
+        <SessionProgressBar
+          completed={progressCompleted}
+          total={progressTotal}
+          compact={compact || chooserMini}
+          mini={chooserMini}
+        />
       ) : chips.length > 0 ? (
         <View style={styles.chipsRow}>
           {chips.map((chip) => (
@@ -343,7 +381,8 @@ export function PostSessionAttachment({
         <SessionExercisePreviewList
           items={visibleExercises}
           moreCount={moreCount}
-          compact
+          compact={compact || chooserMini}
+          mini={chooserMini}
           hero={false}
         />
       ) : notesPreview ? (
@@ -369,8 +408,8 @@ export function PostSessionAttachment({
         accessibilityHint="Abre el entreno completo"
       >
         {!useHero ? (
-          <View style={styles.iconWrap}>
-            <TabDumbbellIcon size={18} color={AUTH.gold} filled />
+          <View style={[styles.iconWrap, chooserMini ? styles.iconWrapChooser : null]}>
+            <TabDumbbellIcon size={chooserMini ? 16 : 18} color={AUTH.gold} filled />
           </View>
         ) : null}
         {bodyContent}
@@ -381,8 +420,8 @@ export function PostSessionAttachment({
   return (
     <View style={cardStyle}>
       {!useHero ? (
-        <View style={styles.iconWrap}>
-          <TabDumbbellIcon size={18} color={AUTH.gold} filled />
+        <View style={[styles.iconWrap, chooserMini ? styles.iconWrapChooser : null]}>
+          <TabDumbbellIcon size={chooserMini ? 16 : 18} color={AUTH.gold} filled />
         </View>
       ) : null}
       {bodyContent}
@@ -424,6 +463,13 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     padding: 10,
   },
+  cardChooserMini: {
+    marginHorizontal: 8,
+    marginTop: 3,
+    marginBottom: 5,
+    padding: 9,
+    gap: 10,
+  },
   cardLinked: {
     borderColor: "rgba(212, 175, 55, 0.45)",
     backgroundColor: "rgba(22, 20, 16, 0.96)",
@@ -445,6 +491,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(212, 175, 55, 0.22)",
   },
+  iconWrapChooser: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+  },
   iconWrapHero: {
     width: 32,
     height: 32,
@@ -456,6 +507,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(212, 175, 55, 0.22)",
   },
   body: { flex: 1, minWidth: 0, gap: 4 },
+  bodyChooserMini: { gap: 3 },
   heroBody: { flex: 1, minWidth: 0, gap: 10 },
   heroHeader: {
     flexDirection: "row",
@@ -497,15 +549,19 @@ const styles = StyleSheet.create({
   },
   linkedBadgeText: { color: AUTH.gold, fontSize: 10, fontWeight: "800", letterSpacing: 0.3 },
   title: { color: AUTH.neutral100, fontSize: 15, fontWeight: "700" },
+  titleChooserMini: { fontSize: 14 },
   meta: { color: AUTH.faint, fontSize: 12, fontWeight: "600" },
+  metaChooserMini: { fontSize: 11 },
   progressBlock: { gap: 6, marginTop: 2 },
   progressBlockCompact: { marginTop: 0 },
+  progressBlockMini: { gap: 4 },
   progressTrack: {
     height: 6,
     borderRadius: 999,
     backgroundColor: "rgba(115, 115, 115, 0.25)",
     overflow: "hidden",
   },
+  progressTrackMini: { height: 5 },
   progressFill: {
     height: "100%",
     borderRadius: 999,
@@ -516,6 +572,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  progressLabelMini: { fontSize: 11 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 2 },
   chip: {
     paddingHorizontal: 8,
@@ -534,6 +591,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   exerciseListCompact: { paddingTop: 6, gap: 5 },
+  exerciseListMini: { paddingTop: 5, gap: 4 },
   exerciseRow: { gap: 2 },
   exerciseRowHero: {
     flexDirection: "row",
@@ -572,6 +630,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 2,
   },
+  moreExercisesMini: { fontSize: 11, marginTop: 1 },
   cta: { color: AUTH.gold, fontSize: 13, fontWeight: "700", marginTop: 8 },
   ctaRow: {
     flexDirection: "row",
